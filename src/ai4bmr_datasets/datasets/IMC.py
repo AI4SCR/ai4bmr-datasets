@@ -1,81 +1,23 @@
-import uuid
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-import tifffile as tiff
 from pydantic import ConfigDict
-from pydantic import Field, BaseModel
 
 from .BaseDataset import BaseDataset
 from ..data_models.Dataset import Dataset
+from ..data_models.Image import Image
 
 
-class Sample(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    sample_name: str
-
-    img_path: str | Path
-    masks_path: str | Path
-    panel_path: str | Path
-
-    in_memory: bool = False
-    _img: np.ndarray = None
-    _masks: np.ndarray = None
-    # _mask: np.ndarray = None
-    _panel: pd.DataFrame = None
-
-    @property
-    def img(self) -> np.ndarray:
-        _img = self._img
-        if _img is None:
-            _img = tiff.imread(self.img_path)
-            self._img = _img if self.in_memory else None
-        return _img
-
-    # @computed_field
-    # @property
-    # def mask(self) -> np.ndarray:
-    #     _mask = self._mask
-    #     if _mask is None:
-    #         _mask = np.expand_dims(tiff.imread(self.mask_path), 0)
-    #         self._mask = _mask if self.in_memory else None
-    #     return _mask
-
-    @property
-    def masks(self) -> np.ndarray:
-        _masks = self._masks
-        if _masks is None:
-            _masks = np.expand_dims(tiff.imread(self.masks_path), 0)
-            self._masks = _masks if self.in_memory else None
-        return _masks
-
-    @property
-    def panel(self) -> pd.DataFrame:
-        _panel = self._panel
-        if _panel is None:
-            _panel = pd.read_csv(self.panel_path)
-            self._panel = _panel if self.in_memory else None
-        return _panel
-
-    @property
-    def height(self) -> int:
-        return self.img.shape[-2]
-
-    @property
-    def width(self) -> int:
-        return self.img.shape[-1]
-
-
-class PCA(BaseDataset):
+class IMC(BaseDataset):
     model_config = Dataset.model_config | ConfigDict(extra='allow')
-    _id = 'pca'
-    _name = 'pca'
-    _data = dict[str, any]
+    _id = 'imc'
+    _name = 'imc'
+    _data = None  # we do not keep data in memory
 
-    def __init__(self, base_dir: Path, img_version: str = '', mask_version: str = '', **kwargs):
+    def __init__(self, base_dir: Path,
+                 img_version: str = '', mask_version: str = '', channel_names: list[str] = None,
+                 **kwargs):
+
         raw_dir = base_dir / "raw"
         processed_dir = base_dir
 
@@ -89,6 +31,8 @@ class PCA(BaseDataset):
 
         self.panel_path: Path = self.imgs_dir / 'panel.csv'
         self.panel: pd.DataFrame = None
+        self.channel_names = channel_names or []
+        self.channel_indices: list[int] = None
 
         self.masks_base_dir: Path = self.processed_dir / "masks"
         self.mask_version: str = mask_version
@@ -100,7 +44,10 @@ class PCA(BaseDataset):
         self.sample_names: list[Path] = None
 
     def load(self):
+        # TODO: should and how should we support subsetself.channel_indices = [self.panel.name.tolist().index(cn) for
+        #  cn in self.channel_names]ting the channels?
         self.panel = pd.read_csv(self.panel_path)
+        self.channel_indices = [self.panel.name.tolist().index(cn) for cn in self.channel_names]
 
         if self.mcd_metadata_dir.exists():
             self.mcd_metadata = self.mcd_metadata_dir.glob('**/*.txt')
@@ -116,15 +63,17 @@ class PCA(BaseDataset):
     def __len__(self):
         return len(self.sample_names)
 
-    def __getitem__(self, idx) -> Sample:
+    def __getitem__(self, idx) -> Image:
         sample_name = self.sample_names[idx]
-        return Sample(
+        return Image(
             sample_name=sample_name,
             img_path=self.imgs_dir / f"{sample_name}.tiff",
             masks_path=self.masks_dir / f"{sample_name}.tiff",
             panel_path=self.panel_path
         )
 
-    # def __iter__(self):
-    #     for idx in range(len(self)):
-    #         yield self[idx]
+    def __iter__(self) -> Image:
+        for idx in range(len(self)):
+            yield self[idx]
+
+

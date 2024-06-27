@@ -1,3 +1,3 @@
 from .BaseDataset import BaseDataset
 from .Dummy import DummyTabular, DummyImages
-from .PCA import PCA
+from .IMC import IMC
