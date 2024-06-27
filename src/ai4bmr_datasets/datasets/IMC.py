@@ -16,6 +16,7 @@ class IMC(BaseDataset):
 
     def __init__(self, base_dir: Path,
                  img_version: str = '', mask_version: str = '', channel_names: list[str] = None,
+                 in_memory: bool = False,
                  **kwargs):
 
         raw_dir = base_dir / "raw"
@@ -23,6 +24,7 @@ class IMC(BaseDataset):
 
         super().__init__(base_dir=base_dir, raw_dir=raw_dir, processed_dir=processed_dir, **kwargs)
 
+        self.in_memory = in_memory
         self.configs_dir: Path = self.processed_dir / "configs"
 
         self.imgs_base_dir: Path = self.processed_dir / "imgs"
@@ -69,7 +71,8 @@ class IMC(BaseDataset):
             sample_name=sample_name,
             img_path=self.imgs_dir / f"{sample_name}.tiff",
             masks_path=self.masks_dir / f"{sample_name}.tiff",
-            panel_path=self.panel_path
+            panel_path=self.panel_path,
+            in_memory=self.in_memory
         )
 
     def __iter__(self) -> Image:

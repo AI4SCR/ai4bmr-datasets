@@ -10,6 +10,7 @@ class CropCollectionView:
                  dataset: IMC,
                  padding: int = 0,
                  use_centroid: bool = False,
+                 in_memory: bool = False,
                  # NOTE: we move this to transformations
                  # remove_signal_outside_mask: bool = True
                  ):
@@ -17,6 +18,7 @@ class CropCollectionView:
         self.dataset = dataset
         self.padding = padding
         self.use_centroid = use_centroid
+        self.in_memory = in_memory
         # self.remove_signal_outside_mask = remove_signal_outside_mask
 
         self.crops = []
@@ -42,7 +44,7 @@ class CropCollectionView:
 
                 bbox = min_row, min_col, max_row, max_col
 
-                crop = ImageCrop(img=img, label=region.label, bbox=bbox, in_memory=False)
+                crop = ImageCrop(img=img, label=region.label, bbox=bbox, in_memory=self.in_memory)
                 self.crops.append(crop)
         return self
 
@@ -54,3 +56,7 @@ class CropCollectionView:
 
     def __len__(self):
         return len(self.crops)
+
+    def __iter__(self) -> ImageCrop:
+        for idx in range(len(self)):
+            yield self[idx]
