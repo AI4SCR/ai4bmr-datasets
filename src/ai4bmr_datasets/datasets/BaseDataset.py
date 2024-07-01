@@ -45,6 +45,7 @@ class BaseDataset(ABC):
         self.force_download = force_download
         self.force_process = force_process
         self.urls = urls
+        self._is_setup = False
 
         if (
                 base_dir is None
@@ -122,6 +123,8 @@ class BaseDataset(ABC):
         self._is_setup = True
 
     def __getitem__(self, idx):
+        if not self._is_setup:
+            self.setup()
         return self._data[idx]
 
     def __len__(self):

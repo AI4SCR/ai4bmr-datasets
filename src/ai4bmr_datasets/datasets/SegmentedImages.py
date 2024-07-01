@@ -99,8 +99,6 @@ class SegmentedImages(BaseDataset):
 
         self.sample_names: list[Path] = None
 
-        self.setup()
-
     def load(self):
         # TODO: should and how should we support subsetself.channel_indices = [self.panel.name.tolist().index(cn) for
         #  cn in self.channel_names]ting the channels?
@@ -131,8 +129,8 @@ class SegmentedImages(BaseDataset):
         return images
 
     def __getitem__(self, idx) -> SegmentedImage:
-        return self._data[idx]
+        return super().__getitem__(idx)
 
     def __iter__(self) -> SegmentedImage:
-        for idx in range(len(self)):
-            yield self[idx]
+        for item in super().__iter__():
+            yield item

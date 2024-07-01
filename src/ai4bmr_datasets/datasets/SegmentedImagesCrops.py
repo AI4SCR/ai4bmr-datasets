@@ -105,5 +105,12 @@ class SegmentedImagesCrops(BaseDataset):
                 crops.append(crop)
         return crops
 
+    def __getitem__(self, idx) -> SegmentedImageCrop:
+        return super().__getitem__(idx)
+
+    def __iter__(self) -> SegmentedImageCrop:
+        for item in super().__iter__():
+            yield item
+
     def get_sample_crops(self, sample_name) -> list:
         return list(filter(lambda x: x.source.sample_name == sample_name, self._data))
