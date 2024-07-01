@@ -1,3 +1,4 @@
 from .BaseDataset import BaseDataset
 from .Dummy import DummyTabular, DummyImages
-from .IMC import IMC
+from .SegmentedImages import SegmentedImages
+from .SegmentedImagesCrops import SegmentedImagesCrops

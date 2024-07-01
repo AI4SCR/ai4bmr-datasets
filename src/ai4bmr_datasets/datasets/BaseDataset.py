@@ -3,38 +3,48 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from ai4bmr_core.log.log import logger
+from pydantic_settings import BaseSettings
 
-from ..data_models.Dataset import Dataset as DatasetConfig
+
+class BaseDatasetConfig(BaseSettings):
+    id: str = None
+    name: str = None
+    description: str = None
+
+    base_dir: None | Path = None
+    cache_dir: None | Path = None
+    raw_dir: None | Path = None
+    processed_dir: None | Path = None
+
+    urls: None | dict[str, str] = None
+    raw_files: list[Path] = []
+    processed_files: list[Path] = []
 
 
-class BaseDataset(ABC, DatasetConfig):
+class BaseDataset(ABC):
     def __init__(
             self,
             *,
-            base_dir: None | Path | str = None,
+            name: str = None,
+            id: str = None,
+            description: str = None,
+            base_dir: Path = None,
             raw_dir: Path = None,
             processed_dir: Path = None,
+            urls: dict[str, str] = None,
+            raw_files: list[Path] = None,
+            processed_files: list[Path] = None,
             force_download: bool = False,
             force_process: bool = False,
-            **kwargs,
     ):
-        """
-        The `BaseDataset` class is an abstract class that provides a template for creating new datasets.
-        It consumes the user fields of the DatasetConfig class.
+        super().__init__()
 
-        If `processed_files` is defined on the subclass, caching is enabled and the `processed_dir` is used to store
-        the output of the `load` function. If `processed_files` is not defined, caching is disabled.
-
-        If `urls` is defined, downloading is enabled and the `raw_dir` is used to store the downloaded files.
-
-        Args:
-            base_dir:
-            raw_dir:
-            processed_dir:
-            force_download:
-            force_process:
-            **kwargs:
-        """
+        self.id = id
+        self.name = name
+        self.description = description
+        self.force_download = force_download
+        self.force_process = force_process
+        self.urls = urls
 
         if (
                 base_dir is None
@@ -52,39 +62,32 @@ class BaseDataset(ABC, DatasetConfig):
         if base_dir is not None and (raw_dir is not None or processed_dir is not None):
             logger.warning(
                 f"""
-                Paths are over-configured. You are setting `data_dir` and `raw_dir` or `processed_dir` at the same time.
+                Paths are over-configured. You are setting `base_dir` and `raw_dir` or `processed_dir` at the same time.
                 base_dir (\033[93mignored\033[0m): {base_dir}
                 raw_dir (\033[92mused\033[0m): {raw_dir}
                 processed_dir (\033[92mused\033[0m): {processed_dir}
                 """
             )
+
         logger.info("Initializing dataset... 🚀")
 
-        # note: we initialize the `BaseDataset` with default values for `raw_dir` and `processed_dir`
-        super().__init__(
-            # we pass these values directly, because they do not need to be post-processed like the other fields
-            force_download=force_download,
-            force_process=force_process,
-            **kwargs,
-        )
-        # note: after super(), we can access the initialized values and overwrite them if necessary
-
-        # note: if the user defines a `base_dir` use it. If not, use the default value defined on the subclass.
-        #   If the subclass does not define a default value, use the default value defined on the DatasetConfig class.
-        self.base_dir = base_dir if base_dir else self._base_dir
-
-        # note: see explanation for `data_dir`
-        self.processed_dir = processed_dir if processed_dir else self._processed_dir
-
-        # note: see explanation for `data_dir`
-        self.raw_dir = raw_dir if raw_dir else self._raw_dir
+        self.base_dir = base_dir if base_dir else Path.home() / ".cache" / "ai4bmr" / "datasets" / self.name if self.name else None
+        self.raw_dir = raw_dir if raw_dir else self.base_dir / "01_raw" if self.base_dir else None
+        self.processed_dir = processed_dir if processed_dir else self.base_dir / "02_processed" if self.base_dir else None
+        # NOTE: if no raw_files are given we use the urls names as fallback
+        self.raw_files = raw_files if raw_files else [self.raw_dir / i for i in
+                                                      self.urls] if self.urls and self.raw_dir else []
+        self.processed_files = processed_files or []
 
         logger.info(
             f"Dataset initialized 🎉 with \n\traw_dir file://{self.raw_dir}\n\tprocessed_dir file://{self.processed_dir}"
         )
 
     def setup(self):
-        logger.info("Setting up dataset... 🫡")
+        self._setup()
+        return self
+
+    def _setup(self):
         if self.force_download and self.raw_dir.exists():
             # NOTE: we delete the `raw_dir` if  `force_download` is True to ensure that all files are newly
             #  downloaded and not just some of them in case of an exception occurs during the download.
@@ -95,26 +98,38 @@ class BaseDataset(ABC, DatasetConfig):
         if self.force_process and self.processed_dir.exists():
             shutil.rmtree(self.processed_dir)
 
-        if self._urls and (self.force_download or not self.is_downloaded):
+        if self.urls and (self.force_download or not self.is_downloaded):
             self.download()
 
-        if self.is_cached and not self.force_process:
+        if not self.processed_files:
+            logger.info("Processing... 🏃🏽")
+        elif self.is_cached and not self.force_process:
             logger.info(
                 "Cached data found 🥳. Loading data from cache. To re-process pass `force_process=True`."
             )
             self._data = self.load_cache()
+        elif self.is_cached:
+            logger.info(
+                "Cached data found 🥳 but `force_process=True`. Processing... 🏃🏽"
+            )
         else:
-            if self.is_cached:
-                logger.info(
-                    "Cached data found 🥳 but `force_process=True`. Processing... 🏃🏽"
-                )
-            else:
-                logger.info("No cached data found 😔. Processing... 🏃🏽")
-            self._data = self.load()
+            logger.info("No cached data found 😔. Processing... 🏃🏽")
+
+        self._data = self.load()
+        if self.processed_dir:
             self.save_cache(self._data)
 
         self._is_setup = True
-        return self
+
+    def __getitem__(self, idx):
+        return self._data[idx]
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        for idx in range(len(self)):
+            yield self[idx]
 
     @abstractmethod
     def load(self):
@@ -154,7 +169,7 @@ class BaseDataset(ABC, DatasetConfig):
         # print(filename)
         try:
             self.raw_dir.mkdir(parents=True, exist_ok=True)
-            for file_name, url in self._urls.items():
+            for file_name, url in self.urls.items():
                 if (self.raw_dir / file_name).exists():
                     logger.info(
                         f"File {file_name} already exists in {self.raw_dir}. "
@@ -201,3 +216,53 @@ class BaseDataset(ABC, DatasetConfig):
             if fpath.is_file():
                 fpath.unlink()
             raise
+
+    @property
+    def base_dir(self) -> Path:
+        return self._base_dir
+
+    @base_dir.setter
+    def base_dir(self, value: Path | str):
+        self._base_dir = Path(value).expanduser() if value else None
+
+    @property
+    def raw_dir(self) -> Path:
+        return self._raw_dir
+
+    @raw_dir.setter
+    def raw_dir(self, value: Path | str):
+        self._raw_dir = Path(value).expanduser() if value else None
+
+    @property
+    def processed_dir(self) -> Path:
+        return self._processed_dir
+
+    @processed_dir.setter
+    def processed_dir(self, value: Path | str):
+        self._processed_dir = Path(value).expanduser() if value else None
+
+    @property
+    def raw_files(self) -> list[str]:
+        return self._raw_files
+
+    @raw_files.setter
+    def raw_files(self, value: list[str]):
+        self._raw_files = value if value else None
+
+    @property
+    def is_downloaded(self) -> bool:
+        return self.raw_dir and self.raw_files and all([(self.raw_dir / i).exists() for i in self.raw_files])
+
+    @property
+    def processed_files(self) -> list[str]:
+        return self._processed_files
+
+    @processed_files.setter
+    def processed_files(self, value: list[str]):
+        self._processed_files = value
+
+    @property
+    def is_cached(self) -> bool:
+        # NOTE: we need to check if processed_files is defined, otherwise caching is not enabled
+        return self.processed_dir and self.processed_files and all(
+            [(self.processed_dir / i).exists() for i in self.processed_files])

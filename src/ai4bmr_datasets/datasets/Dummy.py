@@ -1,45 +1,44 @@
-import numpy as np
 import torch
-from .BaseDataset import BaseDataset
 from torch.utils.data import Dataset
 
+from .BaseDataset import BaseDataset
 
-class DummyTabular(BaseDataset, Dataset):
-    _id = 'dummy_tabular'
-    _name = 'dummy_tabular'
-    _data: np.ndarray
+
+class DummyTabular(BaseDataset):
+
+    def __init__(self, n_samples: int = 1000, n_features: int = 10):
+        self.n_samples = n_samples
+        self.n_features = n_features
+        super().__init__(lazy_setup=False)
 
     def load(self):
-        return np.random.rand(1000, 10)
-
-    def __getitem__(self, idx):
-        return self._data[idx]
-
-    def __len__(self):
-        return len(self._data)
+        return [i for i in torch.rand(self.n_samples, self.n_features, dtype=torch.float32)]
 
 
 class DummyImages(BaseDataset, Dataset):
-    _id = 'dummy_imgs'
-    _name = 'dummy_images'
-    _data: torch.Tensor
-    n: int
-    c: int
-    h: int
-    w: int
 
-    def __init__(self, n: int = 1000, c: int = 3, h: int = 32, w: int = 32):
-        super().__init__(n=n, c=c, h=h, w=w)
+    def __init__(self, n: int = 1000, n_channels: int = 3, height: int = 32, width: int = 32):
+        super().__init__()
+
+        self.n: int = n
+        self.n_channels: int = n_channels
+        self.height: int = height
+        self.width: int = width
+
+        self.imgs = torch.rand(self.n, self.n_channels, self.height, self.width, dtype=torch.float32)
+        self.targets = torch.randint(0, 10, (self.n,))
+
+        self.setup()
 
     def load(self):
-        imgs = torch.rand(self.n, self.c, self.h, self.w, dtype=torch.float32)
-        targets = torch.randint(0, 10, (self.n,))
-        return [tuple([img, targets]) for img, target in zip(imgs, targets)]
-
-    def __getitem__(self, idx):
-        return self._data[idx]
-
-    def __len__(self):
-        return len(self._data)
+        return [{'img': i, 'target': t} for i, t in zip(self.imgs, self.targets)]
 
 
+class DummyImagesPlain(DummyImages):
+
+    def __init__(self, n: int = 1000, n_channels: int = 3, height: int = 32, width: int = 32):
+        super().__init__(n=n, n_channels=n_channels, height=height, width=width)
+        self.setup()
+
+    def load(self):
+        return [(i, t) for i, t in zip(self.imgs, self.targets)]
