@@ -18,11 +18,13 @@ class SegmentedImage(BaseModel):
     img_path: str | Path
     masks_path: str | Path
     panel_path: str | Path
+    objects_label_path: str | Path
 
     in_memory: bool = False
     _img: np.ndarray = None
     _masks: np.ndarray = None
     _panel: pd.DataFrame = None
+    _objects_label: pd.DataFrame = None
 
     @property
     def img(self) -> np.ndarray:
@@ -47,6 +49,14 @@ class SegmentedImage(BaseModel):
             _panel = pd.read_csv(self.panel_path)
             self._panel = _panel if self.in_memory else None
         return _panel
+
+    @property
+    def object_labels(self) -> pd.DataFrame:
+        _objects_label = self._objects_label
+        if _objects_label is None:
+            _objects_label = pd.read_csv(self.objects_label_path)
+            self._objects_label = _objects_label if self.in_memory else None
+        return _objects_label
 
     @computed_field
     @property
@@ -85,14 +95,18 @@ class SegmentedImages(BaseDataset):
         self.img_version: str = img_version
         self.imgs_dir: Path = self.imgs_base_dir / self.img_version
 
-        self.panel_path: Path = self.imgs_dir / 'panel.csv'
-        self.panel: pd.DataFrame = None
-        self.channel_names = channel_names or []
-        self.channel_indices: list[int] = None
-
         self.masks_base_dir: Path = self.processed_dir / "masks"
         self.mask_version: str = mask_version
         self.masks_dir: Path = self.masks_base_dir / self.mask_version
+
+        self.panel_path: Path = self.imgs_dir / 'panel.csv'
+        self.panel: pd.DataFrame = None
+
+        self.object_labels_path = self.masks_dir / 'object_labels.parquet'
+        self.object_labels: pd.DataFrame = None
+
+        self.channel_names = channel_names or []
+        self.channel_indices: list[int] = None
 
         self.mcd_metadata_dir = self.processed_dir / "mcd_metadata"
         self.mcd_metadata: pd.DataFrame = None
@@ -103,6 +117,7 @@ class SegmentedImages(BaseDataset):
         # TODO: should and how should we support subsetself.channel_indices = [self.panel.name.tolist().index(cn) for
         #  cn in self.channel_names]ting the channels?
         self.panel = pd.read_csv(self.panel_path)
+        self.object_labels = pd.read_parquet(self.object_labels_path)
         self.channel_indices = [self.panel.name.tolist().index(cn) for cn in self.channel_names]
 
         if self.mcd_metadata_dir.exists():
@@ -124,6 +139,7 @@ class SegmentedImages(BaseDataset):
                     img_path=self.imgs_dir / f"{sample_name}.tiff",
                     masks_path=self.masks_dir / f"{sample_name}.tiff",
                     panel_path=self.panel_path,
+                    objects_label_path=self.object_labels_path,
                     in_memory=self.in_memory
                 ))
         return images

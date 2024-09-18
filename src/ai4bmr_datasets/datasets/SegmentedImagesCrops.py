@@ -1,6 +1,7 @@
 import uuid
 
 import numpy as np
+import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 from skimage.measure import regionprops
 
@@ -14,7 +15,7 @@ class SegmentedImageCrop(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
     source: SegmentedImage
-    label: int
+    object_id: int
     bbox: tuple[int, int, int, int]
 
     in_memory: bool = False
@@ -41,7 +42,7 @@ class SegmentedImageCrop(BaseModel):
 
     @property
     def mask(self) -> np.ndarray[bool]:
-        return self.masks == self.label
+        return self.masks == self.object_id
 
     @computed_field
     @property
@@ -56,6 +57,13 @@ class SegmentedImageCrop(BaseModel):
         # NOTE: we need to sync bbox with Resizes and Crops
         min_row, min_col, max_row, max_col = self.bbox
         return max_col - min_col
+
+    @computed_field
+    @property
+    def sample_name(self) -> str:
+        return self.source.sample_name
+
+
 
 
 class SegmentedImagesCrops(BaseDataset):
@@ -79,6 +87,42 @@ class SegmentedImagesCrops(BaseDataset):
         self.in_memory = in_memory
         # self.remove_signal_outside_mask = remove_signal_outside_mask
 
+    def get_crops_from_image(self,
+                             image: np.ndarray, masks: np.ndarray,
+                             sample_name: str,
+                             objects_label: pd.DataFrame):
+        assert objects_label.index.names == ['sample_name', 'object_id']
+        assert ['label_name', 'label_id'] in objects_label.columns
+
+        masks = masks.squeeze()
+        # NOTE: for now we only support 2D masks
+        assert masks.ndim == 2, f'Expected 2D masks, got {masks.ndim}'
+        assert image.shape[1:] == masks.shape
+
+        crops = []
+        props = regionprops(masks)
+        H, W = masks.shape
+        for region in props:
+            if self.use_centroid:
+                min_row, min_col = max_row, max_col = region.centroid
+            else:
+                min_row, min_col, max_row, max_col = region.bbox
+            min_row, min_col, max_row, max_col = int(min_row), int(min_col), int(max_row), int(max_col)
+
+            min_row, min_col = max(0, min_row - self.padding), max(0, min_col - self.padding)
+            max_row, max_col = min(H, max_row + self.padding), min(W, max_col + self.padding)
+
+            object_id = region.label
+            labels = objects_label = objects_label.loc[(sample_name, object_id), :]
+            crop = Crop(image=image[..., min_row:max_row, min_col:max_col],
+                        masks=masks[..., min_row:max_row, min_col:max_col],
+                        object_id=object_id,
+                        mask=masks[..., min_row:max_row, min_col:max_col] == object_id,
+                        label_name=labels.label_name,
+                        label_id=labels.label_id,
+                        )
+            crops.append(crop)
+
     def load(self):
         crops = []
         for img in self.dataset:
@@ -101,7 +145,7 @@ class SegmentedImagesCrops(BaseDataset):
 
                 bbox = min_row, min_col, max_row, max_col
 
-                crop = SegmentedImageCrop(source=img, label=region.label, bbox=bbox, in_memory=self.in_memory)
+                crop = SegmentedImageCrop(source=img, object_id=region.label, bbox=bbox, in_memory=self.in_memory)
                 crops.append(crop)
         return crops
 

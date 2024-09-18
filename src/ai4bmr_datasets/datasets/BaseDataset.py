@@ -5,6 +5,10 @@ from pathlib import Path
 from ai4bmr_core.log.log import logger
 from pydantic_settings import BaseSettings
 
+"""
+NOTES:
+- Should we rename base_dir to cache_dir?
+"""
 
 class BaseDatasetConfig(BaseSettings):
     id: str = None
@@ -36,8 +40,9 @@ class BaseDataset(ABC):
             processed_files: list[Path] = None,
             force_download: bool = False,
             force_process: bool = False,
+            **kwargs
     ):
-        super().__init__()
+        super().__init__(**kwargs)
 
         self.id = id
         self.name = name
@@ -128,6 +133,8 @@ class BaseDataset(ABC):
         return self._data[idx]
 
     def __len__(self):
+        if not self._is_setup:
+            self.setup()
         return len(self._data)
 
     def __iter__(self):

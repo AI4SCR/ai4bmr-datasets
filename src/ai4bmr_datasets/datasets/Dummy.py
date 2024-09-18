@@ -28,17 +28,16 @@ class DummyImages(BaseDataset, Dataset):
         self.imgs = torch.rand(self.n, self.n_channels, self.height, self.width, dtype=torch.float32)
         self.targets = torch.randint(0, 10, (self.n,))
 
-        self.setup()
-
     def load(self):
-        return [{'img': i, 'target': t} for i, t in zip(self.imgs, self.targets)]
+        return [{'image': i, 'target': t} for i, t in zip(self.imgs, self.targets)]
 
 
 class DummyImagesPlain(DummyImages):
 
     def __init__(self, n: int = 1000, n_channels: int = 3, height: int = 32, width: int = 32):
         super().__init__(n=n, n_channels=n_channels, height=height, width=width)
-        self.setup()
 
     def load(self):
         return [(i, t) for i, t in zip(self.imgs, self.targets)]
+
+
