@@ -42,4 +42,4 @@ from ai4bmr_datasets.datasets.BLCa import BLCa
 
 from ai4bmr_datasets.datasets.TNBC import TNBC
 dataset = TNBC()
-dataset.load()
+data = dataset.load()

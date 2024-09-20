@@ -139,6 +139,7 @@ class TNBC:
             for ax in axs: ax.set_axis_off()
             fig.tight_layout()
             fig.savefig(self.masks_dir / f'{sample_id}.png')
+            plt.close(fig)
 
     def create_panel(self):
         panel_1 = pd.read_excel(self.supplementary_table_1_path, header=3)[:31]
