@@ -8,18 +8,27 @@ from skimage.io import imread, imsave
 from .BaseDataset import BaseDataset
 from ..datamodels.Image import Image, Mask
 from ai4bmr_core.utils.symlink import symlink_dir_files
+from ai4bmr_core.utils.logging import get_logger
 
 class TNBC:
+    """
+    Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
+    Save Ionpath file as tnbc.
+    The supplementary_table_1_path is downloaded as Table S1 from the paper.
+    """
+    name: str = 'TNBC'
     # TODO: check why patient_id 30 is missing in `data`.
     #   but we have patient ids up to 44 in `data`.
     #   we only have images for patient ids up to 41
     def __init__(self,
                  base_dir: Path = Path(
-                     '/Users/adrianomartinelli/Library/CloudStorage/OneDrive-ETHZurich/oneDrive-documents/data/datasets/TNBC')):
+                     '/Users/adrianomartinelli/Library/CloudStorage/OneDrive-ETHZurich/oneDrive-documents/data/datasets/TNBC'),
+                 verbose: int = 0):
         super().__init__()
+        self.logger = get_logger('TNBC', verbose=verbose)
 
         # processed
-        self.processed_dir = base_dir / '01_processed'
+        self.processed_dir = base_dir / '02_processed'
         self.images_dir = self.processed_dir / 'images'
         self.panel_path = self.images_dir / 'panel.parquet'
         self.masks_dir = self.processed_dir / 'masks'
@@ -35,6 +44,8 @@ class TNBC:
 
 
     def load(self):
+        self.logger.info(f'Loading dataset {self.name}')
+
         patient_data = pd.read_csv(self.patient_data_path)
         patient_data.columns = ['patient_id', 'cancer_type_id']
 
@@ -53,7 +64,8 @@ class TNBC:
         else:
             self.create_metadata(data)
             metadata = pd.read_parquet(self.metadata_dir)
-
+        # 19, 23, 24, (34),
+        idcs = [19, 23, 24]
         # panel
         if self.panel_path.exists():
             panel = pd.read_parquet(self.panel_path)
@@ -73,24 +85,25 @@ class TNBC:
             mask_paths = list(self.masks_dir.glob(r'*.tiff'))
             assert len(mask_paths) == 40
 
-        masks = []
+        masks = {}
         for mask_path in mask_paths:
             metadata_path = self.metadata_dir / f'{mask_path.stem}.parquet'
             assert metadata_path.exists()
-            masks.append(Mask(id=int(mask_path.stem), data_path=mask_path, metadata_path=metadata_path))
+            masks[int(mask_path.stem)] = Mask(id=int(mask_path.stem), data_path=mask_path, metadata_path=metadata_path)
 
         # images
         imgs_paths = list(self.images_dir.glob(r'*.tiff'))
         if len(imgs_paths) != 41:
+            # self.create_images(panel)
             self.images_dir.mkdir(exist_ok=True, parents=True)
             paths = symlink_dir_files(src_dir=self.raw_images_dir, dest_dir=self.images_dir, glob='*.tiff')
             for path in paths:
                 sample_id = re.search(r'Point(\d+).tiff', path.name).groups()[0]
                 path.rename(path.with_stem(sample_id))
 
-        images = []
+        images = {}
         for image_path in self.images_dir.glob('*.tiff'):
-            images.append(Image(id=int(image_path.stem), data_path=image_path, metadata_path=self.panel_path))
+            images[int(image_path.stem)] = Image(id=int(image_path.stem), data_path=image_path, metadata_path=self.panel_path)
 
         return dict(data=data,
                     panel=panel,
@@ -99,7 +112,12 @@ class TNBC:
                     masks=masks,
                     patient_data=patient_data)
 
+    def create_images(self, panel):
+        self.logger.info('Creating images')
+        pass
+
     def create_filtered_masks(self, data):
+        self.logger.info('Filtering masks')
         # NOTE:
         #   - 0: cell boarders
         #   - 1: background
@@ -142,6 +160,7 @@ class TNBC:
             plt.close(fig)
 
     def create_panel(self):
+        self.logger.info('Creating panel')
         panel_1 = pd.read_excel(self.supplementary_table_1_path, header=3)[:31]
         panel_1.columns = panel_1.columns.str.strip()
         panel_1 = panel_1.rename(columns={'Antibody target': 'target'})
@@ -165,6 +184,7 @@ class TNBC:
         panel.to_parquet(self.panel_path)
 
     def create_metadata(self, data):
+        self.logger.info('Creating metadata')
         metadata_cols = ['cellSize', 'tumorYN', 'tumorCluster', 'Group', 'immuneCluster', 'immuneGroup']
         metadata = data[metadata_cols]
 

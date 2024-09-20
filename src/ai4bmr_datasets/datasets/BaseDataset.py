@@ -2,7 +2,7 @@ import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from ai4bmr_core.log.log import logger
+from ai4bmr_core.utils.logging import get_logger
 from pydantic_settings import BaseSettings
 
 """
@@ -24,7 +24,7 @@ class BaseDatasetConfig(BaseSettings):
     raw_files: list[Path] = []
     processed_files: list[Path] = []
 
-
+logger = get_logger('BaseDataset')
 class BaseDataset(ABC):
     def __init__(
             self,

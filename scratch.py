@@ -9,7 +9,7 @@
 # s = ds[0]
 # ss = next(iter(ds))
 # ccv = SegmentedImagesCrops(dataset=ds, padding=0, use_centroid=False).setup()
-
+import pandas as pd
 #
 # assert ccv[0].source.sample_name == ccv[1].source.sample_name
 # assert ccv[0].source is ccv[1].source
@@ -32,7 +32,6 @@
 #     '/Users/adrianomartinelli/Library/CloudStorage/OneDrive-ETHZurich/oneDrive-documents/data/ai4scr/cell-embeddings/01_datasets/t1')
 # ds = IMCImages(base_dir=base_dir, img_version='', mask_version='').setup()
 
-from ai4bmr_datasets.datasets.BLCa import BLCa
 # from ai4bmr_datasets.datasets.PCa import PCa
 # dataset = PCa()
 # # dataset.create_metadata()
@@ -41,5 +40,9 @@ from ai4bmr_datasets.datasets.BLCa import BLCa
 # b = dataset._data['clinical_metadata']
 
 from ai4bmr_datasets.datasets.TNBC import TNBC
-dataset = TNBC()
+
+dataset = TNBC(verbose=1)
 data = dataset.load()
+
+image = data['images'][14]
+masks = data['masks'][14]
