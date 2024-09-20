@@ -77,56 +77,47 @@ class PCa(BaseDataset):
         roi_match_blockId = roi_match_blockId.drop(columns=['patient level code'])
         roi_match_blockId = roi_match_blockId.rename(
             columns={'Description (slidecode_coordinates_uniquecoreID)': 'description'})
+
+        slide_code = roi_match_blockId['description'].str.split('_').str[0].str.strip()
+        tma_coordinates = roi_match_blockId['description'].str.split('_').str[1].str.strip()
+        tma_sample_ids = roi_match_blockId['description'].str.split('_').str[2].str.strip()
+        roi_match_blockId = roi_match_blockId.assign(tma_sample_id=tma_sample_ids,
+                                                     slide_code=slide_code,
+                                                     tma_coordinates=tma_coordinates)
+
         patient_ids = roi_match_blockId['Original block number'].str.split('_').str[0].str.strip()
-        sample_ids = roi_match_blockId['description'].str.split('_').str[2].str.strip()
-        roi_match_blockId = roi_match_blockId.assign(SAMPLE_ID=sample_ids, PAT_ID=patient_ids)
+        roi_match_blockId = roi_match_blockId.assign(PAT_ID=patient_ids)
 
         assert roi_match_blockId.PAT_ID.isna().sum() == 4
-        assert roi_match_blockId.SAMPLE_ID.isna().sum() == 4
         roi_match_blockId = roi_match_blockId.dropna(subset=['PAT_ID'])
-        assert roi_match_blockId.SAMPLE_ID.isna().sum() == 0 and roi_match_blockId.PAT_ID.isna().sum() == 0
 
         path_tma_tidy = base_dir / 'clinical_metadata' / 'TMA_tidy.txt'
         tma_tidy = pd.read_csv(path_tma_tidy, sep='\t', dtype=str)
         tma_tidy = tma_tidy.drop(columns=['DATE_OF_BIRTH', 'INITIALS'])
 
-        # sample_ids_vars = ['UNIQUE_TMA_SAMPLE_ID_1', 'UNIQUE_TMA_SAMPLE_ID_2',
-        #                    'UNIQUE_TMA_SAMPLE_ID_3', 'UNIQUE_TMA_SAMPLE_ID_4']
-        # id_vars = set(tma_tidy.columns) - set(sample_ids_vars)
-        # tma_tidy = tma_tidy.melt(id_vars=id_vars, value_vars=sample_ids_vars, value_name='SAMPLE_ID')
-        # tma_tidy = tma_tidy.dropna(subset=['SAMPLE_ID'])
-        # tma_tidy.loc[:, 'SAMPLE_ID'] = tma_tidy.SAMPLE_ID.astype(int).astype(str).str.strip()
         tma_tidy.loc[:, 'PAT_ID'] = tma_tidy.PAT_ID.astype(str).str.strip()
 
-        # date_of_surgery = pd.to_datetime(tma_tidy['DATE_OF_SURGERY')
-        # last_fu = tma_tidy['LAST_FU']
-        # fig, ax = plt.subplots();ax.scatter(date_of_surgery[mask], last_fu[mask]);ax.scatter(date_of_surgery[~mask], last_fu[~mask]);plt.plot([d1, d2], [100, 100 - (d2-d1).days / 30.44]);plt.show()
+        # NOTE: the `PATIENT_ID` of the first patient is NA for no obvious reason. We assign 0 to it.
+        assert tma_tidy.PATIENT_ID.isna().sum() == 1
+        assert (tma_tidy.PATIENT_ID == 0).sum() == 0  # we ensure the id=0 is not used already
+        assert (tma_tidy.PATIENT_ID == '0').sum() == 0  # we ensure the id=0 is not used already
+        tma_tidy.loc[:, 'PATIENT_ID']= tma_tidy.PATIENT_ID.fillna('0')
+        assert tma_tidy.PATIENT_ID.isna().sum() == 0
 
-        # set(roi_match_blockId.SAMPLE_ID) - set(tma_tidy.SAMPLE_ID)
-        roi_match_blockId.loc[roi_match_blockId.SAMPLE_ID == '150 - split', 'SAMPLE_ID'] = '150'
-        # assert set(roi_match_blockId.SAMPLE_ID) - set(tma_tidy.SAMPLE_ID) == set()
-
-        # roi_ids = set(roi_match_blockId[['PAT_ID', 'SAMPLE_ID']].to_records(index=False).tolist())
-        # tma_ids = set(tma_tidy[['PAT_ID', 'SAMPLE_ID']].to_records(index=False).tolist())
-        #
-        # missing_ids = roi_ids - tma_ids
-        # missing_ids = pd.DataFrame(missing_ids, columns=['PAT_ID', 'SAMPLE_ID']).sort_values(['PAT_ID', 'SAMPLE_ID'])
-
-        # set(roi_match_blockId.PAT_ID) - set(tma_tidy.PAT_ID)
-        # len(set(tma_tidy.PAT_ID) - set(roi_match_blockId.PAT_ID))
-        # set(tma_tidy.PAT_ID) - set(roi_match_blockId.PAT_ID)
-
+        roi_match_blockId.loc[roi_match_blockId.tma_sample_id == '150 - split', 'tma_sample_id'] = '150'
+        assert roi_match_blockId.tma_sample_id.str.contains('split').sum() == 0
         assert tma_tidy['AGE_AT_SURGERY'].isna().any() == False
 
         metadata = pd.merge(roi_match_blockId, tma_tidy, how='left')
         metadata = metadata.sort_values(['PAT_ID'])
 
+        # NOTE: all patients in the roi_match_block are present in the metadata
         assert metadata.PAT_ID.isna().sum() == 0
-        assert metadata.SAMPLE_ID.isna().sum() == 0
-
         # NOTE: 3 ROIs from 2 patients have no meta data
-        assert metadata['AGE_AT_SURGERY'].isna().sum() == 3
-        assert metadata['PAT_ID'][metadata['AGE_AT_SURGERY'].isna()].nunique() == 2
+        assert metadata.PATIENT_ID.isna().sum() == 3
+        assert metadata[metadata.PATIENT_ID.isna()].PAT_ID.nunique() == 2
+
+        metadata = metadata[metadata.PATIENT_ID.notna()]
 
         # %%
         labels = pd.read_parquet(self.object_labels_path)
@@ -134,7 +125,7 @@ class PCa(BaseDataset):
         sample_names = [Path(i).stem for i in metadata.file_name_napari]
         metadata = metadata.assign(sample_name=sample_names)
         metadata = metadata.set_index('sample_name').join(labels, how='inner')
-        assert len(metadata) == len(labels)
+        # assert len(metadata) == len(labels)
 
         # %%
         metadata.to_parquet(self.clinical_metadata_path)

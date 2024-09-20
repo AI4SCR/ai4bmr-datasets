@@ -33,9 +33,13 @@
 # ds = IMCImages(base_dir=base_dir, img_version='', mask_version='').setup()
 
 from ai4bmr_datasets.datasets.BLCa import BLCa
-from ai4bmr_datasets.datasets.PCa import PCa
-dataset = PCa()
-# dataset.create_metadata()
-dataset = dataset.setup()
-a = dataset._data['intensity']
-b = dataset._data['clinical_metadata']
+# from ai4bmr_datasets.datasets.PCa import PCa
+# dataset = PCa()
+# # dataset.create_metadata()
+# dataset = dataset.setup()
+# a = dataset._data['intensity']
+# b = dataset._data['clinical_metadata']
+
+from ai4bmr_datasets.datasets.TNBC import TNBC
+dataset = TNBC()
+dataset.load()
