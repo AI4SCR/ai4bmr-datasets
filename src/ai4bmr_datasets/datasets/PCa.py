@@ -8,21 +8,27 @@ from .BaseDataset import BaseDataset
 class PCa(BaseDataset):
 
     def __init__(self,
-                 base_dir: Path = Path('/Users/adrianomartinelli/Library/CloudStorage/OneDrive-ETHZurich/oneDrive-documents/data/remotes/unibe/data/pca')):
+                 base_dir: Path = Path('/Users/adrianomartinelli/Library/CloudStorage/OneDrive-ETHZurich/oneDrive-documents/data/remotes/unibe/data/pca'),
+                 mask_version: str = 'deepcell_cluster_clean',
+                 image_version: str = 'compensated',
+                 measurement_version: str = None):
         super().__init__()
 
         self.base_dir = base_dir
 
-        self.mask_version = 'deepcell_cluster_clean'
+        self.mask_version = mask_version
         self.masks_dir = self.base_dir / 'masks'
 
-        self.image_version = 'compensated'
+        self.image_version = image_version
         self.images_dir = self.base_dir / 'images' / self.image_version
         self.panel_path = self.images_dir / 'panel.csv'
 
         self.object_labels_path = self.base_dir / 'clustering' / '2024-07-17_13-48' / 'object-labels.parquet'
 
-        self.measurement_version = f'i_{self.image_version}_m_{self.mask_version}'
+        if measurement_version is None:
+            self.measurement_version = f'i_{self.image_version}_m_{self.mask_version}'
+        else:
+            self.measurement_version = measurement_version
         self.measurements_dir = self.base_dir / 'measurements' / self.measurement_version
         self.intensity_dir = self.measurements_dir / 'intensity'
         self.spatial_dir = self.measurements_dir / 'spatial'
@@ -47,7 +53,11 @@ class PCa(BaseDataset):
         intensity = pd.read_parquet(self.intensity_dir)
         intensity = process(intensity)
         intensity = intensity.rename(columns=panel['name'].to_dict())
-        intensity.index = intensity.index.reorder_levels(clinical_metadata.index.names)
+        # # TODO: check if this is needed if we use align later
+        # if set(clinical_metadata.index.names) != set(intensity.index.names):
+        #     assert set(clinical_metadata.index.names) <= set(intensity.index.names)
+        # else:
+        #     intensity.index = intensity.index.reorder_levels(clinical_metadata.index.names)
         clinical_metadata, intensity = clinical_metadata.align(intensity, join='inner', axis=0)
         assert intensity.notna().any().any()
 
@@ -120,13 +130,18 @@ class PCa(BaseDataset):
         metadata = metadata[metadata.PATIENT_ID.notna()]
 
         # %%
-        labels = pd.read_parquet(self.object_labels_path)
-
         sample_names = [Path(i).stem for i in metadata.file_name_napari]
         metadata = metadata.assign(sample_name=sample_names)
-        metadata = metadata.set_index('sample_name').join(labels, how='inner')
+        metadata = metadata.set_index('sample_name')
+
+        # %%
+        if self.object_labels_path.exists():
+            labels = pd.read_parquet(self.object_labels_path)
+            metadata = metadata.join(labels, how='inner')
         # assert len(metadata) == len(labels)
 
         # %%
+        self.clinical_metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(self.clinical_metadata_path)
+
 

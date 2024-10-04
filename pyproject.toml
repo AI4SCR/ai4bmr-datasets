@@ -9,8 +9,21 @@ authors = [
     { name = "Adriano Martinelli", email = "adriano.martinelli@chuv.ch" },
 ]
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = ["python-dotenv", "pydantic", "pydantic-settings", "tqdm", "torch", "numpy<2", "openpyxl"]
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv",
+    "pydantic",
+    "pydantic-settings",
+    "tqdm",
+    "torch",
+    "numpy<2",
+    "openpyxl",
+    "pandas",
+    "tifffile",
+    "scikit-image",
+    "matplotlib",
+    "pyarrow"
+]
 dynamic = ["version"]
 classifiers = [
     "Programming Language :: Python :: 3",

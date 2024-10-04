@@ -39,10 +39,17 @@ import pandas as pd
 # a = dataset._data['intensity']
 # b = dataset._data['clinical_metadata']
 
-from ai4bmr_datasets.datasets.TNBC import TNBC
+# from ai4bmr_datasets.datasets.TNBC import TNBC
+#
+# dataset = TNBC(verbose=1)
+# data = dataset.load()
+#
+# image = data['images'][14]
+# masks = data['masks'][14]
+#
+# # image to look closer at
+# 34, 26, 8, 7
 
-dataset = TNBC(verbose=1)
-data = dataset.load()
-
-image = data['images'][14]
-masks = data['masks'][14]
+from ai4bmr_datasets.datasets.Dummy import DummyImages
+di = DummyImages(num_samples=10)
+data = di.load()
