@@ -44,6 +44,7 @@ class TNBC:
         self.logger = get_logger('TNBC', verbose=verbose)
 
         # processed
+        base_dir = Path(base_dir).expanduser().resolve()
         self.processed_dir = base_dir / '02_processed'
         self.images_dir = self.processed_dir / 'images'
         self.panel_path = self.images_dir / 'panel.parquet'
@@ -72,19 +73,26 @@ class TNBC:
         cancer_type_map = {0: 'cold', 1: 'mixed', 2: 'compartmentalized'}
         patient_data = patient_data.assign(cancer_type=patient_data['cancer_type_id'].map(cancer_type_map))
 
-        data = pd.read_csv(self.processed_single_cell_data_path)
+        processed_data = pd.read_csv(self.processed_single_cell_data_path)
         index_columns = ['SampleID', 'cellLabelInImage']
-        data = data.set_index(index_columns)
-        data.index = data.index.rename(dict(SampleID='sample_id', cellLabelInImage='object_id'))
+        processed_data = processed_data.set_index(index_columns)
+        processed_data.index = processed_data.index.rename(dict(SampleID='sample_id', cellLabelInImage='object_id'))
+
+        # filter for samples that are in both processed data and patient data
+        # NOTE: patient 30 has been excluded from the analysis due to noise
+        #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
+        sample_ids = set(processed_data.index.get_level_values('sample_id')).intersection(set(patient_data.index))
+        processed_data = processed_data.loc[list(sample_ids), :]
+        patient_data = patient_data.loc[list(sample_ids), :]
 
         # mask metadata
         metadata_paths = list(self.masks_version_dir.glob(r'*.parquet'))
         if len(metadata_paths) == 40:
             metadata = pd.read_parquet(metadata_paths)
         else:
-            self.create_metadata(data)
+            self.create_metadata(processed_data)
             metadata_paths = list(self.masks_version_dir.glob(r'*.parquet'))
-            assert metadata_paths == 40
+            assert len(metadata_paths) == 40
             metadata = pd.read_parquet(metadata_paths)
 
         # panel
@@ -93,22 +101,22 @@ class TNBC:
         else:
             self.create_panel()
             panel = pd.read_parquet(self.panel_path)
-        assert set(panel.target) - set(data.columns) == set()
+        assert set(panel.target) - set(processed_data.columns) == set()
 
         # data
-        data = data[panel.target]
-        assert data.isna().sum().sum() == 0
+        processed_data = processed_data[panel.target]
+        assert processed_data.isna().sum().sum() == 0
 
         # objects
         mask_paths = list(self.masks_version_dir.glob(r'*.tiff'))
         if len(mask_paths) != 40:
-            self.create_filtered_masks(data)
+            self.create_filtered_masks(processed_data)
             mask_paths = list(self.masks_version_dir.glob(r'*.tiff'))
             assert len(mask_paths) == 40
 
         masks = {}
         for mask_path in mask_paths:
-            metadata_path = mask_path.with_suffix('parquet')
+            metadata_path = mask_path.with_suffix('.parquet')
             assert metadata_path.exists()
             masks[int(mask_path.stem)] = Mask(id=int(mask_path.stem), data_path=mask_path, metadata_path=metadata_path)
 
@@ -120,9 +128,8 @@ class TNBC:
             for img_path in img_paths:
                 self.logger.debug(f'processing image {img_path.stem}')
                 sample_id = re.search(r'Point(\d+).tiff', img_path.name).groups()[0]
-                # NOTE: they excluded 30 from the analysis due to noise
-                if ((self.images_dir / f'{sample_id}.tiff').exists() or
-                        sample_id not in data.index.get_level_values('sample_id')):
+
+                if (self.images_dir / f'{sample_id}.tiff').exists() or sample_id not in sample_ids:
                     continue
                 img = self.create_image(img_path, panel)
                 imsave(self.images_dir / f'{sample_id}.tiff', img)
@@ -134,12 +141,12 @@ class TNBC:
 
         assert set(images) == set(masks)
 
-        cols = data.columns
-        data.columns = [tidy_names(col) for col in cols]
+        cols = processed_data.columns
+        processed_data.columns = [tidy_names(col) for col in cols]
         panel = panel.assign(target_original_name=panel.target, target=panel.target.map(tidy_names))
-        assert all(panel.target.tolist() == data.columns)
+        assert all(panel.target.tolist() == processed_data.columns)
 
-        return dict(data=data,
+        return dict(data=processed_data,
                     panel=panel,
                     metadata=metadata,
                     images=images,
@@ -190,7 +197,7 @@ class TNBC:
                 mask_filtered = mask_filtered.astype('uint32')
 
             assert 1 not in mask_filtered.flat
-            masks_version_dir = self.masks_dir / 'default'
+            masks_version_dir = self.masks_dir / 'processed'
             masks_version_dir.mkdir(exist_ok=True, parents=True)
             imsave(masks_version_dir / f'{sample_id}.tiff', mask_filtered, check_contrast=False)
 
@@ -229,7 +236,6 @@ class TNBC:
             z = vfunc(z)
 
             # diagnostic plot
-
             fig, axs = plt.subplots(2, 2, dpi=400)
             axs = axs.flat
 
