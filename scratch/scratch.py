@@ -50,6 +50,12 @@ import pandas as pd
 # # image to look closer at
 # 34, 26, 8, 7
 
-from ai4bmr_datasets.datasets.Dummy import DummyImages
-di = DummyImages(num_samples=10)
-data = di.load()
+# from ai4bmr_datasets.datasets.Dummy import DummyImages
+# di = DummyImages(num_samples=10)
+# data = di.load()
+
+# %%
+from ai4bmr_datasets.datasets.TNBC import TNBC
+tnbc = TNBC(verbose=1)
+data = tnbc.load()
+data['panel']

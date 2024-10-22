@@ -8,6 +8,7 @@ from ai4bmr_core.utils.tidy import tidy_names
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from skimage.io import imread, imsave
+from ai4bmr_core.utils.saving import save_image, save_mask
 
 from ..datamodels.Image import Image, Mask
 
@@ -124,15 +125,15 @@ class TNBC:
         imgs_paths = list(self.images_dir.glob(r'*.tiff'))
         if len(imgs_paths) != 40:
             self.images_dir.mkdir(exist_ok=True, parents=True)
-            img_paths = sorted(list(self.raw_images_dir.glob('*.tiff')))
-            for img_path in img_paths:
+            imgs_paths = sorted(self.raw_images_dir.glob('*.tiff'))
+            for img_path in imgs_paths:
                 self.logger.debug(f'processing image {img_path.stem}')
                 sample_id = re.search(r'Point(\d+).tiff', img_path.name).groups()[0]
 
-                if (self.images_dir / f'{sample_id}.tiff').exists() or sample_id not in sample_ids:
+                if (self.images_dir / f'{sample_id}.tiff').exists() or int(sample_id) not in sample_ids:
                     continue
                 img = self.create_image(img_path, panel)
-                imsave(self.images_dir / f'{sample_id}.tiff', img)
+                save_image(img, self.images_dir / f'{sample_id}.tiff')
 
         images = {}
         for image_path in self.images_dir.glob('*.tiff'):
@@ -169,16 +170,17 @@ class TNBC:
         self.logger.info('Filtering masks')
 
         self.masks_dir.mkdir(exist_ok=True, parents=True)
-        mask_paths = list(self.raw_masks_dir.glob(r'p*_labeledcellData.tiff'))
+        mask_paths = sorted(list(self.raw_masks_dir.glob(r'p*_labeledcellData.tiff')))
         sample_ids = set(data.index.get_level_values('sample_id'))
         for mask_path in mask_paths:
             sample_id = re.match(r'p(\d+)', mask_path.stem).groups()
             assert len(sample_id) == 1
             sample_id = int(sample_id[0])
 
+            self.logger.info(f'processing sample {sample_id}')
             if sample_id not in sample_ids:
                 continue
-            if (self.masks_version_dir / f'{sample_id}.png').exists():
+            if (self.masks_version_dir / f'{sample_id}.tiff').exists():
                 continue
 
             # load segmentation mask from raw data
@@ -199,7 +201,7 @@ class TNBC:
             assert 1 not in mask_filtered.flat
             masks_version_dir = self.masks_dir / 'processed'
             masks_version_dir.mkdir(exist_ok=True, parents=True)
-            imsave(masks_version_dir / f'{sample_id}.tiff', mask_filtered, check_contrast=False)
+            save_mask(mask_filtered, masks_version_dir / f'{sample_id}.tiff')
 
             # filter masks by objects in data
             # NOTE:
@@ -223,7 +225,7 @@ class TNBC:
             assert 1 not in mask_filtered_v2.flat
             masks_version_dir = self.masks_dir / 'v2'
             masks_version_dir.mkdir(exist_ok=True, parents=True)
-            imsave(masks_version_dir / f'{sample_id}.tiff', mask_filtered_v2, check_contrast=False)
+            save_mask(mask_filtered_v2, masks_version_dir / f'{sample_id}.tiff')
 
             # note: map objects in mask that are not present in data to 2
             objs_in_segm = set(mask[segm == 1])
@@ -266,18 +268,28 @@ class TNBC:
         panel_2 = panel_2.rename(columns={'Label': 'target', 'Titer': 'Titer (µg/mL)'})
         panel = pd.concat([panel_1, panel_2])
 
+        panel = panel.rename(columns={'Mass channel': 'mass_channel'})
+
         # note: Biotin has not Start,Stop,NoiseT
         #   for PD-L1, we replace the Mass channel and Isotope with the values in Biotin
-        panel.loc[panel.target == 'PDL1-biotin', 'Mass channel'] = \
-            panel.loc[panel.target == 'Biotin', 'Mass channel'].iloc[0]
+        panel.loc[panel.target == 'PDL1-biotin', 'mass_channel'] = \
+            panel.loc[panel.target == 'Biotin', 'mass_channel'].iloc[0]
         panel.loc[panel.target == 'PDL1-biotin', 'Isotope'] = panel.loc[panel.target == 'Biotin', 'Isotope'].iloc[0]
         panel = panel[panel.Start.notna()]
 
         target_map = {'PDL1-biotin': 'PD-L1', 'Ki-67': 'Ki67'}
         panel = panel.assign(target=panel.target.replace(target_map))
 
-        panel = panel.sort_values('Mass channel', ascending=True)
+        panel = panel.sort_values('mass_channel', ascending=True)
         panel = panel.assign(page=range(len(panel)))
+
+        # extract original page numbers for markers
+        img_path = sorted(list(self.raw_images_dir.glob('*.tiff')))[0]
+        metadata = self.get_tiff_metadata(img_path)
+        metadata = self.clean_metadata(metadata, panel)
+        metadata = metadata.rename(columns={'page': 'page_original'})
+
+        panel = panel.merge(metadata[['page_original', 'mass_channel']], on='mass_channel')
 
         panel = panel.convert_dtypes()
         self.panel_path.parent.mkdir(exist_ok=True, parents=True)
@@ -334,10 +346,10 @@ class TNBC:
     @staticmethod
     def clean_metadata(metadata, panel):
         metadata = metadata.assign(mass_channel=metadata.mass_channel.astype('int'))
-        filter = metadata.mass_channel.isin(panel['Mass channel'])
+        filter = metadata.mass_channel.isin(panel['mass_channel'])
         metadata = metadata[filter]
         metadata = metadata.rename(columns={'target': 'target_from_tiff'})
-        map = panel.set_index('Mass channel')['target'].to_dict()
+        map = panel.set_index('mass_channel')['target'].to_dict()
         metadata = metadata.assign(target=metadata.mass_channel.map(map))
         # align with panel marker order, i.e. sort by mass channel
         panel = panel.sort_values('page')  # ensure panel is sorted by page

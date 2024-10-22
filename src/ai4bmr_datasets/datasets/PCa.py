@@ -127,6 +127,8 @@ class PCa(BaseDataset):
         assert metadata.PATIENT_ID.isna().sum() == 3
         assert metadata[metadata.PATIENT_ID.isna()].PAT_ID.nunique() == 2
 
+        # NOTE: for 3 ROIs we do not have patient metadata
+        #   thus from the 545 images we have, only 542 are used in downstream analysis
         metadata = metadata[metadata.PATIENT_ID.notna()]
 
         # %%
