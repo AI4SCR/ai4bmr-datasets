@@ -11,12 +11,13 @@ from skimage.io import imread, imsave
 from ai4bmr_core.utils.saving import save_image, save_mask
 
 from ..datamodels.Image import Image, Mask
+from .BaseDataset import BaseDataset
 
 
 # TODO: we still need to implement the single cell value extraction from the images based on the masks!
 # at the moment we simply use the processed data from the publication.
 
-class TNBC:
+class TNBC(BaseDataset):
     """
     Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
     Save Ionpath file as tnbc.

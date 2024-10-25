@@ -14,7 +14,7 @@ class Image(BaseModel):
     name: str | None = None
 
     data_path: str | Path
-    metadata_path: str | Path
+    metadata_path: str | Path | None
 
     in_memory: bool = False
     _data: np.ndarray = None
@@ -31,7 +31,7 @@ class Image(BaseModel):
     @property
     def metadata(self) -> pd.DataFrame:
         _metadata = self._metadata
-        if _metadata is None:
+        if _metadata is None and self.metadata_path:
             _metadata = pd.read_parquet(self.metadata_path)
             self._metadata = _metadata if self.in_memory else None
         return _metadata

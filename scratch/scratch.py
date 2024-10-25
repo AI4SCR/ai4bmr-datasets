@@ -55,7 +55,21 @@ import pandas as pd
 # data = di.load()
 
 # %%
-from ai4bmr_datasets.datasets.TNBC import TNBC
-tnbc = TNBC(verbose=1)
-data = tnbc.load()
-data['panel']
+# from ai4bmr_datasets.datasets.TNBC import TNBC
+# tnbc = TNBC(verbose=1)
+# data = tnbc.load()
+# data['panel']
+
+
+# %%
+from pathlib import Path
+from ai4bmr_datasets.datasets import PCa
+base_dir = Path('/Users/adrianomartinelli/data/datasets/PCa')
+dataset = PCa(base_dir=base_dir)
+data = dataset.load()
+
+# %%
+from ai4bmr_datasets.datasets import BLCa
+base_dir = Path('/Users/adrianomartinelli/data/datasets/BLCa')
+dataset = BLCa(base_dir=base_dir)
+data = dataset.load()
