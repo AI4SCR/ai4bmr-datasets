@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+from abc import abstractmethod
 
 from .BaseDataset import BaseDataset
 from ..datamodels.Image import Image, Mask
@@ -33,6 +34,7 @@ class IMCDataset(BaseDataset):
         self.spatial_dir = self.measurements_dir / 'spatial'
 
         self.clinical_metadata_path = self.base_dir / 'metadata' / '02_processed' / 'clinical_metadata.parquet'
+        self.mcd_metadata = self.base_dir / 'metadata' / '02_processed' / 'mcd_metadata.parquet'
 
     def load(self):
         if not self.clinical_metadata_path.exists():
@@ -81,7 +83,8 @@ class IMCDataset(BaseDataset):
             if 'parent_group_name' in metadata.columns:
                 metadata = metadata.drop(columns=['parent_group_name'])
 
-            clinical_metadata, metadata = clinical_metadata.align(metadata, join='inner', axis=0)
+            # TODO: we lose some of the cells here for BLCa, we should investigate why
+            clinical_metadata, metadata = clinical_metadata.align(metadata, join='left', axis=0)
         else:
             metadata = None
 
@@ -106,6 +109,9 @@ class IMCDataset(BaseDataset):
                     panel=panel, images=images, masks=masks,
                     clinical_metadata=clinical_metadata, metadata=metadata)
 
+    @abstractmethod
+    def create_clinical_metadata(self):
+        pass
 
 class PCa(IMCDataset):
 
@@ -180,78 +186,84 @@ class PCa(IMCDataset):
 class BLCa(IMCDataset):
 
     def create_clinical_metadata(self):
-        """
-        This computes the metadata for each object in the dataset. The results can still contain objects that have been
-        removed after the clustering, i.e. all elements that where used in the clustering are included in the metadata.
-        """
+        raw_dir = self.base_dir / 'metadata' / '01_raw'
+        processed_dir = self.base_dir / 'metadata' / '02_processed'
 
-        base_dir = self.base_dir
+        # ROI matching
+        filename = "Analyses_cohort 2.xlsx"
+        roi_matching = pd.read_excel(raw_dir / filename, dtype=str, header=4)
+        cont = []
+        for i, _type in enumerate(["tur-b", "primary-tumor", "lymph-node-metastases"]):
+            cols = [f"Localisation.{i}", f"Case.{i}"] if i else ["Localisation", "Case"]
+            dat = roi_matching[cols]
+            dat.columns = ["sample_id", "patient_id"]
+            dat = dat.assign(type=_type)
+            cont.append(dat)
 
-        metadata_dir = base_dir / 'metadata'
-        metadata = pd.read_csv(metadata_dir / 'clinical_metadata.csv').drop(columns='Unnamed: 0')
+        ids = pd.concat(cont)
+        ids = ids.dropna(subset="sample_id")
+        ids.loc[:, "patient_id"] = ids.patient_id.ffill()
+        assert ids.patient_id.value_counts().max() <= 6
 
-        labels = pd.read_parquet(self.object_labels_path)
-
-        mcd_metadata_paths = list((base_dir / 'mcd_metadata').glob('**/*.txt'))
-        mcd_metadata = pd.concat(pd.read_csv(i) for i in mcd_metadata_paths)
-
-        # %%
-        # NOTE: we drop the rows for cases that were excluded
-        metadata = metadata[~metadata['Nr old'].isna()]
-
-        # NOTE: remove test runs
-        mcd_metadata = mcd_metadata[~mcd_metadata.Description.str.startswith('LP')]
-
-        # %%
-        set(metadata.sample_id) - set(mcd_metadata.Description)
-        set(mcd_metadata.Description) - set(metadata.sample_id)
-
-        # %% NOTE: rename acquisitions that were split
+        # mcd data
+        mcd_metadata = pd.read_parquet(self.mcd_metadata)
+        # NOTE: rename acquisitions that were split
         mcd_metadata = mcd_metadata.assign(sample_id=mcd_metadata.Description)
         mcd_metadata.loc[mcd_metadata.Description.str.startswith('1C2b'), 'sample_id'] = '1C2b'
         mcd_metadata.loc[mcd_metadata.Description.str.startswith('1C3i'), 'sample_id'] = '1C3i'
 
-        # %% create sample_name
+        # create sample_name
         mcd_metadata = mcd_metadata.assign(sample_name=mcd_metadata.file_name_napari.map(lambda x: Path(x).stem))
 
-        # %% NOTE: these are the images from patients that were excluded, as indicated in `Analyses_cohort 2.xlsx`
-        samples_with_no_metadata = set(mcd_metadata.sample_id) - set(metadata.sample_id)
-        pd.Series(list(samples_with_no_metadata)).to_csv(base_dir / 'metadata' / 'samples_with_no_metadata.csv')
+        sample_ids_with_not_in_analysis = set(mcd_metadata.sample_id) - set(ids.sample_id)
+        sample_ids_with_no_acquisition = set(ids.sample_id) - set(mcd_metadata.sample_id)
 
-        assert samples_with_no_metadata == {'1A4m', '1A4n', '1A6k', '1A6l', '1A7h', '1A8o', '1A8p', '1C4a', '1C4b'}
-        assert set(mcd_metadata.sample_id) - set(metadata.sample_id) == samples_with_no_metadata
+        metadata = pd.merge(ids, mcd_metadata, how="outer")
+        metadata[metadata.sample_id.isin(sample_ids_with_no_acquisition)].to_csv(
+            processed_dir / 'samples_with_no_acquisition.csv')
+        metadata[metadata.sample_id.isin(sample_ids_with_not_in_analysis)].to_csv(
+            processed_dir / 'sample_ids_with_not_in_analysis.csv')
 
-        removed_sample_names = set(mcd_metadata[mcd_metadata.sample_id.isin(samples_with_no_metadata)].sample_name)
-        mcd_metadata = mcd_metadata[~mcd_metadata.sample_id.isin(samples_with_no_metadata)]
+        sample_ids_to_remove = sample_ids_with_not_in_analysis.union(sample_ids_with_no_acquisition)
+        metadata = metadata[~metadata.sample_id.isin(sample_ids_to_remove)]
 
-        assert set(mcd_metadata.sample_id) - set(metadata.sample_id) == set()
+        # clinical metadata
+        clinical_metadata = pd.read_excel(raw_dir / "metadata_NAC_TMA_11_08.xlsx", dtype=str)
+        clinical_metadata = clinical_metadata.iloc[:59, :]
+        clinical_metadata = clinical_metadata.dropna(axis=1, how="all")  # remove NaN columns
+        # NOTE: some patients have a `Nr old` but everything else is NaN
+        clinical_metadata = clinical_metadata[~clinical_metadata.drop(columns='Nr old').isna().all(axis=1)]
+        # NOTE: `Nr. old` are for the matching with TMA and new ones for the genomic profiling
+        clinical_metadata = clinical_metadata.assign(patient_id=clinical_metadata["Nr old"].astype(int).astype(str))
 
-        # %%
-        set(metadata.sample_id) - set(mcd_metadata.sample_id)
-        len(set(metadata.sample_id) - set(mcd_metadata.sample_id))
-        metadata_full = pd.merge(metadata, mcd_metadata, left_on='sample_id', right_on='sample_id', how='outer')
+        patient_ids_with_no_acquisition = set(clinical_metadata.patient_id) - set(metadata.patient_id)
+        patient_ids_with_no_clinical_metadata = set(metadata.patient_id) - set(clinical_metadata.patient_id)
 
-        col_order = ['sample_id', 'patient_id', 'type', 'Nr old', 'file_name', 'Description']
-        cols = list(set(metadata_full.columns) - set(col_order))
-        col_order = col_order + cols
-        metadata_full = metadata_full[col_order]
+        clinical_metadata[clinical_metadata.patient_id.isin(patient_ids_with_no_acquisition)].to_csv(
+            processed_dir / 'patient_ids_with_no_acquisition.csv')
+        metadata[metadata.patient_id.isin(patient_ids_with_no_clinical_metadata)].to_csv(
+            processed_dir / 'patient_ids_with_no_clinical_metadata.csv')
 
-        # %%
-        samples_with_no_acquisition = metadata_full[~metadata_full.file_name_napari.notna()]
-        samples_with_no_acquisition[['sample_id', 'patient_id']].to_csv(
-            base_dir / 'metadata' / 'samples_with_no_acquisition.csv')
+        patient_ids_to_remove = patient_ids_with_no_acquisition.union(patient_ids_with_no_clinical_metadata)
+        clinical_metadata = clinical_metadata[~clinical_metadata.patient_id.isin(patient_ids_to_remove)]
+        metadata = metadata[~metadata.patient_id.isin(patient_ids_to_remove)]
 
-        metadata_full = metadata_full[metadata_full.file_name_napari.notna()]
+        mask = clinical_metadata.columns.str.contains("date", case=False)
+        date_cols = clinical_metadata.columns[mask]
+        date_cols = date_cols.tolist() + ["Start Chemo", "End Chemo"]
 
-        # %% add label info
-        metadata_full = metadata_full.set_index('sample_name').join(labels, how='inner')
+        clinical_metadata.loc[clinical_metadata["End Chemo"] == "31.02.2010", "End Chemo"] = pd.NaT
+        for col in date_cols:
+            clinical_metadata.loc[:, col] = pd.to_datetime(clinical_metadata[col])
 
-        # check that these are the same sample names that were removed form the mcd_metadata
-        assert set(labels.index.get_level_values('sample_name')) - set(
-            metadata_full.index.get_level_values('sample_name')) == removed_sample_names
+        # metadata
+        metadata_full = pd.merge(metadata, clinical_metadata, how="left")
+        assert len(metadata) == len(metadata_full)
 
-        # %%
-        cols = ['sample_id', 'patient_id', 'type', 'Nr old', 'file_name', 'Description', 'file_name_napari']
-        cols = cols + list(set(metadata_full.columns) - set(cols))
-        metadata_full = metadata_full[cols]
+        # convert to parquet compatible types
+        metadata_full = metadata_full.convert_dtypes()
+        metadata_full = metadata_full.set_index('sample_name')
         metadata_full.to_parquet(self.clinical_metadata_path)
+
+
+
