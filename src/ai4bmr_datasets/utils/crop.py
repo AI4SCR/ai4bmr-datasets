@@ -1,6 +1,7 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from skimage.measure import regionprops
+
 
 def get_crops_from_image(self,
                          image: np.ndarray, masks: np.ndarray,
