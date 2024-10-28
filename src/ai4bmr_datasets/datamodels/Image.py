@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tifffile as tiff
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, Field
 
 
 class Image(BaseModel):
@@ -39,3 +39,19 @@ class Image(BaseModel):
 
 class Mask(Image):
     pass
+
+
+class SegmentedImage(BaseModel):
+    id: str | int = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str | None = None
+
+    image: Image
+    mask: Mask
+
+
+class Crop(SegmentedImage):
+    id: str | int = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str | None = None
+
+    object_id: int | None = None
+    bbox: tuple[int, int, int, int]
