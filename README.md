@@ -6,14 +6,13 @@ Utilities to data handling in the AI4BMR group.
 
 - Access to the github.com/AI4SCR
 - Access to the cluster
-- Access to the project `prometex`
+- Access to the project `prometex` (maybe you already have read access, just try)
 
 # Installation
 
 ```bash
 git clone git+ssh://git@github.com/AI4SCR/ai4bmr-core.git
 git clone git+ssh://git@github.com/AI4SCR/ai4bmr-datasets.git
-cd ai4bmr-core
 pip install -e ai4bmr-core
 pip install -e ai4bmr-datasets
 ```
