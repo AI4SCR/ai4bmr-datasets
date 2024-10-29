@@ -22,10 +22,30 @@ You can either run the code below directly on the cluster or you need to downloa
 If you want to play, start with `TNBC`, this is a [public dataset](https://www.sciencedirect.com/science/article/pii/S0092867418311000?via%3Dihub)
 and it is the smallest of the three available datasets.
 
+### OPTIONAL: Configure access to the UNIL cluster via SSH
+- If you do not have an SSH config file yet create one:
+```bash
+touch ~.ssh/config
+```
+- Add the following configuration to the file
+```bash
+Host unil
+    Hostname curnagl.dcsr.unil.ch
+    AddKeysToAgent Yes
+    ForwardAgent yes
+    IdentityFile ~/.ssh/<NAME_OF_YOUR_PRIVATE_KEY>
+    User <USERNAME>
+```
+### Download the data
+- Create a dataset folder
 ```bash
 # create data folder, adapt as needed
 mkdir -p ~data/datasets
 cd ~data/datasets || exit
+```
+- Download the data with `rsync`
+- If you did not configure your `.ssh/config` file you need to replace `unil` with `<USERNAME>@curnagl.dcsr.unil.ch`
+```bash
 # all datasets
 rsync -ahvP unil:"/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/*.tar" .
 # specific dataset
