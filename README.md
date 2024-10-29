@@ -25,7 +25,7 @@ and it is the smallest of the three available datasets.
 ### OPTIONAL: Configure access to the UNIL cluster via SSH
 - If you do not have an SSH config file yet create one:
 ```bash
-touch ~.ssh/config
+touch ~/.ssh/config
 ```
 - Add the following configuration to the file
 ```bash
@@ -44,7 +44,7 @@ mkdir -p ~data/datasets
 cd ~data/datasets || exit
 ```
 - Download the data with `rsync`
-- If you did not configure your `.ssh/config` file you need to replace `unil` with `<USERNAME>@curnagl.dcsr.unil.ch`
+- If you did not configure your `~/.ssh/config` file you need to replace `unil` with `<USERNAME>@curnagl.dcsr.unil.ch`
 ```bash
 # all datasets
 rsync -ahvP unil:"/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/*.tar" .
