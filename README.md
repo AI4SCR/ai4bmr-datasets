@@ -23,7 +23,8 @@ If you want to play, start with `TNBC`, this is a [public dataset](https://www.s
 and it is the smallest of the three available datasets.
 
 ```bash
-mkdir -p data/datasets
+# create data folder, adapt as needed
+mkdir -p ~data/datasets
 cd data/datasets || exit
 # all datasets
 rsync -ahvP unil:"/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/*.tar" .
