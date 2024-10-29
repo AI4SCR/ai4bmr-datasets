@@ -53,8 +53,8 @@ Host unil
 
 ```bash
 # create data folder, adapt as needed
-mkdir -p ~data/datasets
-cd ~data/datasets || exit
+mkdir -p ~/data/datasets
+cd ~/data/datasets || exit
 ```
 
 - Download the data with `rsync`
@@ -79,7 +79,8 @@ from pathlib import Path
 from ai4bmr_datasets.datasets import TNBC
 
 # NOTE: on the cluster use: /work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/BLCa
-base_dir = Path("<PATH_TO_THE_DOWNLOADED_DATA>")
+#  ~data/datasets/BLCa
+base_dir = Path('~/data/datasets/BLCa').expanduser()
 dataset = TNBC(base_dir=base_dir)
 dataset.setup()
 data = dataset.load()
