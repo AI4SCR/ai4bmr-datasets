@@ -78,9 +78,8 @@ from pathlib import Path
 
 from ai4bmr_datasets.datasets import TNBC
 
-# NOTE: on the cluster use: /work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/BLCa
-#  ~data/datasets/BLCa
-base_dir = Path('~/data/datasets/BLCa').expanduser()
+# NOTE: on the cluster use: /work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC
+base_dir = Path('~/data/datasets/TNBC').expanduser()
 dataset = TNBC(base_dir=base_dir)
 dataset.setup()
 data = dataset.load()
