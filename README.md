@@ -25,10 +25,12 @@ and it is the smallest of the three available datasets.
 ```bash
 mkdir -p data/datasets
 cd data/datasets || exit
-# all datasets, excluding the IMC raw and spillover data
-rsync -ahvP unil:/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/ . --exclude='*/raw/*' --exclude='*/spillover/*'
+# all datasets
+rsync -ahvP unil:"/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/*.tar" .
 # specific dataset
-rsync -ahvP unil:/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC . --exclude='*/raw/*' --exclude='*/spillover/*'
+rsync -ahvP unil:/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC.tar .
+# unzip the dataset
+tar -xvf TNBC.tar
 ```
 
 ## Load TNBC data
