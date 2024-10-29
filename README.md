@@ -1,12 +1,15 @@
 # Dataset
+
 Utilities to data handling in the AI4BMR group.
 
 # Pre-requisites
+
 - Access to the github.com/AI4SCR
 - Access to the cluster
 - Access to the project `prometex`
 
 # Installation
+
 ```bash
 git clone git+ssh://git@github.com/AI4SCR/ai4bmr-core.git
 git clone git+ssh://git@github.com/AI4SCR/ai4bmr-datasets.git
@@ -16,18 +19,26 @@ pip install -e ai4bmr-datasets
 ```
 
 # Example
+
 You can either run the code below directly on the cluster or you need to download the data first.
 
 ## Download data from cluster
-If you want to play, start with `TNBC`, this is a [public dataset](https://www.sciencedirect.com/science/article/pii/S0092867418311000?via%3Dihub)
+
+If you want to play, start with `TNBC`, this is
+a [public dataset](https://www.sciencedirect.com/science/article/pii/S0092867418311000?via%3Dihub)
 and it is the smallest of the three available datasets.
 
-### OPTIONAL: Configure access to the UNIL cluster via SSH
+### (Optional) Configure access to the UNIL cluster via SSH
+
+- Create an SSH key pair (see online tutorials search for `ssh-keygen` or refer to our internal wiki)
 - If you do not have an SSH config file yet create one:
+
 ```bash
 touch ~/.ssh/config
 ```
+
 - Add the following configuration to the file
+
 ```bash
 Host unil
     Hostname curnagl.dcsr.unil.ch
@@ -36,15 +47,20 @@ Host unil
     IdentityFile ~/.ssh/<NAME_OF_YOUR_PRIVATE_KEY>
     User <USERNAME>
 ```
+
 ### Download the data
+
 - Create a dataset folder
+
 ```bash
 # create data folder, adapt as needed
 mkdir -p ~data/datasets
 cd ~data/datasets || exit
 ```
+
 - Download the data with `rsync`
 - If you did not configure your `~/.ssh/config` file you need to replace `unil` with `<USERNAME>@curnagl.dcsr.unil.ch`
+
 ```bash
 # all datasets
 rsync -ahvP unil:"/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/*.tar" .
@@ -55,6 +71,7 @@ tar -xvf TNBC.tar
 ```
 
 ## Load TNBC data
+
 - This is an example, access for `BLCa` and `PCa` is similar.
 
 ```python
