@@ -25,7 +25,7 @@ and it is the smallest of the three available datasets.
 ```bash
 # create data folder, adapt as needed
 mkdir -p ~data/datasets
-cd data/datasets || exit
+cd ~data/datasets || exit
 # all datasets
 rsync -ahvP unil:"/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/*.tar" .
 # specific dataset
