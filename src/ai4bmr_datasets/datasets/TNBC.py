@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from ai4bmr_core.utils.logging import get_logger
-from ai4bmr_core.utils.tidy import tidy_names
+from ai4bmr_core.utils.tidy import tidy_name
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from skimage.io import imread, imsave
@@ -144,8 +144,8 @@ class TNBC(BaseDataset):
         assert set(images) == set(masks)
 
         cols = processed_data.columns
-        processed_data.columns = [tidy_names(col) for col in cols]
-        panel = panel.assign(target_original_name=panel.target, target=panel.target.map(tidy_names))
+        processed_data.columns = [tidy_name(col) for col in cols]
+        panel = panel.assign(target_original_name=panel.target, target=panel.target.map(tidy_name))
         assert all(panel.target.tolist() == processed_data.columns)
 
         return dict(data=processed_data,

@@ -5,6 +5,7 @@ from abc import abstractmethod
 
 from .BaseDataset import BaseDataset
 from ..datamodels.Image import Image, Mask
+from ai4bmr_core.utils.tidy import tidy_name
 
 
 class IMCDataset(BaseDataset):
@@ -34,12 +35,14 @@ class IMCDataset(BaseDataset):
         self.spatial_dir = self.measurements_dir / 'spatial'
 
         self.clinical_metadata_path = self.base_dir / 'metadata' / '02_processed' / 'clinical_metadata.parquet'
-        self.mcd_metadata = self.base_dir / 'metadata' / '02_processed' / 'mcd_metadata.parquet'
+        self.mcd_metadata_path = self.base_dir / 'metadata' / '02_processed' / 'mcd_metadata.parquet'
+        self.labels_path = self.base_dir / 'metadata' / '02_processed' / 'labels.parquet'
 
     def load(self):
         if not self.clinical_metadata_path.exists():
             self.create_clinical_metadata()
         clinical_metadata = pd.read_parquet(self.clinical_metadata_path)
+        metadata = clinical_metadata
 
         panel = pd.read_csv(self.panel_path, index_col='channel')
 
@@ -57,38 +60,48 @@ class IMCDataset(BaseDataset):
         intensity = process(intensity)
         intensity = intensity.rename(columns=panel['name'].to_dict())
 
-        clinical_metadata, intensity = clinical_metadata.align(intensity, join='inner', axis=0)
+        intensity, clinical_metadata = intensity.align(clinical_metadata, join='inner', axis=0)
         assert intensity.notna().any().any()
 
         spatial = pd.read_parquet(self.spatial_dir)
         spatial = process(spatial)
-        clinical_metadata, spatial = clinical_metadata.align(spatial, join='inner', axis=0)
+        intensity, spatial = intensity.align(spatial, join='inner', axis=0)
         assert spatial.notna().any().any()
-
-        assert spatial.index.equals(intensity.index)
         assert spatial.index.equals(clinical_metadata.index)
 
-        # annotations
-        if self.annotations_path.exists():
-            metadata = pd.read_parquet(self.annotations_path)
-            index_to_cols = list(set(metadata.index.names) - {'sample_name', 'object_id'})
-            metadata = metadata.reset_index(index_to_cols, drop=True)
-
-            # NOTE: legacy because we do not have group_id in the annotations for PCa
-            if 'group_id' not in metadata.columns:
-                group_id = metadata.groupby(['parent_group_name', 'group_name']).ngroup()
-                metadata = metadata.assign(group_id=group_id)
-
-            # NOTE: legacy to harmonize with BLCa data that does not provide this information at this point
-            if 'parent_group_name' in metadata.columns:
-                metadata = metadata.drop(columns=['parent_group_name'])
-
-            # TODO: we lose some of the cells here for BLCa, we should investigate why
-            clinical_metadata, metadata = clinical_metadata.align(metadata, join='left', axis=0)
+        # labels
+        if self.labels_path.exists():
+            labels = pd.read_parquet(self.labels_path)
+            index_levels_to_drop = list(set(labels.index.names) - {'object_id', 'sample_name'})
+            labels.index = labels.index.droplevel(index_levels_to_drop)
+            intensity, labels = intensity.align(labels, join='left', axis=0)
+            assert labels.isna().any().any() == False
         else:
-            metadata = None
+            labels = None
 
-        assert spatial.index.equals(metadata.index)
+        assert spatial.index.equals(intensity.index)
+
+        # annotations
+        # NOTE: we do not use the annotations anymore but the labels.parquet
+        # if self.annotations_path.exists():
+        #     metadata = pd.read_parquet(self.annotations_path)
+        #     index_to_cols = list(set(metadata.index.names) - {'sample_name', 'object_id'})
+        #     metadata = metadata.reset_index(index_to_cols, drop=True)
+        #
+        #     # NOTE: legacy because we do not have group_id in the annotations for PCa
+        #     if 'group_id' not in metadata.columns:
+        #         group_id = metadata.groupby(['parent_group_name', 'group_name']).ngroup()
+        #         metadata = metadata.assign(group_id=group_id)
+        #
+        #     # NOTE: legacy to harmonize with BLCa data that does not provide this information at this point
+        #     if 'parent_group_name' in metadata.columns:
+        #         metadata = metadata.drop(columns=['parent_group_name'])
+        #
+        #     # TODO: we lose some of the cells here for BLCa, we should investigate why
+        #     clinical_metadata, metadata = clinical_metadata.align(metadata, join='left', axis=0)
+        # else:
+        #     metadata = None
+        # assert spatial.index.equals(metadata.index)
 
         masks = {}
         for mask_path in self.masks_dir.glob('*.tiff'):
@@ -107,7 +120,7 @@ class IMCDataset(BaseDataset):
 
         return dict(intensity=intensity, spatial=spatial,
                     panel=panel, images=images, masks=masks,
-                    clinical_metadata=clinical_metadata, metadata=metadata)
+                    clinical_metadata=clinical_metadata, metadata=metadata, labels=labels)
 
     @abstractmethod
     def create_clinical_metadata(self):
@@ -173,6 +186,49 @@ class PCa(IMCDataset):
         #   thus from the 545 images we have, only 542 are used in downstream analysis
         metadata = metadata[metadata.PATIENT_ID.notna()]
 
+        # %% tidy
+        metadata = metadata.astype(str)
+
+        metadata.columns = [tidy_name(c, split_camel_case=False) for c in metadata.columns]
+        metadata['date_of_surgery'] = pd.to_datetime(metadata['date_of_surgery'])
+        metadata['age_at_surgery'] = metadata['age_at_surgery'].astype(int)
+        mapping = {
+            'High Gleason pattern': 'high',
+            'Low Gleason pattern': 'low',
+            'Only 1 Gleason pattern': 'only_1',
+            'unkown': 'unknown'
+        }
+        metadata['gleason_pattern_tma_core'] = metadata['gleason_pattern_tma_core'].map(mapping)
+        metadata['last_fu'] = metadata['last_fu'].astype(int)
+        assert metadata.last_fu.isna().sum() == 0
+        metadata['d_amico_risk'] = metadata['d_amico'].map({'Intermediate Risk': 'intermediate', 'High Risk': 'high'})
+        metadata = metadata.drop('d_amico', axis=1)
+        metadata = metadata.convert_dtypes()
+
+        # %%
+        vals = metadata.cause_of_death.astype(int).values
+        cats = sorted(set(vals))
+        metadata['cause_of_death'] = pd.Categorical(vals, categories=cats, ordered=True)
+        assert metadata.cause_of_death.isna().sum() == 0
+
+        vals = metadata.clinical_progr.astype(int).values
+        cats = sorted(set(vals))
+        metadata['clinical_progr'] = pd.Categorical(vals, categories=cats, ordered=True)
+        assert metadata.clinical_progr.isna().sum() == 0
+
+        # metadata['GS_GRP'] = metadata.GS_GRP.astype(int)
+        # assert metadata.GS_GRP.isna().sum() == 0
+
+        vals = metadata.psa_progr.astype(int).values
+        cats = sorted(set(vals))
+        metadata['psa_progr'] = pd.Categorical(vals, categories=cats, ordered=True)
+        assert metadata.psa_progr.isna().sum() == 0
+
+        vals = metadata.recurrence_loc.astype(int).values
+        cats = sorted(set(vals))
+        metadata['recurrence_loc'] = pd.Categorical(vals, categories=cats, ordered=True)
+        assert metadata.recurrence_loc.isna().sum() == 0
+
         # %%
         sample_names = [Path(i).stem for i in metadata.file_name_napari]
         metadata = metadata.assign(sample_name=sample_names)
@@ -206,7 +262,7 @@ class BLCa(IMCDataset):
         assert ids.patient_id.value_counts().max() <= 6
 
         # mcd data
-        mcd_metadata = pd.read_parquet(self.mcd_metadata)
+        mcd_metadata = pd.read_parquet(self.mcd_metadata_path)
         # NOTE: rename acquisitions that were split
         mcd_metadata = mcd_metadata.assign(sample_id=mcd_metadata.Description)
         mcd_metadata.loc[mcd_metadata.Description.str.startswith('1C2b'), 'sample_id'] = '1C2b'
