@@ -36,7 +36,8 @@ class TNBC(BaseDataset):
                  verbose: int = 0):
         """
         :param base_dir:
-        :param mask_version: `default` uses the cells that are present in the interior mask of the raw data. `v2` uses only the cells present in the processed data `cellData.csv`
+        :param mask_version: `default` uses the cells that are present in the interior mask of the raw data. 
+            `v2` uses only the cells present in the processed data `cellData.csv`
         :param verbose:
         """
         if expression_from == 'processed':
@@ -72,7 +73,7 @@ class TNBC(BaseDataset):
         patient_data = patient_data.assign(sample_id=patient_data['patient_id']).set_index('sample_id')
 
         # TODO: verify mapping
-        cancer_type_map = {0: 'cold', 1: 'mixed', 2: 'compartmentalized'}
+        cancer_type_map = {0: 'mixed', 1: 'compartmentalized', 2: 'cold'}
         patient_data = patient_data.assign(cancer_type=patient_data['cancer_type_id'].map(cancer_type_map))
 
         processed_data = pd.read_csv(self.processed_single_cell_data_path)

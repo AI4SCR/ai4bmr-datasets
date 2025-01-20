@@ -1,11 +1,11 @@
+from abc import abstractmethod
 from pathlib import Path
 
 import pandas as pd
-from abc import abstractmethod
+from ai4bmr_core.utils.tidy import tidy_name
 
 from .BaseDataset import BaseDataset
 from ..datamodels.Image import Image, Mask
-from ai4bmr_core.utils.tidy import tidy_name
 
 
 class IMCDataset(BaseDataset):
@@ -126,6 +126,7 @@ class IMCDataset(BaseDataset):
     def create_clinical_metadata(self):
         pass
 
+
 class PCa(IMCDataset):
 
     def create_clinical_metadata(self):
@@ -153,6 +154,7 @@ class PCa(IMCDataset):
         patient_ids = roi_match_blockId['Original block number'].str.split('_').str[0].str.strip()
         roi_match_blockId = roi_match_blockId.assign(PAT_ID=patient_ids)
 
+        # NOTE: these are the LP samples (i.e. test runs)
         assert roi_match_blockId.PAT_ID.isna().sum() == 4
         roi_match_blockId = roi_match_blockId.dropna(subset=['PAT_ID'])
 
@@ -162,14 +164,10 @@ class PCa(IMCDataset):
 
         tma_tidy.loc[:, 'PAT_ID'] = tma_tidy.PAT_ID.astype(str).str.strip()
 
-        # NOTE: the `PATIENT_ID` of the first patient is NA for no obvious reason. We assign 0 to it.
+        # NOTE: the `PATIENT_ID` of the first patient is NA for no obvious reason.
         assert tma_tidy.PATIENT_ID.isna().sum() == 1
-        assert (tma_tidy.PATIENT_ID == 0).sum() == 0  # we ensure the id=0 is not used already
-        assert (tma_tidy.PATIENT_ID == '0').sum() == 0  # we ensure the id=0 is not used already
-        tma_tidy.loc[:, 'PATIENT_ID'] = tma_tidy.PATIENT_ID.fillna('0')
-        assert tma_tidy.PATIENT_ID.isna().sum() == 0
 
-        roi_match_blockId.loc[roi_match_blockId.tma_sample_id == '150 - split', 'tma_sample_id'] = '150'
+        roi_match_blockId.loc[roi_match_blockId.tma_sample_id == '150 - split', 'tma_sample_id'] = '150_1'
         assert roi_match_blockId.tma_sample_id.str.contains('split').sum() == 0
         assert tma_tidy['AGE_AT_SURGERY'].isna().any() == False
 
@@ -179,55 +177,113 @@ class PCa(IMCDataset):
         # NOTE: all patients in the roi_match_block are present in the metadata
         assert metadata.PAT_ID.isna().sum() == 0
         # NOTE: 3 ROIs from 2 patients have no meta data
-        assert metadata.PATIENT_ID.isna().sum() == 3
-        assert metadata[metadata.PATIENT_ID.isna()].PAT_ID.nunique() == 2
+        assert metadata.DONOR_BLOCK_ID.isna().sum() == 3
+        assert metadata[metadata.DONOR_BLOCK_ID.isna()].PAT_ID.nunique() == 2
 
         # NOTE: for 3 ROIs we do not have patient metadata
-        #   thus from the 545 images we have, only 542 are used in downstream analysis
-        metadata = metadata[metadata.PATIENT_ID.notna()]
+        #   thus from the 546 images we have, only 543 are used in downstream analysis
+        metadata = metadata[metadata.DONOR_BLOCK_ID.notna()]
+
+        # verify
+        # TODO: remove after verification by collaborators
+        for i in range(metadata.shape[0]):
+            id_ = metadata['tma_sample_id'].values[i]
+            ids_ = metadata[['UNIQUE_TMA_SAMPLE_ID_1', 'UNIQUE_TMA_SAMPLE_ID_2', 'UNIQUE_TMA_SAMPLE_ID_3',
+                             'UNIQUE_TMA_SAMPLE_ID_4']].iloc[i]
+            ids_ = set(ids_)
+            if id_ not in ids_:
+                pass
+                print(id_, metadata.PAT_ID.iloc[i])
+
+        filter_ = metadata['Original block number'] == metadata['DONOR_BLOCK_ID']
+        mismatches = metadata[['PAT_ID', 'Gleason pattern (TMA core)', 'Original block number', 'DONOR_BLOCK_ID']][
+            ~filter_]
 
         # %% tidy
         metadata = metadata.astype(str)
 
         metadata.columns = [tidy_name(c, split_camel_case=False) for c in metadata.columns]
+
         metadata['date_of_surgery'] = pd.to_datetime(metadata['date_of_surgery'])
+
         metadata['age_at_surgery'] = metadata['age_at_surgery'].astype(int)
+
         mapping = {
             'High Gleason pattern': 'high',
             'Low Gleason pattern': 'low',
             'Only 1 Gleason pattern': 'only_1',
             'unkown': 'unknown'
         }
-        metadata['gleason_pattern_tma_core'] = metadata['gleason_pattern_tma_core'].map(mapping)
+        metadata['gleason_pattern_tma_core'] = metadata.gleason_pattern_tma_core.map(mapping)
+
+        metadata['psa_at_surgery'] = metadata.psa_at_surgery.astype(float)
+        assert metadata['psa_at_surgery'].isna().sum() == 0
+
         metadata['last_fu'] = metadata['last_fu'].astype(int)
         assert metadata.last_fu.isna().sum() == 0
+
+        metadata['cause_of_death'] = metadata.cause_of_death.map({'0': 'alive', '1': 'non-PCa_death', '2': 'PCa_death'})
+        assert metadata.cause_of_death.isna().sum() == 0
+
+        metadata['os_status'] = metadata.os_status.map({'0': 'alive', '1': 'dead'})
+        assert metadata.os_status.isna().sum() == 0
+
+        metadata['psa_progr'] = metadata.psa_progr.astype(int)
+        assert metadata.psa_progr.isna().sum() == 0
+
+        metadata['psa_progr_time'] = metadata.psa_progr_time.astype(int)
+        assert metadata.psa_progr_time.isna().sum() == 0
+
+        metadata['clinical_progr'] = metadata.clinical_progr.astype(int)
+        assert metadata.clinical_progr.isna().sum() == 0
+
+        metadata['clinical_progr_time'] = metadata.clinical_progr_time.astype(int)
+        assert metadata.clinical_progr_time.isna().sum() == 0
+
+        metadata['disease_progr'] = metadata.disease_progr.astype(int)
+        assert metadata.disease_progr.isna().sum() == 0
+
+        metadata['disease_progr_time'] = metadata.disease_progr_time.astype(int)
+        assert metadata.disease_progr_time.isna().sum() == 0
+
+        metadata['recurrence_loc'] = metadata.recurrence_loc.map({'0': 'no_recurrence', '1': 'local', '2': 'metastasis',
+                                                                  '3': 'local_and_metastasis'})
+        assert metadata.recurrence_loc.isna().sum() == 0
+
+        # NOTE: we do not have the mapping at this point
+        # metadata['cgrading_biopsy'] = metadata.cgrading_biopsy.astype(int)
+
+        metadata['cgs_pat_1'] = metadata.cgs_pat_1.astype(int)
+        assert metadata.cgs_pat_1.isna().sum() == 0
+
+        metadata['cgs_pat_2'] = metadata.cgs_pat_2.astype(int)
+        assert metadata.cgs_pat_2.isna().sum() == 0
+
+        metadata['cgs_score'] = metadata.cgs_score.astype(int)
+        assert metadata.cgs_score.isna().sum() == 0
+
+        # metadata['gs_grp'] = metadata.gs_grp.map({'1': '<=6', '2': '3+4=7', '3': '4+3=7', '4': '8', '5': '9/10'})
+        # assert metadata.gs_grp.isna().sum() == 0
+
+        metadata['pgs_score'] = metadata.pgs_score.astype(int)
+        assert metadata.pgs_score.isna().sum() == 0
+
+        metadata['ln_status'] = metadata.ln_status.astype(int)
+        assert metadata.ln_status.isna().sum() == 0
+
+        metadata['surgical_margin_status'] = metadata.surgical_margin_status.astype(float)
+        assert metadata.surgical_margin_status.astype(float).isna().sum() == 87
+
         metadata['d_amico_risk'] = metadata['d_amico'].map({'Intermediate Risk': 'intermediate', 'High Risk': 'high'})
         metadata = metadata.drop('d_amico', axis=1)
+
         metadata = metadata.convert_dtypes()
 
         # %%
-        vals = metadata.cause_of_death.astype(int).values
-        cats = sorted(set(vals))
-        metadata['cause_of_death'] = pd.Categorical(vals, categories=cats, ordered=True)
-        assert metadata.cause_of_death.isna().sum() == 0
-
-        vals = metadata.clinical_progr.astype(int).values
-        cats = sorted(set(vals))
-        metadata['clinical_progr'] = pd.Categorical(vals, categories=cats, ordered=True)
-        assert metadata.clinical_progr.isna().sum() == 0
-
-        # metadata['GS_GRP'] = metadata.GS_GRP.astype(int)
-        # assert metadata.GS_GRP.isna().sum() == 0
-
-        vals = metadata.psa_progr.astype(int).values
-        cats = sorted(set(vals))
-        metadata['psa_progr'] = pd.Categorical(vals, categories=cats, ordered=True)
-        assert metadata.psa_progr.isna().sum() == 0
-
-        vals = metadata.recurrence_loc.astype(int).values
-        cats = sorted(set(vals))
-        metadata['recurrence_loc'] = pd.Categorical(vals, categories=cats, ordered=True)
-        assert metadata.recurrence_loc.isna().sum() == 0
+        # vals = metadata.cause_of_death.astype(int).values
+        # cats = sorted(set(vals))
+        # metadata['cause_of_death'] = pd.Categorical(vals, categories=cats, ordered=True)
+        # assert metadata.cause_of_death.isna().sum() == 0
 
         # %%
         sample_names = [Path(i).stem for i in metadata.file_name_napari]
@@ -320,6 +376,3 @@ class BLCa(IMCDataset):
         metadata_full = metadata_full.convert_dtypes()
         metadata_full = metadata_full.set_index('sample_name')
         metadata_full.to_parquet(self.clinical_metadata_path)
-
-
-
