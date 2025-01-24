@@ -74,34 +74,14 @@ class IMCDataset(BaseDataset):
             labels = pd.read_parquet(self.labels_path)
             index_levels_to_drop = list(set(labels.index.names) - {'object_id', 'sample_name'})
             labels.index = labels.index.droplevel(index_levels_to_drop)
-            intensity, labels = intensity.align(labels, join='left', axis=0)
+            intensity, labels = intensity.align(labels, join='right', axis=0)
             assert labels.isna().any().any() == False
         else:
             labels = None
 
+        # NOTE: we need to align here again because not all cells in the mask are still in `labels`
+        intensity, spatial = intensity.align(spatial, join='left', axis=0)
         assert spatial.index.equals(intensity.index)
-
-        # annotations
-        # NOTE: we do not use the annotations anymore but the labels.parquet
-        # if self.annotations_path.exists():
-        #     metadata = pd.read_parquet(self.annotations_path)
-        #     index_to_cols = list(set(metadata.index.names) - {'sample_name', 'object_id'})
-        #     metadata = metadata.reset_index(index_to_cols, drop=True)
-        #
-        #     # NOTE: legacy because we do not have group_id in the annotations for PCa
-        #     if 'group_id' not in metadata.columns:
-        #         group_id = metadata.groupby(['parent_group_name', 'group_name']).ngroup()
-        #         metadata = metadata.assign(group_id=group_id)
-        #
-        #     # NOTE: legacy to harmonize with BLCa data that does not provide this information at this point
-        #     if 'parent_group_name' in metadata.columns:
-        #         metadata = metadata.drop(columns=['parent_group_name'])
-        #
-        #     # TODO: we lose some of the cells here for BLCa, we should investigate why
-        #     clinical_metadata, metadata = clinical_metadata.align(metadata, join='left', axis=0)
-        # else:
-        #     metadata = None
-        # assert spatial.index.equals(metadata.index)
 
         masks = {}
         for mask_path in self.masks_dir.glob('*.tiff'):
