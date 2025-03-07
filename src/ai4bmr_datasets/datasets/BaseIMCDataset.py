@@ -20,11 +20,12 @@ class BaseIMCDataset:
         return len(self.sample_ids)
 
     def __getitem__(self, idx):
-        sample_id = self.sample_ids[idx]
+        sample_id = self.samples.index[idx]
         return {
-            'samples': self.samples.loc[sample_id],
-            'images': self.images[sample_id],
-            'masks': self.masks[sample_id],
+            'sample_id': sample_id,
+            'sample': self.samples.loc[sample_id],
+            'image': self.images[sample_id],
+            'mask': self.masks[sample_id],
             'panel': self.panel,
             'intensity': self.intensity.loc[sample_id],
             'spatial': self.spatial.loc[sample_id],
@@ -46,6 +47,7 @@ class BaseIMCDataset:
         panel = pd.read_parquet(panel_path)
         samples = pd.read_parquet(self.sample_metadata_path)
 
+        # TODO: only load features, masks if they exist
         intensity = pd.read_parquet(intensity_path)
         spatial = pd.read_parquet(spatial_path)
         intensity, spatial = intensity.align(spatial, join='outer', axis=0)
@@ -58,9 +60,9 @@ class BaseIMCDataset:
         sample_ids = sample_ids.sort_values()
 
         self.samples = samples.loc[sample_ids, :]
-        self.panel = panel.loc[sample_ids, :]
         self.intensity = intensity
         self.spatial = spatial
+        self.panel = panel
 
         masks = {}
         masks_dir = self.get_masks_dir(mask_version=mask_version)

@@ -78,5 +78,18 @@
 from pathlib import Path
 from ai4bmr_datasets.datasets import TNBCv2
 ds = TNBCv2(base_dir=Path('/Users/adrianomartinelli/Library/CloudStorage/OneDrive-ETHZurich/oneDrive-documents/data/datasets/TNBC'))
-ds.process()
+# ds.process()
 x = ds.load()
+s = ds[0]
+
+# %% to compute new feature version use
+from ai4bmr_imc.measure import intensity_features, spatial_features
+
+version_name = 'published'
+x = ds.load(image_version=version_name, mask_version=version_name, features_as_published=False)
+for sample in ds:
+    sample_id = sample['sample_id']
+    intensity_path = ds.get_intensity_dir(image_version=version_name, mask_version=version_name) / f'{sample_id}.parquet'
+    intensity = intensity_features(sample['image'].data, sample['mask'].data, sample['panel'])
+
+    spatial = spatial_features(sample['mask'].data)

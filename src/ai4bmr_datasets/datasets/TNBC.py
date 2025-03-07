@@ -26,7 +26,7 @@ class TNBCv2(BaseIMCDataset):
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
         self.logger = get_logger('TNBCv2', verbose=1)
-        self.version_name = 'publication'
+        self.version_name = 'published'
 
         # raw data paths
         self.raw_masks_dir = self.raw_dir / 'TNBC_shareCellData'
