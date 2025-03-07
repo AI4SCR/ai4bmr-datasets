@@ -291,3 +291,6 @@ lightning_logs/
 
 # setuptools_scm
 _version.py
+
+# dotenv
+.env
