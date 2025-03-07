@@ -10,7 +10,6 @@ from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from skimage.io import imread
 
-from ..datamodels.Image import Image, Mask
 from .BaseIMCDataset import BaseIMCDataset
 
 
@@ -27,7 +26,7 @@ class TNBCv2(BaseIMCDataset):
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
         self.logger = get_logger('TNBCv2', verbose=1)
-        self.version_name = 'default'
+        self.version_name = 'publication'
 
         # raw data paths
         self.raw_masks_dir = self.raw_dir / 'TNBC_shareCellData'
@@ -36,50 +35,9 @@ class TNBCv2(BaseIMCDataset):
         self.raw_sca_path = self.raw_dir / 'TNBC_shareCellData' / 'cellData.csv'
         self.patient_class_path = self.raw_dir / 'TNBC_shareCellData' / 'patient_class.csv'
 
-    def load(self, image_version: str = 'default', mask_version: str = 'default'):
-        self.logger.info(f'Loading dataset {self.name}')
-
-        panel_path = self.get_panel_path(image_version=image_version)
-        panel = pd.read_parquet(panel_path)
-        samples = pd.read_parquet(self.sample_metadata_path)
-
-        intensity = pd.read_parquet(self.get_intensity_dir(image_version=image_version, mask_version=mask_version))
-        spatial = pd.read_parquet(self.get_spatial_dir(mask_version=mask_version))
-
-        assert set(panel.target) == set(intensity.columns)
-
-        sample_ids = intensity.index.get_level_values('sample_id').unique()
-        sample_ids = sample_ids.sort_values()
-
-        samples = samples.loc[sample_ids, :]
-
-        masks = {}
-        masks_dir = self.get_masks_dir(mask_version=mask_version)
-
-        images = {}
-        images_dir = self.get_images_dir(image_version=image_version)
-
-        if sample_ids is not None:
-            for sample_id in sample_ids:
-                mask_path = masks_dir / f'{sample_id}.tiff'
-                image_path = images_dir / f'{sample_id}.tiff'
-
-                masks[sample_id] = Mask(id=int(mask_path.stem), data_path=mask_path, metadata_path=None)
-                images[sample_id] = Image(id=int(image_path.stem), data_path=image_path, metadata_path=panel_path)
-        else:
-            masks = {int(p.stem): Mask(id=int(p.stem), data_path=p, metadata_path=None) for p in masks_dir.glob('*.tiff')}
-            images = {int(p.stem): Mask(id=int(p.stem), data_path=p, metadata_path=None) for p in images_dir.glob('*.tiff')}
-
-        assert set(images) == set(masks)
-
-        return {
-            'samples': samples,
-            'images': images,
-            'masks': masks,
-            'panel': panel,
-            'intensity': intensity,
-            'spatial': spatial
-        }
+        # containers for processing of features
+        self.observations_default = set()
+        self.observations_unfiltered = set()
 
     def create_panel(self):
         self.logger.info('Creating panel')
@@ -203,8 +161,17 @@ class TNBCv2(BaseIMCDataset):
                 assert 1 not in mask_unfiltered.flat
 
                 save_mask(mask_unfiltered, path_unfiltered)
+            else:
+                mask_unfiltered = imread(path_unfiltered, plugin='tifffile')
 
-            if not path_default.exists() and sample_id in sample_ids:
+            # we record all observations to filter the raw single cell annotations data
+            self.observations_unfiltered.update(set((sample_id, i) for i in set(mask_unfiltered.flat)))
+
+            # NOTE: for the default masks we only compute the masks for the samples that are in the processed data
+            if sample_id not in sample_ids:
+                continue
+
+            if not path_default.exists():
                 # NOTE: filter masks by objects in data
                 #   - 0: cell boarders
                 #   - 1: background
@@ -225,6 +192,11 @@ class TNBCv2(BaseIMCDataset):
                 assert 1 not in mask_default.flat
 
                 save_mask(mask_default, path_default)
+            else:
+                mask_default = imread(path_unfiltered, plugin='tifffile')
+
+            # we record all observations to filter the raw single cell annotations data
+            self.observations_default.update(set((sample_id, i) for i in set(mask_default.flat)))
 
             if False:
                 # diagnostic plot
@@ -310,8 +282,7 @@ class TNBCv2(BaseIMCDataset):
         metadata = metadata.convert_dtypes()
 
         for grp_name, grp_data in metadata.groupby('sample_id'):
-            path = self.get_annotations_path(sample_name=grp_name,
-                                              image_version_name=self.version_name, mask_version_name=self.version_name)
+            path = self.annotations_dir / self.version_name / f'{grp_name}.parquet'
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path)
 
@@ -325,6 +296,7 @@ class TNBCv2(BaseIMCDataset):
     def create_features_spatial(self):
         self.logger.info('Creating features [spatial]')
 
+        samples = pd.read_parquet(self.get_samples_path())
         spatial = pd.read_csv(self.raw_sca_path)
 
         index_columns = ['sample_id', 'object_id']
@@ -335,9 +307,30 @@ class TNBCv2(BaseIMCDataset):
 
         spatial = spatial[feat_cols_names]
         spatial.columns = spatial.columns.map(tidy_name)
+        spatial = spatial.convert_dtypes()
 
-        for grp_name, grp_data in spatial.groupby('sample_id'):
-            dir = self.get_spatial_dir(mask_version=self.version_name)
+        valid_obs = set(spatial.index).intersection(self.observations_default)
+        default = spatial.loc[list(valid_obs), :]
+
+        valid_samples = set(default.index.get_level_values('sample_id')).intersection(samples.index)
+        default = default.loc[list(valid_samples)]
+
+        for grp_name, grp_data in default.groupby('sample_id'):
+            dir = self.spatial_dir / self.version_name
+            path = dir / f'{grp_name}.parquet'
+            path.parent.mkdir(exist_ok=True, parents=True)
+            grp_data.to_parquet(path)
+
+        del default
+
+        valid_obs = set(spatial.index).intersection(self.observations_unfiltered)
+        unfiltered = spatial.loc[list(valid_obs), :]
+
+        valid_samples = set(unfiltered.index.get_level_values('sample_id')).intersection(samples.index)
+        unfiltered = unfiltered.loc[list(valid_samples)]
+
+        for grp_name, grp_data in unfiltered.groupby('sample_id'):
+            dir = self.get_spatial_dir(mask_version='unfiltered')
             path = dir / f'{grp_name}.parquet'
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path)
@@ -355,12 +348,6 @@ class TNBCv2(BaseIMCDataset):
             .rename(columns={'SampleID':'sample_id', 'cellLabelInImage':'object_id'}) \
             .set_index(index_columns)
 
-        # filter for samples that are in both processed data and patient data
-        # NOTE: patient 30 has been excluded from the analysis due to noise
-        #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
-        sample_ids = set(intensity.index.get_level_values('sample_id')).intersection(set(samples.index))
-        intensity = intensity.loc[list(sample_ids), :]
-
         intensity.columns = intensity.columns.map(tidy_name)
 
         intensity = intensity[panel.target]
@@ -368,11 +355,21 @@ class TNBCv2(BaseIMCDataset):
 
         intensity = intensity.convert_dtypes()
 
-        for grp_name, grp_data in intensity.groupby('sample_id'):
-            dir = self.get_intensity_dir(image_version=self.version_name, mask_version=self.version_name)
+        # filter for samples that are in both processed data and patient data
+        # NOTE: patient 30 has been excluded from the analysis due to noise
+        #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
+        valid_obs = set(intensity.index).intersection(self.observations_default)
+        default = intensity.loc[list(valid_obs), :]
+
+        valid_samples = set(default.index.get_level_values('sample_id')).intersection(samples.index)
+        default = default.loc[list(valid_samples)]
+
+        for grp_name, grp_data in default.groupby('sample_id'):
+            dir = self.intensity_dir / self.version_name
             path = dir / f'{grp_name}.parquet'
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path)
+
 
     @property
     def name(self):

@@ -1,19 +1,103 @@
 from pathlib import Path
+from ..datamodels.Image import Image, Mask
+import pandas as pd
 
 class BaseIMCDataset:
 
     def __init__(self, base_dir: Path):
         self.base_dir = base_dir
 
+        # populated by `self.load()`
+        self.sample_ids = None
+        self.samples = None
+        self.images = None
+        self.masks = None
+        self.panel = None
+        self.intensity = None
+        self.spatial = None
+
     def __len__(self):
-        pass
+        return len(self.sample_ids)
+
+    def __getitem__(self, idx):
+        sample_id = self.sample_ids[idx]
+        return {
+            'samples': self.samples.loc[sample_id],
+            'images': self.images[sample_id],
+            'masks': self.masks[sample_id],
+            'panel': self.panel,
+            'intensity': self.intensity.loc[sample_id],
+            'spatial': self.spatial.loc[sample_id],
+        }
+
+    def load(self, image_version: str = 'published', mask_version: str = 'published', features_as_published: bool = True):
+        self.logger.info(f'Loading dataset {self.name}')
+
+        if features_as_published:
+            if not (image_version == 'published' and mask_version == 'published'):
+                raise ValueError('Features can only be loaded `as_published=True` when `image_version=published` and `mask_version=published`')
+            intensity_path = self.intensity_dir / 'published'
+            spatial_path = self.spatial_dir / 'published'
+        else:
+            intensity_path = self.get_intensity_dir(image_version=image_version, mask_version=mask_version)
+            spatial_path = self.get_spatial_dir(mask_version=mask_version)
+
+        panel_path = self.get_panel_path(image_version=image_version)
+        panel = pd.read_parquet(panel_path)
+        samples = pd.read_parquet(self.sample_metadata_path)
+
+        intensity = pd.read_parquet(intensity_path)
+        spatial = pd.read_parquet(spatial_path)
+        intensity, spatial = intensity.align(spatial, join='outer', axis=0)
+
+        assert intensity.isna().any().any() == False
+        assert spatial.isna().any().any() == False
+        assert set(panel.target) == set(intensity.columns)
+
+        sample_ids = intensity.index.get_level_values('sample_id').unique()
+        sample_ids = sample_ids.sort_values()
+
+        self.samples = samples.loc[sample_ids, :]
+        self.panel = panel.loc[sample_ids, :]
+        self.intensity = intensity
+        self.spatial = spatial
+
+        masks = {}
+        masks_dir = self.get_masks_dir(mask_version=mask_version)
+
+        images = {}
+        images_dir = self.get_images_dir(image_version=image_version)
+
+        if sample_ids is not None:
+            for sample_id in sample_ids:
+                mask_path = masks_dir / f'{sample_id}.tiff'
+                image_path = images_dir / f'{sample_id}.tiff'
+
+                masks[sample_id] = Mask(id=int(mask_path.stem), data_path=mask_path, metadata_path=None)
+                images[sample_id] = Image(id=int(image_path.stem), data_path=image_path, metadata_path=panel_path)
+        else:
+            masks = {int(p.stem): Mask(id=int(p.stem), data_path=p, metadata_path=None) for p in masks_dir.glob('*.tiff')}
+            images = {int(p.stem): Mask(id=int(p.stem), data_path=p, metadata_path=None) for p in images_dir.glob('*.tiff')}
+
+        assert set(images) == set(masks)
+        self.images = images
+        self.masks = masks
+
+        return {
+            'samples': self.panel,
+            'images': self.images,
+            'masks': self.masks,
+            'panel': self.panel,
+            'intensity': self.intensity,
+            'spatial': self.spatial
+        }
 
     def process(self):
         self.create_panel()
         self.create_metadata()
-        self.create_features()
         self.create_images()
         self.create_masks()
+        self.create_features()
 
     def create_images(self):
         pass
