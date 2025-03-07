@@ -107,6 +107,6 @@ df = data['data']
 sc = df[(df.index.get_level_values('sample_id') == image.id)]
 
 # get patient data for the image
-data['patient_data'].loc[image.id]
+data['samples'].loc[image.id]
 
 ```

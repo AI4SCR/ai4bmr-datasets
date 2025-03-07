@@ -4,264 +4,86 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from ai4bmr_core.utils.logging import get_logger
+from ai4bmr_core.utils.saving import save_image, save_mask
 from ai4bmr_core.utils.tidy import tidy_name
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
-from skimage.io import imread, imsave
-from ai4bmr_core.utils.saving import save_image, save_mask
+from skimage.io import imread
 
 from ..datamodels.Image import Image, Mask
-from .BaseDataset import BaseDataset
+from .BaseIMCDataset import BaseIMCDataset
 
 
-# TODO: we still need to implement the single cell value extraction from the images based on the masks!
-# at the moment we simply use the processed data from the publication.
-
-class TNBC(BaseDataset):
+class TNBCv2(BaseIMCDataset):
     """
-    Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
-    Save Ionpath file as tnbc.
-    The supplementary_table_1_path is downloaded as Table S1 from the paper.
+        Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
+        Save Ionpath file as tnbc.
+        The supplementary_table_1_path is downloaded as Table S1 from the paper.
     """
-    name: str = 'TNBC'
-    doi: str = '10.1016/j.cell.2018.08.039'
-
-    # TODO: check why patient_id 30 is missing in `data`.
-    #   but we have patient ids up to 44 in `data`.
+    # TODO: check why patient_id 30 is missing in `data` ( update: due to noise)
+    #   but we have patient ids up to 44 in `raw_sca`.
     #   we only have images for patient ids up to 41
-    def __init__(self,
-                 base_dir: Path = Path('~/data/datasets/TNBC'),
-                 mask_version: str = 'processed',
-                 expression_from: str = 'processed',
-                 verbose: int = 0):
-        """
-        :param base_dir:
-        :param mask_version: `default` uses the cells that are present in the interior mask of the raw data. 
-            `v2` uses only the cells present in the processed data `cellData.csv`
-        :param verbose:
-        """
-        if expression_from == 'processed':
-            assert mask_version == 'processed'
 
-        super().__init__()
-        self.logger = get_logger('TNBC', verbose=verbose)
+    def __init__(self, base_dir: Path):
+        super().__init__(base_dir)
+        self.logger = get_logger('TNBCv2', verbose=1)
+        self.version_name = 'default'
 
-        # processed
-        base_dir = Path(base_dir).expanduser().resolve()
-        self.processed_dir = base_dir / '02_processed'
-        self.images_dir = self.processed_dir / 'images'
-        self.panel_path = self.images_dir / 'panel.parquet'
-        self.masks_dir = self.processed_dir / 'masks'
-        self.masks_version_dir = self.masks_dir / mask_version
-        self.metadata_dir = self.processed_dir / 'metadata'
-        self.misc = self.processed_dir / 'misc'
-        self.misc.mkdir(exist_ok=True, parents=True)
-
-        # raw
-        self.raw_dir = base_dir / '01_raw'
+        # raw data paths
         self.raw_masks_dir = self.raw_dir / 'TNBC_shareCellData'
         self.raw_images_dir = self.raw_dir / 'tnbc'
-        self.processed_single_cell_data_path = self.raw_dir / 'TNBC_shareCellData' / 'cellData.csv'
-        self.patient_data_path = self.raw_dir / 'TNBC_shareCellData' / 'patient_class.csv'
         self.supplementary_table_1_path = self.raw_dir / '1-s2.0-S0092867418311000-mmc1.xlsx'  # downloaded as Table S1 from paper
+        self.raw_sca_path = self.raw_dir / 'TNBC_shareCellData' / 'cellData.csv'
+        self.patient_class_path = self.raw_dir / 'TNBC_shareCellData' / 'patient_class.csv'
 
-    def load(self):
+    def load(self, image_version: str = 'default', mask_version: str = 'default'):
         self.logger.info(f'Loading dataset {self.name}')
 
-        patient_data = pd.read_csv(self.patient_data_path, header=None)
-        patient_data.columns = ['patient_id', 'cancer_type_id']
-        patient_data = patient_data.assign(sample_id=patient_data['patient_id']).set_index('sample_id')
+        panel_path = self.get_panel_path(image_version=image_version)
+        panel = pd.read_parquet(panel_path)
+        samples = pd.read_parquet(self.sample_metadata_path)
 
-        # TODO: verify mapping
-        cancer_type_map = {0: 'mixed', 1: 'compartmentalized', 2: 'cold'}
-        patient_data = patient_data.assign(cancer_type=patient_data['cancer_type_id'].map(cancer_type_map))
+        intensity = pd.read_parquet(self.get_intensity_dir(image_version=image_version, mask_version=mask_version))
+        spatial = pd.read_parquet(self.get_spatial_dir(mask_version=mask_version))
 
-        processed_data = pd.read_csv(self.processed_single_cell_data_path)
-        index_columns = ['SampleID', 'cellLabelInImage']
-        processed_data = processed_data.set_index(index_columns)
-        processed_data.index = processed_data.index.rename(dict(SampleID='sample_id', cellLabelInImage='object_id'))
+        assert set(panel.target) == set(intensity.columns)
 
-        # filter for samples that are in both processed data and patient data
-        # NOTE: patient 30 has been excluded from the analysis due to noise
-        #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
-        sample_ids = set(processed_data.index.get_level_values('sample_id')).intersection(set(patient_data.index))
-        processed_data = processed_data.loc[list(sample_ids), :]
-        patient_data = patient_data.loc[list(sample_ids), :]
+        sample_ids = intensity.index.get_level_values('sample_id').unique()
+        sample_ids = sample_ids.sort_values()
 
-        # mask metadata
-        metadata_paths = list(self.masks_version_dir.glob(r'*.parquet'))
-        if len(metadata_paths) == 40:
-            metadata = pd.read_parquet(metadata_paths)
-        else:
-            self.create_metadata(processed_data)
-            metadata_paths = list(self.masks_version_dir.glob(r'*.parquet'))
-            assert len(metadata_paths) == 40
-            metadata = pd.read_parquet(metadata_paths)
-
-        # panel
-        if self.panel_path.exists():
-            panel = pd.read_parquet(self.panel_path)
-        else:
-            self.create_panel()
-            panel = pd.read_parquet(self.panel_path)
-        assert set(panel.target) - set(processed_data.columns) == set()
-
-        # data
-        processed_data = processed_data[panel.target]
-        assert processed_data.isna().sum().sum() == 0
-
-        # objects
-        mask_paths = list(self.masks_version_dir.glob(r'*.tiff'))
-        if len(mask_paths) != 40:
-            self.create_filtered_masks(processed_data)
-            mask_paths = list(self.masks_version_dir.glob(r'*.tiff'))
-            assert len(mask_paths) == 40
+        samples = samples.loc[sample_ids, :]
 
         masks = {}
-        for mask_path in mask_paths:
-            metadata_path = mask_path.with_suffix('.parquet')
-            assert metadata_path.exists()
-            masks[int(mask_path.stem)] = Mask(id=int(mask_path.stem), data_path=mask_path, metadata_path=metadata_path)
-
-        # images
-        imgs_paths = list(self.images_dir.glob(r'*.tiff'))
-        if len(imgs_paths) != 40:
-            self.images_dir.mkdir(exist_ok=True, parents=True)
-            imgs_paths = sorted(self.raw_images_dir.glob('*.tiff'))
-            for img_path in imgs_paths:
-                self.logger.debug(f'processing image {img_path.stem}')
-                sample_id = re.search(r'Point(\d+).tiff', img_path.name).groups()[0]
-
-                if (self.images_dir / f'{sample_id}.tiff').exists() or int(sample_id) not in sample_ids:
-                    continue
-                img = self.create_image(img_path, panel)
-                save_image(img, self.images_dir / f'{sample_id}.tiff')
+        masks_dir = self.get_masks_dir(mask_version=mask_version)
 
         images = {}
-        for image_path in self.images_dir.glob('*.tiff'):
-            images[int(image_path.stem)] = Image(id=int(image_path.stem), data_path=image_path,
-                                                 metadata_path=self.panel_path)
+        images_dir = self.get_images_dir(image_version=image_version)
+
+        if sample_ids is not None:
+            for sample_id in sample_ids:
+                mask_path = masks_dir / f'{sample_id}.tiff'
+                image_path = images_dir / f'{sample_id}.tiff'
+
+                masks[sample_id] = Mask(id=int(mask_path.stem), data_path=mask_path, metadata_path=None)
+                images[sample_id] = Image(id=int(image_path.stem), data_path=image_path, metadata_path=panel_path)
+        else:
+            masks = {int(p.stem): Mask(id=int(p.stem), data_path=p, metadata_path=None) for p in masks_dir.glob('*.tiff')}
+            images = {int(p.stem): Mask(id=int(p.stem), data_path=p, metadata_path=None) for p in images_dir.glob('*.tiff')}
 
         assert set(images) == set(masks)
 
-        cols = processed_data.columns
-        processed_data.columns = [tidy_name(col) for col in cols]
-        panel = panel.assign(target_original_name=panel.target, target=panel.target.map(tidy_name))
-        assert all(panel.target.tolist() == processed_data.columns)
-
-        return dict(data=processed_data,
-                    panel=panel,
-                    metadata=metadata,
-                    images=images,
-                    masks=masks,
-                    patient_data=patient_data)
-
-    def create_image(self, path, panel) -> np.ndarray:
-        self.logger.info('Creating images')
-        img = imread(path)
-
-        metadata = self.get_tiff_metadata(path)
-        metadata = self.clean_metadata(metadata, panel)
-
-        img = img[metadata.page]
-        assert img.shape[0] == len(panel)
-
-        return img
-
-    def create_filtered_masks(self, data):
-        self.logger.info('Filtering masks')
-
-        self.masks_dir.mkdir(exist_ok=True, parents=True)
-        mask_paths = sorted(list(self.raw_masks_dir.glob(r'p*_labeledcellData.tiff')))
-        sample_ids = set(data.index.get_level_values('sample_id'))
-        for mask_path in mask_paths:
-            sample_id = re.match(r'p(\d+)', mask_path.stem).groups()
-            assert len(sample_id) == 1
-            sample_id = int(sample_id[0])
-
-            self.logger.info(f'processing sample {sample_id}')
-            if sample_id not in sample_ids:
-                continue
-            if (self.masks_version_dir / f'{sample_id}.tiff').exists():
-                continue
-
-            # load segmentation mask from raw data
-            segm = imread(
-                self.raw_images_dir / f'TA459_multipleCores2_Run-4_Point{sample_id}' / 'segmentation_interior.png')
-            # load segmentation from processed data
-            mask = imread(mask_path, plugin='tifffile')
-
-            mask_filtered = mask.copy()
-            # note: set region with no segmentation to background
-            mask_filtered[segm == 0] = 0
-
-            if mask_filtered.max() < 65535:
-                mask_filtered = mask_filtered.astype('uint16')
-            else:
-                mask_filtered = mask_filtered.astype('uint32')
-
-            assert 1 not in mask_filtered.flat
-            masks_version_dir = self.masks_dir / 'processed'
-            masks_version_dir.mkdir(exist_ok=True, parents=True)
-            save_mask(mask_filtered, masks_version_dir / f'{sample_id}.tiff')
-
-            # filter masks by objects in data
-            # NOTE:
-            #   - 0: cell boarders
-            #   - 1: background
-            #   - 2: cells
-            #   (19, 4812) is background in the mask and removed after removing objects not in `data`
-            objs_in_data = set(data.loc[sample_id, :].index)
-            removed_objects = set(mask.flat) - set(objs_in_data) - {0, 1}
-            map = {i: 0 for i in removed_objects}
-            vfunc = np.vectorize(lambda x: map.get(x, x))
-            mask_filtered_v2 = vfunc(mask)
-            mask_filtered_v2[mask_filtered_v2 == 1] = 0
-
-            if mask_filtered_v2.max() < 65535:
-                mask_filtered_v2 = mask_filtered_v2.astype('uint16')
-            else:
-                mask_filtered_v2 = mask_filtered_v2.astype('uint32')
-
-            assert set(mask_filtered_v2.flat) - objs_in_data == {0}
-            assert 1 not in mask_filtered_v2.flat
-            masks_version_dir = self.masks_dir / 'v2'
-            masks_version_dir.mkdir(exist_ok=True, parents=True)
-            save_mask(mask_filtered_v2, masks_version_dir / f'{sample_id}.tiff')
-
-            # note: map objects in mask that are not present in data to 2
-            objs_in_segm = set(mask[segm == 1])
-            map = {i: 2 for i in objs_in_segm - objs_in_data}
-            assert objs_in_data - objs_in_segm == set()
-            map.update({i: 1 for i in objs_in_data.intersection(objs_in_segm)})
-            z = mask.copy()
-            z[segm != 1] = 0
-            vfunc = np.vectorize(lambda x: map.get(x, x))
-            z = vfunc(z)
-
-            # diagnostic plot
-            fig, axs = plt.subplots(2, 2, dpi=400)
-            axs = axs.flat
-
-            axs[0].imshow(mask > 1, interpolation=None, cmap='grey')
-            axs[0].set_title('Segmentation from processed data', fontsize=8)
-
-            axs[1].imshow(mask_filtered > 0, interpolation=None, cmap='grey')
-            axs[1].set_title('Segmentation from raw data', fontsize=8)
-
-            axs[2].imshow(z, interpolation=None)
-            axs[2].set_title('Objects missing in `cellData.csv`', fontsize=8)
-
-            axs[3].imshow(mask_filtered_v2 > 0, interpolation=None, cmap='grey')
-            axs[3].set_title('Segmentation from processed\nfiltered with `cellData.csv`', fontsize=8)
-
-            for ax in axs: ax.set_axis_off()
-            fig.tight_layout()
-            fig.savefig(self.misc / f'{sample_id}.png')
-            plt.close(fig)
+        return {
+            'samples': samples,
+            'images': images,
+            'masks': masks,
+            'panel': panel,
+            'intensity': intensity,
+            'spatial': spatial
+        }
 
     def create_panel(self):
         self.logger.info('Creating panel')
+
         panel_1 = pd.read_excel(self.supplementary_table_1_path, header=3)[:31]
         panel_1.columns = panel_1.columns.str.strip()
         panel_1 = panel_1.rename(columns={'Antibody target': 'target'})
@@ -283,21 +105,25 @@ class TNBC(BaseDataset):
         panel = panel.assign(target=panel.target.replace(target_map))
 
         panel = panel.sort_values('mass_channel', ascending=True)
-        panel = panel.assign(page=range(len(panel)))
+        # panel = panel.assign(page=range(len(panel)))
+        panel = panel.assign(target_original_name=panel.target, target=panel.target.map(tidy_name))
 
         # extract original page numbers for markers
         img_path = sorted(list(self.raw_images_dir.glob('*.tiff')))[0]
         metadata = self.get_tiff_metadata(img_path)
-        metadata = self.clean_metadata(metadata, panel)
-        metadata = metadata.rename(columns={'page': 'page_original'})
+        metadata = metadata.rename(columns={'target': 'target_from_tiff'}).reset_index()
 
-        panel = panel.merge(metadata[['page_original', 'mass_channel']], on='mass_channel')
+        panel = panel.merge(metadata, on='mass_channel', how='left')
+        assert panel.isna().any().any() == False
+        panel = panel.sort_values('page').reset_index(drop=True)
 
         panel = panel.convert_dtypes()
-        self.panel_path.parent.mkdir(exist_ok=True, parents=True)
-        panel.to_parquet(self.panel_path)
+        panel_path = self.get_panel_path(image_version=self.version_name)
+        panel_path.parent.mkdir(exist_ok=True, parents=True)
+        panel.to_parquet(panel_path)
 
-    def get_tiff_metadata(self, path):
+    @staticmethod
+    def get_tiff_metadata(path):
         import tifffile
         tag_name = 'PageName'
         metadata = pd.DataFrame()
@@ -308,14 +134,155 @@ class TNBC(BaseDataset):
                 metadata.loc[page_num, tag_name] = page_name_tag.value
         metadata = metadata.assign(PageName=metadata.PageName.str.strip())
         metadata = metadata.PageName.str.extract(r'(?P<target>\w+)\s+\((?P<mass_channel>\d+)')
+
+        metadata.mass_channel = metadata.mass_channel.astype('int')
+        metadata = metadata.convert_dtypes()
+
         return metadata
 
-    def create_metadata(self, data):
-        self.logger.info('Creating metadata')
-        metadata_cols = ['cellSize', 'tumorYN', 'tumorCluster', 'Group', 'immuneCluster', 'immuneGroup']
+    def create_images(self):
+        self.logger.info('Creating images')
+
+        panel_path = self.get_panel_path(image_version=self.version_name)
+        panel = pd.read_parquet(panel_path)
+
+        images_dir = self.get_images_dir(self.version_name)
+        images_dir.mkdir(exist_ok=True, parents=True)
+
+        image_paths = sorted(self.raw_images_dir.glob('*.tiff'))
+        for img_path in image_paths:
+            self.logger.debug(f'processing image {img_path.stem}')
+            sample_id = re.search(r'Point(\d+).tiff', img_path.name).groups()[0]
+
+            if (images_dir / f'{sample_id}.tiff').exists():
+                continue
+
+            img = imread(img_path)
+            img = img[panel.page.values]  # extract only the layers of the panel
+            assert len(img) == len(panel)
+
+            save_image(img, images_dir / f'{sample_id}.tiff')
+
+    def create_masks(self):
+        self.logger.info('Filtering masks')
+
+        masks_default_dir = self.get_masks_dir(mask_version=self.version_name)
+        masks_default_dir.mkdir(exist_ok=True, parents=True)
+
+        masks_unfiltered_dir = self.get_masks_dir(mask_version='unfiltered')
+        masks_unfiltered_dir.mkdir(exist_ok=True, parents=True)
+
+        mask_paths = sorted(list(self.raw_masks_dir.glob(r'p*_labeledcellData.tiff')))
+
+        data = pd.read_csv(self.raw_sca_path)
+        data = data.rename(columns={'SampleID': 'sample_id', 'cellLabelInImage': 'object_id'})
+        data = data.set_index('sample_id')[['object_id']]
+
+        sample_ids = set(data.index.get_level_values('sample_id'))
+
+        for mask_path in mask_paths:
+            sample_id = re.match(r'p(\d+)', mask_path.stem).groups()
+            assert len(sample_id) == 1
+            sample_id = int(sample_id[0])
+
+            self.logger.info(f'processing sample {sample_id}')
+
+            path_default = masks_default_dir / f'{sample_id}.tiff'
+            path_unfiltered = masks_unfiltered_dir / f'{sample_id}.tiff'
+
+            if not path_unfiltered.exists():
+                # load segmentation from processed data
+                mask_unfiltered = imread(mask_path, plugin='tifffile')
+
+                # load segmentation mask from raw data
+                segm = imread(
+                    self.raw_images_dir / f'TA459_multipleCores2_Run-4_Point{sample_id}' / 'segmentation_interior.png')
+
+                # note: set region with no segmentation to background
+                mask_unfiltered[segm == 0] = 0
+                assert 1 not in mask_unfiltered.flat
+
+                save_mask(mask_unfiltered, path_unfiltered)
+
+            if not path_default.exists() and sample_id in sample_ids:
+                # NOTE: filter masks by objects in data
+                #   - 0: cell boarders
+                #   - 1: background
+                #   - 2..N: cells
+                #   (19, 4812) is background in the mask and removed after removing objects not in `data`
+
+                mask_default = imread(mask_path, plugin='tifffile')
+
+                objs_in_data = set(data.loc[sample_id, :].object_id)
+                removed_objects = set(mask_default.flat) - set(objs_in_data) - {0, 1}
+
+                map = {i: 0 for i in removed_objects}
+                vfunc = np.vectorize(lambda x: map.get(x, x))
+                mask_default = vfunc(mask_default)
+                mask_default[mask_default == 1] = 0
+
+                assert set(mask_default.flat) - objs_in_data == {0}
+                assert 1 not in mask_default.flat
+
+                save_mask(mask_default, path_default)
+
+            if False:
+                # diagnostic plot
+                # FIXME: what do to with this?
+                # note: map objects in mask that are not present in data to 2
+                objs_in_segm = set(mask[segm == 1])
+                map = {i: 2 for i in objs_in_segm - objs_in_data}
+                assert objs_in_data - objs_in_segm == set()
+                map.update({i: 1 for i in objs_in_data.intersection(objs_in_segm)})
+                z = mask.copy()
+                z[segm != 1] = 0
+                vfunc = np.vectorize(lambda x: map.get(x, x))
+                z = vfunc(z)
+
+                fig, axs = plt.subplots(2, 2, dpi=400)
+                axs = axs.flat
+
+                axs[0].imshow(mask > 1, interpolation=None, cmap='grey')
+                axs[0].set_title('Segmentation from processed data', fontsize=8)
+
+                axs[1].imshow(mask_filtered > 0, interpolation=None, cmap='grey')
+                axs[1].set_title('Segmentation from raw data', fontsize=8)
+
+                axs[2].imshow(z, interpolation=None)
+                axs[2].set_title('Objects missing in `cellData.csv`', fontsize=8)
+
+                axs[3].imshow(mask_filtered_v2 > 0, interpolation=None, cmap='grey')
+                axs[3].set_title('Segmentation from processed\nfiltered with `cellData.csv`', fontsize=8)
+
+                for ax in axs: ax.set_axis_off()
+                fig.tight_layout()
+                fig.savefig(self.misc / f'{sample_id}.png')
+                plt.close(fig)
+
+    def process_clinical_metadata(self):
+        self.logger.info('Creating metadata [samples]')
+        samples = pd.read_csv(self.patient_class_path, header=None)
+        samples.columns = ['patient_id', 'cancer_type_id']
+        samples = samples.assign(sample_id=samples['patient_id']).set_index('sample_id')
+
+        cancer_type_map = {0: 'mixed', 1: 'compartmentalized', 2: 'cold'}
+        samples = samples.assign(cancer_type=samples['cancer_type_id'].map(cancer_type_map))
+
+        path = self.get_samples_path()
+        path.parent.mkdir(exist_ok=True, parents=True)
+        samples.to_parquet(self.get_samples_path())
+
+    def process_annotations(self):
+        self.logger.info('Creating metadata [annotations]')
+
+        data = pd.read_csv(self.raw_sca_path)
+
+        metadata_cols = ['SampleID', 'cellSize', 'tumorYN', 'tumorCluster', 'Group', 'immuneCluster', 'immuneGroup']
         metadata = data[metadata_cols]
 
-        grp_map = {1: 'unidentified', 2: 'immune', 3: 'endothelial', 4: 'Mmsenchymal_like', 5: 'tumor',
+        metadata = metadata.rename(columns={'SampleID': 'sample_id'}).set_index('sample_id')
+
+        grp_map = {1: 'unidentified', 2: 'immune', 3: 'endothelial', 4: 'mesenchymal_like', 5: 'tumor',
                    6: 'keratin_positive_tumor'}
         metadata = metadata.assign(group_name=metadata['Group'].map(grp_map))
 
@@ -341,86 +308,152 @@ class TNBC(BaseDataset):
         metadata = metadata.assign(label_id=metadata.label_name.map(label_id_map))
 
         metadata = metadata.convert_dtypes()
-        self.masks_version_dir.mkdir(exist_ok=True, parents=True)
+
         for grp_name, grp_data in metadata.groupby('sample_id'):
-            grp_data.to_parquet(self.masks_version_dir / f'{grp_name}.parquet')
+            path = self.get_annotations_path(sample_name=grp_name,
+                                              image_version_name=self.version_name, mask_version_name=self.version_name)
+            path.parent.mkdir(exist_ok=True, parents=True)
+            grp_data.to_parquet(path)
 
-    @staticmethod
-    def clean_metadata(metadata, panel):
-        metadata = metadata.assign(mass_channel=metadata.mass_channel.astype('int'))
-        filter = metadata.mass_channel.isin(panel['mass_channel'])
-        metadata = metadata[filter]
-        metadata = metadata.rename(columns={'target': 'target_from_tiff'})
-        map = panel.set_index('mass_channel')['target'].to_dict()
-        metadata = metadata.assign(target=metadata.mass_channel.map(map))
-        # align with panel marker order, i.e. sort by mass channel
-        panel = panel.sort_values('page')  # ensure panel is sorted by page
-        metadata = metadata.reset_index().set_index('target').loc[panel.target]
-        return metadata
+    def create_metadata(self):
+        self.process_clinical_metadata()
+        self.process_annotations()
 
-    def reproduce_paper_figure_2E(self) -> Figure:
-        """Try to reproduce the figure from the paper. Qualitative comparison looks good if data is loaded from
-        """
+    def create_graphs(self):
+        pass
 
-        import pandas as pd
-        import seaborn as sns
-        import numpy as np
-        from sklearn.preprocessing import MinMaxScaler
-        import colorcet as cc
+    def create_features_spatial(self):
+        self.logger.info('Creating features [spatial]')
 
-        data = self.load()
-        df = data['data']
+        spatial = pd.read_csv(self.raw_sca_path)
 
-        # %%
-        cols = ['FoxP3', 'CD4', 'CD3', 'CD56', 'CD209', 'CD20', 'HLA-DR', 'CD11c', 'CD16', 'CD68', 'CD11b', 'MPO',
-                'CD45',
-                'CD31',
-                'SMA', 'Vimentin', 'Beta catenin', 'Pan-Keratin', 'p53', 'EGFR', 'Keratin17', 'Keratin6']
-        pdat = df[cols]
-        pdat = pdat[pdat.index.get_level_values('sample_id') <= 41]
+        index_columns = ['sample_id', 'object_id']
+        feat_cols_names = ['cellSize']
+        spatial = spatial \
+            .rename(columns={'SampleID': 'sample_id', 'cellLabelInImage': 'object_id'}) \
+            .set_index(index_columns)
 
-        pdat, row_colors = pdat.align(data['metadata'], join='left', axis=0)
-        pdat = pdat.assign(group_name=pd.Categorical(row_colors.group_name,
-                                                     categories=['immune', 'endothelial', 'Mmsenchymal_like', 'tumor',
-                                                                 'keratin_positive_tumor', 'unidentified']))
-        pdat = pdat.assign(immune_group_name=pd.Categorical(row_colors.immune_group_name,
-                                                            categories=['Tregs', 'CD4 T', 'CD8 T', 'CD3 T', 'NK', 'B',
-                                                                        'Neutrophils',
-                                                                        'Macrophages', 'DC', 'DC/Mono', 'Mono/Neu',
-                                                                        'Other immune']))
-        pdat = pdat.set_index(['group_name', 'immune_group_name'], append=True)
+        spatial = spatial[feat_cols_names]
+        spatial.columns = spatial.columns.map(tidy_name)
 
-        color_map = {'immune': np.array((187, 103, 30, 0)) / 255,
-                     'endothelial': np.array((253, 142, 142, 0)) / 255,
-                     'Mmsenchymal_like': np.array((1, 56, 54, 0)) / 255,
-                     'tumor': np.array((244, 201, 254, 0)) / 255,
-                     'keratin_positive_tumor': np.array((128, 215, 230, 0)) / 255,
-                     'unidentified': np.array((255, 255, 255, 0)) / 255,
-                     }
-        row_colors = row_colors.assign(group_name=row_colors.group_name.map(color_map))
+        for grp_name, grp_data in spatial.groupby('sample_id'):
+            dir = self.get_spatial_dir(mask_version=self.version_name)
+            path = dir / f'{grp_name}.parquet'
+            path.parent.mkdir(exist_ok=True, parents=True)
+            grp_data.to_parquet(path)
 
-        color_map = {k: cc.glasbey_category10[i] for i, k in enumerate(row_colors.immune_group_name.unique())}
-        row_colors = row_colors.assign(immune_group_name=row_colors.immune_group_name.map(color_map))
-        row_colors = row_colors[['group_name', 'immune_group_name']]
+    def create_features_intensity(self):
+        self.logger.info('Creating features [intensities]')
 
-        pdat = pdat.sort_values(['group_name', 'immune_group_name'])
+        samples = pd.read_parquet(self.get_samples_path())
+        panel_path = self.get_panel_path(image_version=self.version_name)
+        panel = pd.read_parquet(panel_path)
+        intensity = pd.read_csv(self.raw_sca_path)
 
-        # %% filter
-        pdat = pdat[pdat.index.get_level_values('group_name') == 'immune']
-        pdat = pdat[
-            ['FoxP3', 'CD4', 'CD3', 'CD56', 'CD209', 'CD20', 'HLA-DR', 'CD11c', 'CD16', 'CD68', 'CD11b', 'MPO', 'CD45']]
+        index_columns = ['sample_id', 'object_id']
+        intensity = intensity \
+            .rename(columns={'SampleID':'sample_id', 'cellLabelInImage':'object_id'}) \
+            .set_index(index_columns)
 
-        # %%
-        pdat = pd.DataFrame(MinMaxScaler().fit_transform(pdat), index=pdat.index, columns=pdat.columns)
-        cg = sns.clustermap(pdat,
-                            cmap='bone',
-                            row_colors=row_colors,
-                            col_cluster=False,
-                            row_cluster=False,
-                            # figsize=(20, 20)
-                            )
-        cg.ax_heatmap.set_facecolor('black')
-        cg.ax_heatmap.set_yticklabels([])
-        cg.figure.tight_layout()
-        cg.figure.show()
-        return cg.figure
+        # filter for samples that are in both processed data and patient data
+        # NOTE: patient 30 has been excluded from the analysis due to noise
+        #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
+        sample_ids = set(intensity.index.get_level_values('sample_id')).intersection(set(samples.index))
+        intensity = intensity.loc[list(sample_ids), :]
+
+        intensity.columns = intensity.columns.map(tidy_name)
+
+        intensity = intensity[panel.target]
+        assert intensity.isna().sum().sum() == 0
+
+        intensity = intensity.convert_dtypes()
+
+        for grp_name, grp_data in intensity.groupby('sample_id'):
+            dir = self.get_intensity_dir(image_version=self.version_name, mask_version=self.version_name)
+            path = dir / f'{grp_name}.parquet'
+            path.parent.mkdir(exist_ok=True, parents=True)
+            grp_data.to_parquet(path)
+
+    @property
+    def name(self):
+        return 'TNBCv2'
+
+    @property
+    def id(self):
+        return 'TNBC-v2'
+
+    @property
+    def doi(self):
+        return '10.1016/j.cell.2018.08.039'
+
+
+# %%
+# TODO: we still need to implement the single cell value extraction from the images based on the masks!
+# at the moment we simply use the processed data from the publication.
+def reproduce_paper_figure_2E(self) -> Figure:
+    """Try to reproduce the figure from the paper. Qualitative comparison looks good if data is loaded from
+    """
+
+    import pandas as pd
+    import seaborn as sns
+    import numpy as np
+    from sklearn.preprocessing import MinMaxScaler
+    import colorcet as cc
+
+    data = self.load()
+    df = data['data']
+
+    # %%
+    cols = ['FoxP3', 'CD4', 'CD3', 'CD56', 'CD209', 'CD20', 'HLA-DR', 'CD11c', 'CD16', 'CD68', 'CD11b', 'MPO',
+            'CD45',
+            'CD31',
+            'SMA', 'Vimentin', 'Beta catenin', 'Pan-Keratin', 'p53', 'EGFR', 'Keratin17', 'Keratin6']
+    pdat = df[cols]
+    pdat = pdat[pdat.index.get_level_values('sample_id') <= 41]
+
+    pdat, row_colors = pdat.align(data['metadata'], join='left', axis=0)
+    pdat = pdat.assign(group_name=pd.Categorical(row_colors.group_name,
+                                                 categories=['immune', 'endothelial', 'Mmsenchymal_like', 'tumor',
+                                                             'keratin_positive_tumor', 'unidentified']))
+    pdat = pdat.assign(immune_group_name=pd.Categorical(row_colors.immune_group_name,
+                                                        categories=['Tregs', 'CD4 T', 'CD8 T', 'CD3 T', 'NK', 'B',
+                                                                    'Neutrophils',
+                                                                    'Macrophages', 'DC', 'DC/Mono', 'Mono/Neu',
+                                                                    'Other immune']))
+    pdat = pdat.set_index(['group_name', 'immune_group_name'], append=True)
+
+    color_map = {'immune': np.array((187, 103, 30, 0)) / 255,
+                 'endothelial': np.array((253, 142, 142, 0)) / 255,
+                 'Mmsenchymal_like': np.array((1, 56, 54, 0)) / 255,
+                 'tumor': np.array((244, 201, 254, 0)) / 255,
+                 'keratin_positive_tumor': np.array((128, 215, 230, 0)) / 255,
+                 'unidentified': np.array((255, 255, 255, 0)) / 255,
+                 }
+    row_colors = row_colors.assign(group_name=row_colors.group_name.map(color_map))
+
+    color_map = {k: cc.glasbey_category10[i] for i, k in enumerate(row_colors.immune_group_name.unique())}
+    row_colors = row_colors.assign(immune_group_name=row_colors.immune_group_name.map(color_map))
+    row_colors = row_colors[['group_name', 'immune_group_name']]
+
+    pdat = pdat.sort_values(['group_name', 'immune_group_name'])
+
+    # %% filter
+    pdat = pdat[pdat.index.get_level_values('group_name') == 'immune']
+    pdat = pdat[
+        ['FoxP3', 'CD4', 'CD3', 'CD56', 'CD209', 'CD20', 'HLA-DR', 'CD11c', 'CD16', 'CD68', 'CD11b', 'MPO', 'CD45']]
+
+    # %%
+    pdat = pd.DataFrame(MinMaxScaler().fit_transform(pdat), index=pdat.index, columns=pdat.columns)
+    cg = sns.clustermap(pdat,
+                        cmap='bone',
+                        row_colors=row_colors,
+                        col_cluster=False,
+                        row_cluster=False,
+                        # figsize=(20, 20)
+                        )
+    cg.ax_heatmap.set_facecolor('black')
+    cg.ax_heatmap.set_yticklabels([])
+    cg.figure.tight_layout()
+    cg.figure.show()
+    return cg.figure
+
