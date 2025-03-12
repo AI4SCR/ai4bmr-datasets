@@ -26,4 +26,3 @@ def build_graph(mask: np.ndarray, topology: str, **kwargs) -> nx.Graph:
     # Build graph and get key
     g = builder.build_graph(mask, **kwargs)
     return g
-

@@ -2,6 +2,29 @@
 
 Utilities to data handling in the AI4BMR group.
 
+# Dataset Structure
+Each dataset has the following attributes that can be null:
+
+- 'samples': with Index `sample_id`
+- 'images': float image with intensities
+- 'masks': integer images with `object_ids`
+- 'panel': with Index `channel_index` and a column `target`
+- 'intensity': with MultiIndex (`sample_id`, `object_id`)
+- 'spatial': with MultiIndex (`sample_id`, `object_id`)
+
+those indices and columns are enforced.
+
+## Guidelines
+- Images and masks are saved as tifffiles (we might want to switch to ome.tiff) using the `save_image` and `save_mask` utilities
+- Images and masks are loaded lazily with the [`Image`](src/ai4bmr_datasets/datamodels/Image.py) and [`Mask`](src/ai4bmr_datasets/datamodels/Image.py) classes
+  - All tabular data is saved as typed parquet files
+    - before saving data always clean the column names with [`tidy_name`](https://github.com/AI4SCR/ai4bmr-core/blob/67d5505255ce85b832781118af537719a8f03c2b/src/ai4bmr_core/utils/tidy.py#L4)
+      ```python
+      target=panel.target.map(tidy_name)
+      ```
+    - before saving data always convert to base dtypes with [`pd.convert_dtypes`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.convert_dtypes.html)
+
+
 # Pre-requisites
 
 - Access to the github.com/AI4SCR
@@ -109,4 +132,12 @@ sc = df[(df.index.get_level_values('sample_id') == image.id)]
 # get patient data for the image
 data['samples'].loc[image.id]
 
+```
+
+### NSCLC
+
+```bash
+# extract on cluster
+module load p7zip/17.05 gcc/12.3.0
+7z x NSCLC.zip
 ```

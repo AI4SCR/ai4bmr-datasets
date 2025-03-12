@@ -15,12 +15,14 @@ class ContactGraphBuilder(BaseGraphBuilder):
     Build contact graph based on pixel expansion of cell masks.
     """
 
-    def build_graph(self,
-                    mask: np.ndarray,
-                    kernel_name: str = 'disk',
-                    kernel_radius: float = 4,
-                    include_self: bool = True,
-                    **kwargs) -> nx.Graph:
+    def build_graph(
+        self,
+        mask: np.ndarray,
+        kernel_name: str = "disk",
+        kernel_radius: float = 4,
+        include_self: bool = True,
+        **kwargs,
+    ) -> nx.Graph:
         """Build topology using pixel expansion of segmentation masks provided by topo_data['mask'].
         Masks that overlap after expansion are connected in the graph.
         """
