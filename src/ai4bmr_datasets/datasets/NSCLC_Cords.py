@@ -61,33 +61,13 @@ class NSCLC(BaseIMCDataset):
 
                 print('MCD FILE PATH ', mcd_file_path)
 
-                self.extract_tiff_metadata(mcd_file_path, self.tiff_imgs, self.raw_panel)
+                self.extract_tiff_from_mcd(mcd_file_path, self.tiff_imgs, self.raw_panel)
 
         import pdb; pdb.set_trace()
 
 
 
-    @staticmethod
-    def get_tiff_metadata(path):
-        import tifffile
-        tag_name = 'PageName'
-        metadata = pd.DataFrame()
-        metadata.index.name = 'page'
-        with tifffile.TiffFile(path) as tif:
-            for page_num, page in enumerate(tif.pages):
-                page_name_tag = page.tags.get(tag_name)
-                import pdb; pdb.set_trace()
-                metadata.loc[page_num, tag_name] = page_name_tag.value
-        metadata = metadata.assign(PageName=metadata.PageName.str.strip())
-        metadata = metadata.PageName.str.extract(r'(?P<target>\w+)\s+\((?P<mass_channel>\d+)')
-
-        metadata.mass_channel = metadata.mass_channel.astype('int')
-        metadata = metadata.convert_dtypes()
-
-        return metadata
-    
-
-    def extract_tiff_metadata(self, mcd_file, output_dir, raw_panel_path):
+    def extract_tiff_from_mcd(self, mcd_file: str, output_dir: str, raw_panel_path):
 
         mcd_file = Path(mcd_file)
         output_dir = Path(output_dir)
@@ -95,8 +75,6 @@ class NSCLC(BaseIMCDataset):
         
         if not mcd_file.is_file():
             raise FileNotFoundError(f"MCD file not found: {mcd_file}")
-        
-        tiff_files = []
         
         # Open the MCD file
         with MCDFile(mcd_file) as mcd:
@@ -127,7 +105,7 @@ class NSCLC(BaseIMCDataset):
                     # mask acquisition layers and channels to keep , MASK RELATED TO IMAGE (mcd.read_acquisition(acquisition, strict=False)) ORDER 
                     mask = [1 if name in panel_channels_to_keep['Metal Tag'].values else 0 for name in acquisition.channel_names]
 
-                    # verify the kept channels are 43, accordin to the proteins in the panel
+                    # verify the kept channels are 43, according to the proteins in the panel
                     assert np.sum(mask) == 43 and np.sum(mask) == len(panel_channels_to_keep), 'number of channels to keep is not 43'
 
                     # filtered image with the 43 relevant protein channels 
@@ -145,15 +123,9 @@ class NSCLC(BaseIMCDataset):
                     # Convert metadata to a string format compatible with TIFF files
                     metadata_str = "\n".join([f"Layer {i+1}: {mapped_df['Target'][i]}" for i in range(len(mapped_df))])
 
-                    pattern = r'(\d+[A-C]?)\b'
-                    pattern = r'(\d+_[A-Za-z])'
                     pattern = r'_(\d+_[A-Z])\.mcd'
 
                     match = re.search(pattern, str(mcd_file)[-20:])
-
-                    #import pdb; pdb.set_trace()
-                    #match = re.search(pattern, str(mcd_file))
-                    # TO DO use re 
                     TMA_cell_pattern = match.group(1)
 
                     # save ndarray as a multi-page TIFF file with metadata
