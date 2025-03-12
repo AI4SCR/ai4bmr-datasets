@@ -16,7 +16,8 @@ dependencies = [
     "pydantic-settings",
     "tqdm",
     "torch",
-    "numpy<2",
+#    "numpy<2",
+    "numpy",
     "openpyxl",
     "pandas",
     "tifffile",
@@ -40,7 +41,6 @@ repository = "https://github.com/AI4SCR/ai4scr-datasets"
 test = [
     "pytest",
     "pytest-cov",
-    "pandas"
 ]
 dev = [
     "mypy",

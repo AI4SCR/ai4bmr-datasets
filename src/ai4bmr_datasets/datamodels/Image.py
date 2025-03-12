@@ -32,12 +32,14 @@ class Image(BaseModel):
     def metadata(self) -> pd.DataFrame:
         _metadata = self._metadata
         if _metadata is None and self.metadata_path:
-            if self.metadata_path.suffix == '.csv':
+            if self.metadata_path.suffix == ".csv":
                 _metadata = pd.read_csv(self.metadata_path)
-            elif self.metadata_path.suffix == '.parquet':
+            elif self.metadata_path.suffix == ".parquet":
                 _metadata = pd.read_parquet(self.metadata_path)
             else:
-                raise ValueError(f'unsupported metadata format: {self.metadata_path.suffix}')
+                raise ValueError(
+                    f"unsupported metadata format: {self.metadata_path.suffix}"
+                )
             self._metadata = _metadata if self.in_memory else None
         return _metadata
 

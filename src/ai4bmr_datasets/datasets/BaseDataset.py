@@ -10,6 +10,7 @@ NOTES:
 - Should we rename base_dir to cache_dir?
 """
 
+
 class BaseDatasetConfig(BaseSettings):
     id: str = None
     name: str = None
@@ -24,23 +25,26 @@ class BaseDatasetConfig(BaseSettings):
     raw_files: list[Path] = []
     processed_files: list[Path] = []
 
-logger = get_logger('BaseDataset')
+
+logger = get_logger("BaseDataset")
+
+
 class BaseDataset(ABC):
     def __init__(
-            self,
-            *,
-            name: str = None,
-            id: str = None,
-            description: str = None,
-            base_dir: Path = None,
-            raw_dir: Path = None,
-            processed_dir: Path = None,
-            urls: dict[str, str] = None,
-            raw_files: list[Path] = None,
-            processed_files: list[Path] = None,
-            force_download: bool = False,
-            force_process: bool = False,
-            **kwargs
+        self,
+        *,
+        name: str = None,
+        id: str = None,
+        description: str = None,
+        base_dir: Path = None,
+        raw_dir: Path = None,
+        processed_dir: Path = None,
+        urls: dict[str, str] = None,
+        raw_files: list[Path] = None,
+        processed_files: list[Path] = None,
+        force_download: bool = False,
+        force_process: bool = False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -53,10 +57,10 @@ class BaseDataset(ABC):
         self._is_setup = False
 
         if (
-                base_dir is None
-                and raw_dir is not None
-                and processed_dir is not None
-                and raw_dir.parent != processed_dir.parent
+            base_dir is None
+            and raw_dir is not None
+            and processed_dir is not None
+            and raw_dir.parent != processed_dir.parent
         ):
             logger.warning(
                 f"""
@@ -77,12 +81,33 @@ class BaseDataset(ABC):
 
         logger.info("Initializing dataset... 🚀")
 
-        self.base_dir = base_dir if base_dir else Path.home() / ".cache" / "ai4bmr" / "datasets" / self.name if self.name else None
-        self.raw_dir = raw_dir if raw_dir else self.base_dir / "01_raw" if self.base_dir else None
-        self.processed_dir = processed_dir if processed_dir else self.base_dir / "02_processed" if self.base_dir else None
+        self.base_dir = (
+            base_dir
+            if base_dir
+            else (
+                Path.home() / ".cache" / "ai4bmr" / "datasets" / self.name
+                if self.name
+                else None
+            )
+        )
+        self.raw_dir = (
+            raw_dir if raw_dir else self.base_dir / "01_raw" if self.base_dir else None
+        )
+        self.processed_dir = (
+            processed_dir
+            if processed_dir
+            else self.base_dir / "02_processed" if self.base_dir else None
+        )
         # NOTE: if no raw_files are given we use the urls names as fallback
-        self.raw_files = raw_files if raw_files else [self.raw_dir / i for i in
-                                                      self.urls] if self.urls and self.raw_dir else []
+        self.raw_files = (
+            raw_files
+            if raw_files
+            else (
+                [self.raw_dir / i for i in self.urls]
+                if self.urls and self.raw_dir
+                else []
+            )
+        )
         self.processed_files = processed_files or []
 
         logger.info(
@@ -208,13 +233,16 @@ class BaseDataset(ABC):
         try:
             with urlopen(Request(url, headers={"User-agent": "dataset-user"})) as rsp:
                 total = rsp.info().get("content-length", None)
-                with tqdm(
+                with (
+                    tqdm(
                         unit="B",
                         unit_scale=True,
                         miniters=1,
                         unit_divisor=1024,
                         total=total if total is None else int(total),
-                ) as t, fpath.open("wb") as f:
+                    ) as t,
+                    fpath.open("wb") as f,
+                ):
                     block = rsp.read(blocksize)
                     while block:
                         f.write(block)
@@ -261,7 +289,11 @@ class BaseDataset(ABC):
 
     @property
     def is_downloaded(self) -> bool:
-        return self.raw_dir and self.raw_files and all([(self.raw_dir / i).exists() for i in self.raw_files])
+        return (
+            self.raw_dir
+            and self.raw_files
+            and all([(self.raw_dir / i).exists() for i in self.raw_files])
+        )
 
     @property
     def processed_files(self) -> list[str]:
@@ -274,5 +306,8 @@ class BaseDataset(ABC):
     @property
     def is_cached(self) -> bool:
         # NOTE: we need to check if processed_files is defined, otherwise caching is not enabled
-        return self.processed_dir and self.processed_files and all(
-            [(self.processed_dir / i).exists() for i in self.processed_files])
+        return (
+            self.processed_dir
+            and self.processed_files
+            and all([(self.processed_dir / i).exists() for i in self.processed_files])
+        )
