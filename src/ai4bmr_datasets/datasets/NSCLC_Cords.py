@@ -159,10 +159,10 @@ class NSCLC(BaseIMCDataset):
 NSCLS_path = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/NSCLC/')
 NSCLC_dataset = NSCLC(base_dir=NSCLS_path)
 
-NSCLC_dataset.create_images()
+NSCLC_dataset.create_metadata()
     
-img_path = '/work/FAC/FBM/DBC/mrapsoma/prometex/data/NSCLC/01_raw/raw/img/20210129_LC_NSCLC_TMA_88_A_073.tiff'
-NSCLC_dataset.get_tiff_metadata(img_path)
+#img_path = '/work/FAC/FBM/DBC/mrapsoma/prometex/data/NSCLC/01_raw/raw/img/20210129_LC_NSCLC_TMA_88_A_073.tiff'
+#NSCLC_dataset.get_tiff_metadata(img_path)
 
 
 
