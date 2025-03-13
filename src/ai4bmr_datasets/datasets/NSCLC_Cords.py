@@ -18,6 +18,7 @@ from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple, Union
 import re
 import os
 from os import PathLike
+import anndata
 
 
 class NSCLC(BaseIMCDataset):
@@ -36,11 +37,28 @@ class NSCLC(BaseIMCDataset):
         self.raw_images_mcd = self.raw_dir / 'raw/mcd'
         self.raw_panel = self.raw_dir / 'raw/raw_panel.csv'
         self.tiff_imgs = self.processed_dir / 'tiff_imgs'
+        self.sce_h5ad = self.processed_dir / 'sce_objects/sce.h5ad'
 
 
         self.supplementary_table_1_path = self.raw_dir / '1-s2.0-S0092867418311000-mmc1.xlsx'  # downloaded as Table S1 from paper
         self.raw_sca_path = self.raw_dir / 'TNBC_shareCellData' / 'cellData.csv'
         self.patient_class_path = self.raw_dir / 'TNBC_shareCellData' / 'patient_class.csv'
+
+
+    def create_metadata(self):
+
+        ad = anndata.read_h5ad(self.sce_h5ad)
+
+        # create column in anndata obs with sample id based on TmaID TmaBlock and acID
+        ad.obs["sample_ID"] = ad.obs["TmaID"].astype(str) + "_" + ad.obs["TmaBlock"].astype(str) + "_" + ad.obs["acID"].astype(str)
+
+        # store unique sample IDs with associated patient metadata in a parquet file
+        columns_order = ['sample_ID'] + [col for col in ad.obs.columns if col != 'sample_ID']
+        patient_metadata = ad.obs.drop_duplicates(subset=['sample_ID'], keep='first')
+        patient_metadata = patient_metadata[columns_order]
+        patient_metadata.reset_index(drop=True, inplace=True)
+        patient_metadata.to_parquet(self.metadata_dir / 'patient_metadata.parquet') 
+
 
 
 
