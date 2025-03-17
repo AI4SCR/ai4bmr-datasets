@@ -215,6 +215,10 @@ class BaseIMCDataset:
         pass
 
     @property
+    def metadata(self):
+        return self.samples
+
+    @property
     def name(self):
         return "name"
 
