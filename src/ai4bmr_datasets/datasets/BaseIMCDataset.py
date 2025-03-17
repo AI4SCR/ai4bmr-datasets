@@ -23,6 +23,7 @@ class BaseIMCDataset:
         return len(self.sample_ids)
 
     def __getitem__(self, idx):
+        # TODO: this breaks if there is no self.samples
         sample_id = self.samples.index[idx]
         return {
             "sample_id": sample_id,
@@ -35,7 +36,7 @@ class BaseIMCDataset:
         }
 
     def resolve_paths(
-        self, image_version: str, mask_version: str, features_as_published: bool = True
+            self, image_version: str, mask_version: str, features_as_published: bool = True
     ):
         if features_as_published:
             if not (image_version == "published" and mask_version == "published"):
@@ -69,12 +70,13 @@ class BaseIMCDataset:
         return paths
 
     def load(
-        self,
-        image_version: str = "published",
-        mask_version: str = "published",
-        features_as_published: bool = True,
+            self,
+            image_version: str = "published",
+            mask_version: str = "published",
+            features_as_published: bool = True,
     ):
-        self.logger.info(f"Loading dataset {self.name} with image_version={image_version} and mask_version={mask_version}")
+        self.logger.info(
+            f"Loading dataset {self.name} with image_version={image_version} and mask_version={mask_version}")
 
         paths = self.resolve_paths(
             image_version=image_version,
@@ -82,7 +84,7 @@ class BaseIMCDataset:
             features_as_published=features_as_published,
         )
 
-        sample_ids = None
+        sample_ids = {}
 
         # load panel
         panel_path = paths["panel_path"]
@@ -96,7 +98,7 @@ class BaseIMCDataset:
         samples_path = paths["samples_path"]
         samples = pd.read_parquet(samples_path) if samples_path.exists() else None
 
-        if samples is not None and sample_ids is not None:
+        if samples is not None and sample_ids:
             samples = samples.loc[list(sample_ids), :]
         elif samples is not None:
             # TODO: what should be the default location to get the sample_ids from?
@@ -123,13 +125,10 @@ class BaseIMCDataset:
             intensity, spatial = intensity.align(spatial, join="outer", axis=0)
 
         # load masks and images
-        masks = None
         masks_dir = paths["masks_dir"]
-
-        images = None
         images_dir = paths["images_dir"]
 
-        if sample_ids is not None:
+        if sample_ids:
             masks = {}
             images = {}
 
@@ -137,41 +136,51 @@ class BaseIMCDataset:
                 mask_path = masks_dir / f"{sample_id}.tiff"
                 image_path = images_dir / f"{sample_id}.tiff"
 
-                if masks_dir is not None:
+                if masks_dir.exists():
                     masks[sample_id] = Mask(
-                        id=int(mask_path.stem), data_path=mask_path, metadata_path=None
+                        id=mask_path.stem, data_path=mask_path, metadata_path=None
                     )
 
-                if images_dir is not None:
+                if images_dir.exists():
                     images[sample_id] = Image(
-                        id=int(image_path.stem),
+                        id=image_path.stem,
                         data_path=image_path,
                         metadata_path=panel_path,
                     )
         else:
 
-            if masks_dir is not None:
+            if masks_dir.exists():
                 masks = {
-                    int(p.stem): Mask(id=int(p.stem), data_path=p, metadata_path=None)
+                    p.stem: Mask(id=p.stem, data_path=p, metadata_path=None)
                     for p in masks_dir.glob("*.tiff")
                 }
+            else:
+                masks = {}
 
-            if images_dir is not None:
+            if images_dir.exists():
                 images = {
-                    int(p.stem): Image(id=int(p.stem), data_path=p, metadata_path=None)
+                    p.stem: Image(id=p.stem, data_path=p, metadata_path=None)
                     for p in images_dir.glob("*.tiff")
                 }
+            else:
+                images = {}
 
-        if images_dir is not None and masks is not None:
+        # TODO: either always require sample_ids or this might break
+        if images and masks:
             assert set(images) == set(masks)
+            assert set(images) == sample_ids
+        if images:
+            assert set(images) == sample_ids
+        if masks:
+            assert set(masks) == sample_ids
 
-        self.sample_ids = sample_ids = sample_ids & set(masks) & set(images)
+        self.sample_ids = sorted(sample_ids)
         # retain only the specified sample_ids
-        self.samples = samples.loc[list(sample_ids)]
-        self.images = {k:v for k,v in images.items() if k in sample_ids}
-        self.masks = {k:v for k,v in masks.items() if k in sample_ids}
-        self.intensity = intensity.loc[list(sample_ids)]
-        self.spatial = spatial.loc[list(sample_ids)]
+        self.samples = samples.loc[list(sample_ids)] if sample_ids else None
+        self.images = {k: v for k, v in images.items() if k in sample_ids}
+        self.masks = {k: v for k, v in masks.items() if k in sample_ids}
+        self.intensity = intensity.loc[list(sample_ids)] if intensity else None
+        self.spatial = spatial.loc[list(sample_ids)] if intensity else None
 
         return {
             "samples": self.samples,
@@ -264,7 +273,7 @@ class BaseIMCDataset:
         return self.metadata_dir / "annotations"
 
     def get_annotations_path(
-        self, sample_name: str, image_version_name: str, mask_version_name: str
+            self, sample_name: str, image_version_name: str, mask_version_name: str
     ):
         version_name = f"{image_version_name}-{mask_version_name}"
         return self.annotations_dir / version_name / f"{sample_name}.parquet"
