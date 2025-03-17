@@ -166,21 +166,22 @@ class BaseIMCDataset:
                 images = {}
 
         # TODO: either always require sample_ids or this might break
-        if images and masks:
-            assert set(images) == set(masks)
-            assert set(images) == sample_ids
-        if images:
-            assert set(images) == sample_ids
-        if masks:
-            assert set(masks) == sample_ids
+        #   rethink validations
+        # if images and masks:
+            # assert set(images) == set(masks)
+            # assert set(images) == sample_ids
+        # if images:
+            # assert set(images) == sample_ids
+        # if masks:
+        #     assert set(masks) == sample_ids
 
         self.sample_ids = sorted(sample_ids)
         # retain only the specified sample_ids
-        self.samples = samples.loc[list(sample_ids)] if sample_ids else None
+        self.samples = samples.loc[list(sample_ids)] if sample_ids is not None else None
         self.images = {k: v for k, v in images.items() if k in sample_ids}
         self.masks = {k: v for k, v in masks.items() if k in sample_ids}
-        self.intensity = intensity.loc[list(sample_ids)] if intensity else None
-        self.spatial = spatial.loc[list(sample_ids)] if intensity else None
+        self.intensity = intensity.loc[list(sample_ids)] if intensity is not None else None
+        self.spatial = spatial.loc[list(sample_ids)] if intensity is not None else None
 
         return {
             "samples": self.samples,

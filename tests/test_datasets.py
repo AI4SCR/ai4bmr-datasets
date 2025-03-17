@@ -26,5 +26,6 @@ def test_TNBC():
 
     base_dir = Path("~/data/datasets/TNBC").expanduser().resolve()
     ds = TNBCv2(base_dir=base_dir)
-    # ds.process()
+    ds.process()
     data = ds.load()
+    ds.panel

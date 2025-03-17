@@ -151,6 +151,7 @@ class TNBCv2(BaseIMCDataset):
         data = data.rename(
             columns={"SampleID": "sample_id", "cellLabelInImage": "object_id"}
         )
+        data.sample_id = data.sample_id.astype(str)
         data = data.set_index("sample_id")[["object_id"]]
 
         sample_ids = set(data.index.get_level_values("sample_id"))
@@ -158,7 +159,7 @@ class TNBCv2(BaseIMCDataset):
         for mask_path in mask_paths:
             sample_id = re.match(r"p(\d+)", mask_path.stem).groups()
             assert len(sample_id) == 1
-            sample_id = int(sample_id[0])
+            sample_id = sample_id[0]
 
             self.logger.info(f"processing sample {sample_id}")
 
@@ -263,6 +264,7 @@ class TNBCv2(BaseIMCDataset):
         samples = pd.read_csv(self.patient_class_path, header=None)
         samples.columns = ["patient_id", "cancer_type_id"]
         samples = samples.assign(sample_id=samples["patient_id"]).set_index("sample_id")
+        samples.index = samples.index.astype(str)
 
         cancer_type_map = {0: "mixed", 1: "compartmentalized", 2: "cold"}
         samples = samples.assign(
@@ -289,9 +291,9 @@ class TNBCv2(BaseIMCDataset):
         ]
         metadata = data[metadata_cols]
 
-        metadata = metadata.rename(columns={"SampleID": "sample_id"}).set_index(
-            "sample_id"
-        )
+        metadata = metadata.rename(columns={"SampleID": "sample_id"})
+        metadata.sample_id = metadata.sample_id.astype(str)
+        metadata = metadata.set_index("sample_id")
 
         grp_map = {
             1: "unidentified",
@@ -363,7 +365,9 @@ class TNBCv2(BaseIMCDataset):
         feat_cols_names = ["cellSize"]
         spatial = spatial.rename(
             columns={"SampleID": "sample_id", "cellLabelInImage": "object_id"}
-        ).set_index(index_columns)
+        )
+        spatial.sample_id = spatial.sample_id.astype(str)
+        spatial = spatial.set_index(index_columns)
 
         spatial = spatial[feat_cols_names]
         spatial.columns = spatial.columns.map(tidy_name)
@@ -410,7 +414,9 @@ class TNBCv2(BaseIMCDataset):
         index_columns = ["sample_id", "object_id"]
         intensity = intensity.rename(
             columns={"SampleID": "sample_id", "cellLabelInImage": "object_id"}
-        ).set_index(index_columns)
+        )
+        intensity.sample_id = intensity.sample_id.astype(str)
+        intensity = intensity.set_index(index_columns)
 
         intensity.columns = intensity.columns.map(tidy_name)
 
