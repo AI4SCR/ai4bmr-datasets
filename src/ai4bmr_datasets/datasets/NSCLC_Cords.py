@@ -31,11 +31,13 @@ class NSCLC(BaseIMCDataset):
 
         # TO DO get logger 
         #self.logger = get_logger('TNBCv2', verbose=1)
-        self.version_name = 'published'
+        self.version_name = 'publication-steinbock'
 
         self.raw_masks_dir = self.raw_dir / 'Cell_masks'
         self.raw_images_mcd = self.raw_dir / 'raw/mcd'
         self.raw_panel = self.raw_dir / 'raw/raw_panel.csv'
+        self.steinbock_panel = self.raw_dir / 'raw/panels_steinbock/175_A_panel.csv'
+
         self.tiff_imgs = self.processed_dir / 'tiff_imgs'
         self.sce_h5ad = self.processed_dir / 'sce_objects/sce.h5ad'
 
@@ -58,6 +60,23 @@ class NSCLC(BaseIMCDataset):
         patient_metadata = patient_metadata[columns_order]
         patient_metadata.reset_index(drop=True, inplace=True)
         patient_metadata.to_parquet(self.metadata_dir / 'patient_metadata.parquet') 
+
+
+    def create_panel(self): 
+
+        import pdb; pdb.set_trace()
+
+        # note : all panels in the panel_steinbock folder are the same, so we can use any of them
+
+        df_panel = pd.read_csv(self.steinbock_panel)
+        # keep relevant rows with clean target in it 
+        df_panel = df_panel.dropna(subset=['Clean_Target'])
+        df_panel.rename(columns={'channel': 'mass_channel'})
+
+        df_panel.to_parquet(self.get_panel_path(image_version=self.version_name))
+
+
+        print('hello')
 
 
 
@@ -159,7 +178,7 @@ class NSCLC(BaseIMCDataset):
 NSCLS_path = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/NSCLC/')
 NSCLC_dataset = NSCLC(base_dir=NSCLS_path)
 
-NSCLC_dataset.create_metadata()
+NSCLC_dataset.create_panel()
     
 #img_path = '/work/FAC/FBM/DBC/mrapsoma/prometex/data/NSCLC/01_raw/raw/img/20210129_LC_NSCLC_TMA_88_A_073.tiff'
 #NSCLC_dataset.get_tiff_metadata(img_path)
