@@ -84,6 +84,8 @@ class NSCLC(BaseIMCDataset):
     def create_images(self):
 
         mcd_folders = os.listdir(self.raw_images_mcd)
+
+        data = []
         
         for mcd_folder in mcd_folders : 
             print('mcd_folder ', mcd_folder)
@@ -98,13 +100,65 @@ class NSCLC(BaseIMCDataset):
 
                 print('MCD FILE PATH ', mcd_file_path)
 
-                self.extract_tiff_from_mcd(mcd_file_path, self.tiff_imgs, self.raw_panel)
+                mcd_images_idx, acquisition_mcd_idx, mcd_idx, TMA_idx = self.extract_tiff_from_mcd(mcd_file_path, self.tiff_imgs, self.raw_panel)
+                #mcd_images_idx, acquisition_mcd_idx, mcd_idx, TMA_idx = self.extract_acquisition_id_mcd(mcd_file_path)
+
+                for i in range(len(mcd_images_idx)): 
+                    data.append([mcd_images_idx[i], acquisition_mcd_idx[i], mcd_idx[i], TMA_idx[i]])
+
+        df = pd.DataFrame(data, columns=["mcd_image_names", "acquisition_mcd", "TmaID", "TmaBlock"])
+
+        #df.to_parquet(self.processed_dir / 'mcd_images_acquisitions.parquet')
 
         import pdb; pdb.set_trace()
 
 
 
+    
+    def extract_acquisition_id_mcd(self, mcd_file: Path) -> str:
+
+        mcd_file = Path(mcd_file)
+
+        mcd_image_names = []
+        acquisition_mcds = []
+        TmaIDs = []
+        TmaBlocks = []
+
+        # Open the MCD file
+        with MCDFile(mcd_file) as mcd:
+            num_tiff_images = sum(len(slide.acquisitions) for slide in mcd.slides)
+            
+            if num_tiff_images == 0:
+                raise ValueError("No TIFF images found in the MCD file.")
+            
+            # Process each acquisition (similar to the try_preprocess_images_from_disk method)
+            for slide_idx, slide in enumerate(mcd.slides):
+
+                for acq_idx, acquisition in enumerate(slide.acquisitions):
+                    print('acq_idx ', acq_idx)  
+
+                    pattern = r'_(\d+)_([A-Z]+)$'
+                    match = re.search(pattern, mcd_file.stem)
+                    mcd_id, TMA_id = match.groups()
+
+                    mcd_image_names.append(mcd_file.stem)
+                    acquisition_mcds.append(acquisition.id)
+                    TmaIDs.append(mcd_id)
+                    TmaBlocks.append(TMA_id)
+
+        return mcd_image_names, acquisition_mcds, TmaIDs, TmaBlocks
+
+
+
+
+
+
     def extract_tiff_from_mcd(self, mcd_file: str, output_dir: str, raw_panel_path):
+
+        mcd_image_names = []
+        acquisition_mcds = []
+        TmaIDs = []
+        TmaBlocks = []
 
         mcd_file = Path(mcd_file)
         output_dir = Path(output_dir)
@@ -130,6 +184,15 @@ class NSCLC(BaseIMCDataset):
 
                 for acq_idx, acquisition in enumerate(slide.acquisitions):
                     print('acq_idx ', acq_idx)  
+                    # store images IDs and acquisititions IDs
+                    pattern = r'_(\d+)_([A-Z]+)$'
+                    match = re.search(pattern, mcd_file.stem)
+                    mcd_id, TMA_id = match.groups()
+
+                    mcd_image_names.append(mcd_file.stem)
+                    acquisition_mcds.append(acquisition.id)
+                    TmaIDs.append(mcd_id)
+                    TmaBlocks.append(TMA_id)
 
                     raw_panel = pd.read_csv(raw_panel_path)
 
@@ -166,7 +229,14 @@ class NSCLC(BaseIMCDataset):
                     TMA_cell_pattern = match.group(1)
 
                     # save ndarray as a multi-page TIFF file with metadata
-                    imwrite(output_dir / f'{TMA_cell_pattern}_{acq_idx}.tiff', img_filtered_channels.astype(np.float32), metadata={'ImageDescription': metadata_str})
+                    #imwrite(output_dir / f'{TMA_cell_pattern}_{acq_idx}.tiff', img_filtered_channels.astype(np.float32), metadata={'ImageDescription': metadata_str})
+
+                    import pdb; pdb.set_trace()
+
+                    # save iamge with acquisition id 
+                    imwrite(output_dir / f'{TMA_cell_pattern}_{acquisition.id}.tiff', img_filtered_channels.astype(np.float32), metadata={'ImageDescription': metadata_str})
+
+        return mcd_image_names, acquisition_mcds, TmaIDs, TmaBlocks
         
 
 
@@ -178,7 +248,7 @@ class NSCLC(BaseIMCDataset):
 NSCLS_path = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/NSCLC/')
 NSCLC_dataset = NSCLC(base_dir=NSCLS_path)
 
-NSCLC_dataset.create_panel()
+NSCLC_dataset.create_images()
     
 #img_path = '/work/FAC/FBM/DBC/mrapsoma/prometex/data/NSCLC/01_raw/raw/img/20210129_LC_NSCLC_TMA_88_A_073.tiff'
 #NSCLC_dataset.get_tiff_metadata(img_path)
