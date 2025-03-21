@@ -136,12 +136,12 @@ class BaseIMCDataset:
                 mask_path = masks_dir / f"{sample_id}.tiff"
                 image_path = images_dir / f"{sample_id}.tiff"
 
-                if masks_dir.exists():
+                if mask_path.exists():
                     masks[sample_id] = Mask(
                         id=mask_path.stem, data_path=mask_path, metadata_path=None
                     )
 
-                if images_dir.exists():
+                if image_path.exists():
                     images[sample_id] = Image(
                         id=image_path.stem,
                         data_path=image_path,

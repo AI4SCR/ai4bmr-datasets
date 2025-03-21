@@ -29,3 +29,14 @@ def test_TNBC():
     ds.process()
     data = ds.load()
     ds.panel
+
+def test_NSCLC():
+    from ai4bmr_datasets.datasets.NSCLCv2 import NSCLCv2
+    from pathlib import Path
+
+    base_dir = Path("~/data/datasets/NSCLCv2").expanduser().resolve()
+    ds = NSCLCv2(base_dir=base_dir)
+    ds.process()
+
+    _ = ds.load()
+    ds.panel
