@@ -13,6 +13,14 @@ from .BaseIMCDataset import BaseIMCDataset
 
 class NSCLC(BaseIMCDataset):
 
+    @property
+    def id(self):
+        return "NSCLC"
+
+    @property
+    def doi(self):
+        return "10.1016/j.ccell.2023.12.021"
+
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
         self.base_dir = base_dir
