@@ -76,9 +76,9 @@
 
 # %%
 from pathlib import Path
-from ai4bmr_datasets.datasets import TNBCv2
+from ai4bmr_datasets.datasets import TNBC
 
-ds = TNBCv2(
+ds = TNBC(
     base_dir=Path(
         "/Users/adrianomartinelli/Library/CloudStorage/OneDrive-ETHZurich/oneDrive-documents/data/datasets/TNBC"
     )
