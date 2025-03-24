@@ -1,4 +1,4 @@
 from .Dummy import DummyTabular, DummyImages
 from .IMC import PCa, BLCa
-from .TNBC import TNBCv2
-from .NSCLCv2 import NSCLCv2
+from .TNBC import TNBC
+from .NSCLC import NSCLC

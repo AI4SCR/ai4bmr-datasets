@@ -1,5 +1,5 @@
 from pathlib import Path
-from collections import namedtuple
+from loguru import logger
 
 from ..datamodels.Image import Image, Mask
 import pandas as pd
@@ -36,7 +36,7 @@ class BaseIMCDataset:
         }
 
     def resolve_paths(
-            self, image_version: str, mask_version: str, features_as_published: bool = True
+        self, image_version: str, mask_version: str, features_as_published: bool = True
     ):
         if features_as_published:
             if not (image_version == "published" and mask_version == "published"):
@@ -70,13 +70,14 @@ class BaseIMCDataset:
         return paths
 
     def load(
-            self,
-            image_version: str = "published",
-            mask_version: str = "published",
-            features_as_published: bool = True,
+        self,
+        image_version: str = "published",
+        mask_version: str = "published",
+        features_as_published: bool = True,
     ):
-        self.logger.info(
-            f"Loading dataset {self.name} with image_version={image_version} and mask_version={mask_version}")
+        logger.info(
+            f"Loading dataset {self.name} with image_version={image_version} and mask_version={mask_version}"
+        )
 
         paths = self.resolve_paths(
             image_version=image_version,
@@ -90,8 +91,8 @@ class BaseIMCDataset:
         panel_path = paths["panel_path"]
         panel = pd.read_parquet(panel_path) if panel_path.exists() else None
         if panel is not None:
-            assert panel.index.name == 'channel_index'
-            assert 'target' in panel.columns
+            assert panel.index.name == "channel_index"
+            assert "target" in panel.columns
         self.panel = panel
 
         # load samples metadata
@@ -111,14 +112,14 @@ class BaseIMCDataset:
 
         if intensity is not None:
             assert set(self.panel.target) == set(intensity.columns)
-            assert intensity.index.names == ('sample_id', 'object_id')
-            sample_ids = sample_ids & set(intensity.index.get_level_values('sample_id'))
+            assert intensity.index.names == ("sample_id", "object_id")
+            sample_ids = sample_ids & set(intensity.index.get_level_values("sample_id"))
 
         # load features [spatial]
         spatial_path = paths["spatial_path"]
         spatial = pd.read_parquet(spatial_path) if spatial_path.exists() else None
         if spatial is not None:
-            assert spatial.index.names == ('sample_id', 'object_id')
+            assert spatial.index.names == ("sample_id", "object_id")
 
         if intensity is not None and spatial is not None:
             assert set(intensity.index) == set(spatial.index)
@@ -168,10 +169,10 @@ class BaseIMCDataset:
         # TODO: either always require sample_ids or this might break
         #   rethink validations
         # if images and masks:
-            # assert set(images) == set(masks)
-            # assert set(images) == sample_ids
+        # assert set(images) == set(masks)
+        # assert set(images) == sample_ids
         # if images:
-            # assert set(images) == sample_ids
+        # assert set(images) == sample_ids
         # if masks:
         #     assert set(masks) == sample_ids
 
@@ -180,7 +181,9 @@ class BaseIMCDataset:
         self.samples = samples.loc[list(sample_ids)] if sample_ids is not None else None
         self.images = {k: v for k, v in images.items() if k in sample_ids}
         self.masks = {k: v for k, v in masks.items() if k in sample_ids}
-        self.intensity = intensity.loc[list(sample_ids)] if intensity is not None else None
+        self.intensity = (
+            intensity.loc[list(sample_ids)] if intensity is not None else None
+        )
         self.spatial = spatial.loc[list(sample_ids)] if intensity is not None else None
 
         return {
@@ -193,11 +196,7 @@ class BaseIMCDataset:
         }
 
     def process(self):
-        self.create_panel()
-        self.create_metadata()
-        self.create_images()
-        self.create_masks()
-        self.create_features()
+        raise NotImplementedError("process method must be implemented")
 
     def create_images(self):
         pass
@@ -274,7 +273,7 @@ class BaseIMCDataset:
         return self.metadata_dir / "annotations"
 
     def get_annotations_path(
-            self, sample_name: str, image_version_name: str, mask_version_name: str
+        self, sample_name: str, image_version_name: str, mask_version_name: str
     ):
         version_name = f"{image_version_name}-{mask_version_name}"
         return self.annotations_dir / version_name / f"{sample_name}.parquet"

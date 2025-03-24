@@ -3,17 +3,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from ai4bmr_core.utils.logging import get_logger
 from ai4bmr_core.utils.saving import save_image, save_mask
 from ai4bmr_core.utils.tidy import tidy_name
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from tifffile import imread
+from loguru import logger
 
 from .BaseIMCDataset import BaseIMCDataset
 
 
-class TNBCv2(BaseIMCDataset):
+class TNBC(BaseIMCDataset):
     """
     Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
     Save Ionpath file as tnbc.
@@ -26,7 +26,6 @@ class TNBCv2(BaseIMCDataset):
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
-        self.logger = get_logger("TNBCv2", verbose=1)
         self.version_name = "published"
 
         # raw data paths
@@ -44,8 +43,15 @@ class TNBCv2(BaseIMCDataset):
         self.observations_default = set()
         self.observations_unfiltered = set()
 
+    def process(self):
+        self.create_panel()
+        self.create_metadata()
+        self.create_images()
+        self.create_masks()
+        self.create_features()
+
     def create_panel(self):
-        self.logger.info("Creating panel")
+        logger.info("Creating panel")
 
         panel_1 = pd.read_excel(self.supplementary_table_1_path, header=3)[:31]
         panel_1.columns = panel_1.columns.str.strip()
@@ -77,7 +83,11 @@ class TNBCv2(BaseIMCDataset):
         )
 
         # extract original page numbers for markers
-        img_path = sorted(filter(lambda f: not f.name.startswith('.'), self.raw_images_dir.glob("*.tiff")))[0]
+        img_path = sorted(
+            filter(
+                lambda f: not f.name.startswith("."), self.raw_images_dir.glob("*.tiff")
+            )
+        )[0]
         metadata = self.get_tiff_metadata(img_path)
         metadata = metadata.rename(columns={"target": "target_from_tiff"}).reset_index()
 
@@ -85,7 +95,7 @@ class TNBCv2(BaseIMCDataset):
         assert panel.isna().any().any() == False
         panel = panel.sort_values("page").reset_index(drop=True)
 
-        panel.index.name = 'channel_index'
+        panel.index.name = "channel_index"
         panel = panel.convert_dtypes()
 
         panel_path = self.get_panel_path(image_version=self.version_name)
@@ -114,7 +124,7 @@ class TNBCv2(BaseIMCDataset):
         return metadata
 
     def create_images(self):
-        self.logger.info("Creating images")
+        logger.info("Creating images")
 
         panel_path = self.get_panel_path(image_version=self.version_name)
         panel = pd.read_parquet(panel_path)
@@ -122,9 +132,13 @@ class TNBCv2(BaseIMCDataset):
         images_dir = self.get_images_dir(self.version_name)
         images_dir.mkdir(exist_ok=True, parents=True)
 
-        image_paths = sorted(filter(lambda f: not f.name.startswith('.'), self.raw_images_dir.glob("*.tiff")))
+        image_paths = sorted(
+            filter(
+                lambda f: not f.name.startswith("."), self.raw_images_dir.glob("*.tiff")
+            )
+        )
         for img_path in image_paths:
-            self.logger.debug(f"processing image {img_path.stem}")
+            logger.debug(f"processing image {img_path.stem}")
             sample_id = re.search(r"Point(\d+).tiff", img_path.name).groups()[0]
 
             if (images_dir / f"{sample_id}.tiff").exists():
@@ -137,7 +151,7 @@ class TNBCv2(BaseIMCDataset):
             save_image(img, images_dir / f"{sample_id}.tiff")
 
     def create_masks(self):
-        self.logger.info("Filtering masks")
+        logger.info("Filtering masks")
 
         masks_default_dir = self.get_masks_dir(mask_version=self.version_name)
         masks_default_dir.mkdir(exist_ok=True, parents=True)
@@ -161,7 +175,7 @@ class TNBCv2(BaseIMCDataset):
             assert len(sample_id) == 1
             sample_id = sample_id[0]
 
-            self.logger.info(f"processing sample {sample_id}")
+            logger.info(f"processing sample {sample_id}")
 
             path_default = masks_default_dir / f"{sample_id}.tiff"
             path_unfiltered = masks_unfiltered_dir / f"{sample_id}.tiff"
@@ -260,7 +274,7 @@ class TNBCv2(BaseIMCDataset):
                 plt.close(fig)
 
     def process_clinical_metadata(self):
-        self.logger.info("Creating metadata [samples]")
+        logger.info("Creating metadata [samples]")
         samples = pd.read_csv(self.patient_class_path, header=None)
         samples.columns = ["patient_id", "cancer_type_id"]
         samples = samples.assign(sample_id=samples["patient_id"]).set_index("sample_id")
@@ -276,7 +290,7 @@ class TNBCv2(BaseIMCDataset):
         samples.to_parquet(self.get_samples_path())
 
     def process_annotations(self):
-        self.logger.info("Creating metadata [annotations]")
+        logger.info("Creating metadata [annotations]")
 
         data = pd.read_csv(self.raw_sca_path)
 
@@ -356,7 +370,7 @@ class TNBCv2(BaseIMCDataset):
         pass
 
     def create_features_spatial(self):
-        self.logger.info("Creating features [spatial]")
+        logger.info("Creating features [spatial]")
 
         samples = pd.read_parquet(self.get_samples_path())
         spatial = pd.read_csv(self.raw_sca_path)
@@ -404,7 +418,7 @@ class TNBCv2(BaseIMCDataset):
             grp_data.to_parquet(path)
 
     def create_features_intensity(self):
-        self.logger.info("Creating features [intensities]")
+        logger.info("Creating features [intensities]")
 
         samples = pd.read_parquet(self.get_samples_path())
         panel_path = self.get_panel_path(image_version=self.version_name)
@@ -444,7 +458,7 @@ class TNBCv2(BaseIMCDataset):
 
     @property
     def name(self):
-        return "TNBCv2"
+        return "TNBC"
 
     @property
     def id(self):
