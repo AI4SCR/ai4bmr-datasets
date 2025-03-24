@@ -20,7 +20,6 @@ import psutil
 import gc
 
 
-
 class NSCLC():
 
     def __init__(self, 
