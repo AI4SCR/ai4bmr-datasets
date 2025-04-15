@@ -1,3 +1,5 @@
+import pandas as pd
+
 
 def test_PCa():
     from ai4bmr_datasets.datasets import PCa
@@ -5,12 +7,15 @@ def test_PCa():
 
     base_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
     ds = dataset = PCa(base_dir=base_dir)
-    self = ds
+    # self = ds
     # ds.create_annotations()
     # ds.create_metadata()
     # ds.create_clinical_metadata()
     # ds.create_tma_annotations()
     # dataset.process()
+    import pandas as pd
+
+    sampels = pd.read_parquet(ds.sample_metadata_path, engine="fastparquet")
     data = dataset.load(
         image_version="filtered", mask_version="filtered", features_as_published=False
     )

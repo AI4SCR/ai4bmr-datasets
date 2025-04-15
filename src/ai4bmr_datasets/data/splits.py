@@ -56,10 +56,14 @@ def generate_splits(
         num_train_samples = len(train_metadata)
 
         val_splitter = StratifiedShuffleSplit if stratify else ShuffleSplit
-        val_splitter = val_splitter(n_splits=1, test_size=val_size, random_state=random_state)
+        val_splitter = val_splitter(
+            n_splits=1, test_size=val_size, random_state=random_state
+        )
 
         y = train_metadata[target_column_name] if stratify else None
-        train_indices, val_indices = next(val_splitter.split(np.zeros(num_train_samples), y=y))
+        train_indices, val_indices = next(
+            val_splitter.split(np.zeros(num_train_samples), y=y)
+        )
 
         train_indices = train_metadata.index[train_indices]
         val_indices = train_metadata.index[val_indices]
@@ -67,7 +71,9 @@ def generate_splits(
         val_indices = []
 
     # sanity checks
-    assert set(train_indices).union(val_indices).union(test_indices) == set(metadata.index.values)
+    assert set(train_indices).union(val_indices).union(test_indices) == set(
+        metadata.index.values
+    )
     assert set(train_indices).intersection(test_indices) == set()
     assert set(val_indices).intersection(test_indices) == set()
 
@@ -90,7 +96,9 @@ def has_splits(metadata: pd.DataFrame):
     return Split.COLUMN_NAME in metadata.columns
 
 
-def generate_subset(dataset: Dataset, metadata: pd.DataFrame | None, num_samples: int | None = None):
+def generate_subset(
+    dataset: Dataset, metadata: pd.DataFrame | None, num_samples: int | None = None
+):
     from torch.utils.data import Subset
 
     subset_idx = np.random.choice(len(metadata), num_samples, replace=False)

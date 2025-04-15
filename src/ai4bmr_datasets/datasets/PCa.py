@@ -158,11 +158,17 @@ class PCa(BaseIMCDataset):
         tma_sample_ids = (
             roi_match_blockId["description"].str.split("_").str[2].str.strip()
         )
+
         roi_match_blockId = roi_match_blockId.assign(
             tma_sample_id=tma_sample_ids,
             slide_code=slide_code,
             tma_coordinates=tma_coordinates,
         )
+
+        roi_match_blockId.loc[
+            roi_match_blockId.tma_sample_id == "150 - split", "tma_sample_id"
+        ] = "150"
+        assert roi_match_blockId.tma_sample_id.str.contains("split").sum() == 0
 
         patient_ids = (
             roi_match_blockId["Original block number"].str.split("_").str[0].str.strip()
@@ -173,6 +179,13 @@ class PCa(BaseIMCDataset):
         assert roi_match_blockId.PAT_ID.isna().sum() == 4
         roi_match_blockId = roi_match_blockId.dropna(subset=["PAT_ID"])
 
+        assert not roi_match_blockId.slide_code.isna().any()
+        assert not roi_match_blockId.tma_coordinates.isna().any()
+        assert not roi_match_blockId.tma_sample_id.isna().any()
+
+        tma_id = roi_match_blockId.slide_code + "_" + roi_match_blockId.tma_coordinates
+        roi_match_blockId["tma_id"] = tma_id
+
         tma_tidy = pd.read_csv(self.raw_tma_tidy_path, sep="\t", dtype=str)
         tma_tidy = tma_tidy.drop(columns=["DATE_OF_BIRTH", "INITIALS"])
 
@@ -180,11 +193,6 @@ class PCa(BaseIMCDataset):
 
         # NOTE: the `PATIENT_ID` of the first patient is NA for no obvious reason.
         assert tma_tidy.PATIENT_ID.isna().sum() == 1
-
-        roi_match_blockId.loc[
-            roi_match_blockId.tma_sample_id == "150 - split", "tma_sample_id"
-        ] = "150_1"
-        assert roi_match_blockId.tma_sample_id.str.contains("split").sum() == 0
         assert tma_tidy["AGE_AT_SURGERY"].isna().any() == False
 
         metadata = pd.merge(roi_match_blockId, tma_tidy, how="left")
@@ -291,6 +299,11 @@ class PCa(BaseIMCDataset):
         )
         assert metadata.recurrence_loc.isna().sum() == 0
 
+        mapping = {
+            i: "recurrence" for i in ["local", "local_and_metastasis", "metastasis"]
+        }
+        metadata["recurrence"] = metadata["recurrence_loc"].astype(str).replace(mapping)
+
         # NOTE: we do not have the mapping at this point
         # metadata['cgrading_biopsy'] = metadata.cgrading_biopsy.astype(int)
 
@@ -336,21 +349,45 @@ class PCa(BaseIMCDataset):
         metadata = metadata.set_index("sample_id")
 
         # %%
-        cat_cols = ['file_name_napari', 'original_block_number',
-         'gleason_pattern_tma_core', 'tma_sample_id', 'slide_code', 'pat_id', 'patient_id', 'donor_block_id',
-         'unique_tma_sample_id_1', 'unique_tma_sample_id_2',
-         'unique_tma_sample_id_3', 'unique_tma_sample_id_4',
-         'cause_of_death',
-         'os_status', 'psa_progr', 'clinical_progr',
-         'disease_progr',
-         'recurrence_loc', 'cgrading_biopsy', 'cgs_pat_1', 'cgs_pat_2',
-         'cgs_score', 'gs_grp', 'ct_stage', 'pt_stage', 'pgs_score', 'ln_status',
-         'surgical_margin_status', 'adj_adt', 'adj_radio', 'd_amico_risk']
+        cat_cols = [
+            "file_name_napari",
+            "original_block_number",
+            "gleason_pattern_tma_core",
+            "tma_sample_id",
+            "slide_code",
+            "pat_id",
+            "patient_id",
+            "donor_block_id",
+            "unique_tma_sample_id_1",
+            "unique_tma_sample_id_2",
+            "unique_tma_sample_id_3",
+            "unique_tma_sample_id_4",
+            "cause_of_death",
+            "os_status",
+            "psa_progr",
+            "clinical_progr",
+            "disease_progr",
+            "recurrence",
+            "recurrence_loc",
+            "cgrading_biopsy",
+            "cgs_pat_1",
+            "cgs_pat_2",
+            "cgs_score",
+            "gs_grp",
+            "ct_stage",
+            "pt_stage",
+            "pgs_score",
+            "ln_status",
+            "surgical_margin_status",
+            "adj_adt",
+            "adj_radio",
+            "d_amico_risk",
+        ]
         metadata = metadata.astype({k: "category" for k in cat_cols})
 
         # %%
         self.sample_metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        metadata.to_parquet(self.sample_metadata_path, engine='fastparquet')
+        metadata.to_parquet(self.sample_metadata_path, engine="fastparquet")
 
     def create_tma_annotations(self):
         samples = pd.read_parquet(self.sample_metadata_path, engine="fastparquet")
@@ -359,7 +396,7 @@ class PCa(BaseIMCDataset):
 
         df.columns = df.columns.map(tidy_name)
         df = df.rename(columns={"unnamed_12": "notes"})
-        df['notes'] = df.notes.astype(str).str.strip()
+        df["notes"] = df.notes.astype(str).str.strip()
 
         filter_ = df.sample_name == "sample_name"
         df = df[~filter_]
@@ -367,7 +404,7 @@ class PCa(BaseIMCDataset):
         filter_ = df.sample_name.notna()
         df = df[filter_]
 
-        mapping = {"y": "yes", "n": "no", "/": "unclear_annotation"}
+        mapping = {"y": "yes", "n": "no", "/": "unclear_annotation", "nan": pd.NA}
         df = df.map(lambda x: mapping.get(x, x))
 
         # df.gs_pat_1.unique()
@@ -427,45 +464,85 @@ class PCa(BaseIMCDataset):
         for col in tidy_col_vals:
             df[col] = df[col].astype(str).map(tidy_name)
 
-        filter_ = df \
-            .isin([
-                    "not_enough_material",
-                    "unclear_annotation",
-                    "no_tissue",
-                    "not_sure_if_tumor",
-                    "not_enough_tumor",
-                    "too_much_loss",
-                ]) \
-            .sum(axis=1)
+        filter_ = df.isin(
+            [
+                "not_enough_material",
+                "unclear_annotation",
+                "no_tissue",
+                "not_sure_if_tumor",
+                "not_enough_tumor",
+                "too_much_loss",
+            ]
+        ).sum(axis=1)
         filter_ = filter_ > 0
         df = df[~filter_]
 
-        mapping = {'nan': pd.NA, None: pd.NA}
+        mapping = {"nan": pd.NA}
+        df = df.map(lambda x: mapping.get(x, x))
+
+        filter_ = df.gs_pat_1.notna()
+        df = df[filter_]
+
+        mapping = {"nan": pd.NA, None: pd.NA}
         df = df.map(lambda x: mapping.get(x, x))
 
         df = df.convert_dtypes()
-        df = df.rename(columns={"sample_name": "sample_id"}).set_index('sample_id')
+        df = df.rename(columns={"sample_name": "sample_id"}).set_index("sample_id")
         # df.to_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/projects/ai4bmr-datasets/tests/tma_anno.csv')
+
+        # sample_id_to_tma_id = samples['tma_id'].to_dict()
+        # df['tma_id'] = df.index.map(sample_id_to_tma_id)
+        # assert not df.tma_id.isna().any()
 
         # NOTE: check that the data in samples and the data in the tma annotations are the same
         shared_sample_ids = list(set(df.index).intersection(set(samples.index)))
-        for i in ['tma_coordinates', 'tma_sample_id']:
+        for i in ["tma_coordinates", "tma_sample_id"]:
             s1 = set(samples.loc[shared_sample_ids][i].astype(str).to_dict().items())
             s2 = set(df.loc[shared_sample_ids][i].astype(str).to_dict().items())
             assert s1 == s2
 
-        shared_cols = list(set(df.columns).intersection(set(samples.columns)))
+        set(samples).intersection(set(df))
+        shared_cols = ["description", "tma_sample_id", "tma_coordinates"]
         df = df.drop(columns=shared_cols)
 
         # note: for some reason we cannot store boolean as a category, we use yes/no instead
-        df['is_tumor'] = 'yes'
-        df.loc[df.gs_pat_1 == 'no_tumor', 'is_tumor'] = 'no'
+        df["is_tumor"] = "yes"
+        df.loc[df.gs_pat_1 == "no_tumor", "is_tumor"] = "no"
 
-        mapping = { 'no_tumor': pd.NA, '3': 3, '4': 4, '5': 5 }
-        df['gs_pat_1'] = df.gs_pat_1.map(lambda x: mapping.get(x, x))
+        mapping = {"no_tumor": pd.NA, "3": 3, "4": 4, "5": 5}
+        df["gs_pat_1"] = df.gs_pat_1.map(lambda x: mapping.get(x, x))
 
-        mapping = { 'no_tumor': pd.NA, '3': 3, '4': 4, '5': 5 }
-        df['gs_pat_2'] = df.gs_pat_2.map(lambda x: mapping.get(x, x))
+        mapping = {"no_tumor": pd.NA, "3": 3, "4": 4, "5": 5}
+        df["gs_pat_2"] = df.gs_pat_2.map(lambda x: mapping.get(x, x))
+
+        df["gleason_score"] = pd.NA
+        gleason_score = df.gs_pat_1.astype(str) + "+" + df.gs_pat_2.astype(str)
+
+        filter_ = df.gs_pat_1.notna()
+        df.loc[filter_, "gleason_score"] = gleason_score[filter_]
+
+        gleason_score_sum = df.gs_pat_1[filter_].astype(int) + df.gs_pat_2[
+            filter_
+        ].astype(int)
+        df["gleason_score_sum"] = pd.NA
+        df.loc[filter_, "gleason_score_sum"] = gleason_score_sum
+
+        df["gleason_grp"] = pd.NA
+
+        filter_ = df.gleason_score_sum <= 6
+        df.loc[filter_, "gleason_grp"] = 1
+
+        filter_ = df.gleason_score == "3+4"
+        df.loc[filter_, "gleason_grp"] = 2
+
+        filter_ = df.gleason_score == "4+3"
+        df.loc[filter_, "gleason_grp"] = 3
+
+        filter_ = df.gleason_score_sum == 8
+        df.loc[filter_, "gleason_grp"] = 4
+
+        filter_ = df.gleason_score_sum >= 9
+        df.loc[filter_, "gleason_grp"] = 5
 
         df = df.convert_dtypes()
 
@@ -478,9 +555,12 @@ class PCa(BaseIMCDataset):
             "inflammation",
             "glandular_atrophy_pin",
             "cribriform",
-            "is_tumor"
+            "is_tumor",
+            "gleason_grp",
+            "gleason_score_sum",
+            "gleason_score",
         ]
 
-        df = df.astype({k: 'category' for k in cat_cols})
+        df = df.astype({k: "category" for k in cat_cols})
         samples = pd.concat([samples, df], axis=1)
-        samples.to_parquet(self.sample_metadata_path, engine='fastparquet')
+        samples.to_parquet(self.sample_metadata_path, engine="fastparquet")

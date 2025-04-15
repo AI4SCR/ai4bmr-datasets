@@ -107,7 +107,11 @@ class BaseIMCDataset:
 
         # load samples metadata
         samples_path = paths["samples_path"]
-        samples = pd.read_parquet(samples_path, engine='fastparquet') if samples_path.exists() else None
+        samples = (
+            pd.read_parquet(samples_path, engine="fastparquet")
+            if samples_path.exists()
+            else None
+        )
 
         if samples is not None and sample_ids:
             samples = samples.loc[list(sample_ids), :]
@@ -118,7 +122,16 @@ class BaseIMCDataset:
 
         # load features [intensity]
         intensity_path = paths["intensity_path"]
-        intensity = pd.concat([pd.read_parquet(i, engine='fastparquet') for i in intensity_path.glob("*.parquet")]) if intensity_path.exists() else None
+        intensity = (
+            pd.concat(
+                [
+                    pd.read_parquet(i, engine="fastparquet")
+                    for i in intensity_path.glob("*.parquet")
+                ]
+            )
+            if intensity_path.exists()
+            else None
+        )
         if intensity is not None:
             assert set(self.panel.target) == set(intensity.columns)
             assert intensity.index.names == ("sample_id", "object_id")
@@ -126,7 +139,16 @@ class BaseIMCDataset:
 
         # load features [spatial]
         spatial_path = paths["spatial_path"]
-        spatial = pd.concat([pd.read_parquet(i, engine='fastparquet') for i in spatial_path.glob("*.parquet")]) if spatial_path.exists() else None
+        spatial = (
+            pd.concat(
+                [
+                    pd.read_parquet(i, engine="fastparquet")
+                    for i in spatial_path.glob("*.parquet")
+                ]
+            )
+            if spatial_path.exists()
+            else None
+        )
         if spatial is not None:
             assert spatial.index.names == ("sample_id", "object_id")
 
@@ -179,7 +201,12 @@ class BaseIMCDataset:
 
         annotations_dir = paths["annotations_dir"]
         if annotations_dir.exists():
-            annotations = spatial = pd.concat([pd.read_parquet(i, engine='fastparquet') for i in annotations_dir.glob("*.parquet")])
+            annotations = spatial = pd.concat(
+                [
+                    pd.read_parquet(i, engine="fastparquet")
+                    for i in annotations_dir.glob("*.parquet")
+                ]
+            )
             intensity, annotations = intensity.align(annotations, join="outer", axis=0)
             assert not annotations.isna().any().any()
         else:
