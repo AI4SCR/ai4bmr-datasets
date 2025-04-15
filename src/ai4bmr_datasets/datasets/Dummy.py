@@ -11,12 +11,20 @@ class DummyTabular:
         self.num_features = num_features
 
         rng = np.random.default_rng(seed=42)
-        self.data = pd.DataFrame(rng.random((self.num_samples, self.num_features)))
-        self.data.index.name = "sample_id"
-        self.metadata = pd.DataFrame(
-            rng.integers(0, num_classes, num_samples), columns=["label_id"]
+
+        index = pd.Index(range(num_samples), name="sample_id", dtype="str")
+        self.data = pd.DataFrame(
+            rng.random((self.num_samples, self.num_features)), index=index
         )
-        self.metadata.index.name = "sample_id"
+
+        label_ids = rng.integers(0, num_classes, num_samples)
+        label = np.array(["type_1", "type_2"])[label_ids]
+
+        metadata = pd.DataFrame(
+            {"label_id": pd.Categorical(label_ids), "label": pd.Categorical(label)},
+            index=index,
+        )
+        self.metadata = metadata.convert_dtypes()
 
     def load(self):
         return dict(data=self.data, metadata=self.metadata)

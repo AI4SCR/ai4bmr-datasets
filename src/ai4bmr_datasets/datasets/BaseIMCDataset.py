@@ -33,6 +33,7 @@ class BaseIMCDataset:
             "panel": self.panel,
             "intensity": self.intensity.loc[sample_id],
             "spatial": self.spatial.loc[sample_id],
+            "annotations": self.annotations.loc[sample_id],
         }
 
     def resolve_paths(
@@ -45,11 +46,15 @@ class BaseIMCDataset:
                 )
             intensity_path = self.intensity_dir / "published"
             spatial_path = self.spatial_dir / "published"
+            annotations_dir = self.annotations_dir / "published"
         else:
             intensity_path = self.get_intensity_dir(
                 image_version=image_version, mask_version=mask_version
             )
             spatial_path = self.get_spatial_dir(mask_version=mask_version)
+            annotations_dir = self.get_annotations_dir(
+                image_version=image_version, mask_version=mask_version
+            )
 
         samples_path = self.sample_metadata_path
 
@@ -63,6 +68,7 @@ class BaseIMCDataset:
             samples_path=samples_path,
             intensity_path=intensity_path,
             spatial_path=spatial_path,
+            annotations_dir=annotations_dir,
         )
 
         # paths = {k: p if p.exists() else None for k,p in paths.items()}
@@ -89,7 +95,11 @@ class BaseIMCDataset:
 
         # load panel
         panel_path = paths["panel_path"]
-        panel = pd.read_parquet(panel_path) if panel_path.exists() else None
+        panel = (
+            pd.read_parquet(panel_path, engine="fastparquet")
+            if panel_path.exists()
+            else None
+        )
         if panel is not None:
             assert panel.index.name == "channel_index"
             assert "target" in panel.columns
@@ -97,7 +107,7 @@ class BaseIMCDataset:
 
         # load samples metadata
         samples_path = paths["samples_path"]
-        samples = pd.read_parquet(samples_path) if samples_path.exists() else None
+        samples = pd.read_parquet(samples_path, engine='fastparquet') if samples_path.exists() else None
 
         if samples is not None and sample_ids:
             samples = samples.loc[list(sample_ids), :]
@@ -108,8 +118,7 @@ class BaseIMCDataset:
 
         # load features [intensity]
         intensity_path = paths["intensity_path"]
-        intensity = pd.read_parquet(intensity_path) if intensity_path.exists() else None
-
+        intensity = pd.concat([pd.read_parquet(i, engine='fastparquet') for i in intensity_path.glob("*.parquet")]) if intensity_path.exists() else None
         if intensity is not None:
             assert set(self.panel.target) == set(intensity.columns)
             assert intensity.index.names == ("sample_id", "object_id")
@@ -117,13 +126,15 @@ class BaseIMCDataset:
 
         # load features [spatial]
         spatial_path = paths["spatial_path"]
-        spatial = pd.read_parquet(spatial_path) if spatial_path.exists() else None
+        spatial = pd.concat([pd.read_parquet(i, engine='fastparquet') for i in spatial_path.glob("*.parquet")]) if spatial_path.exists() else None
         if spatial is not None:
             assert spatial.index.names == ("sample_id", "object_id")
 
         if intensity is not None and spatial is not None:
             assert set(intensity.index) == set(spatial.index)
             intensity, spatial = intensity.align(spatial, join="outer", axis=0)
+            assert not intensity.isna().any().any()
+            assert not spatial.isna().any().any()
 
         # load masks and images
         masks_dir = paths["masks_dir"]
@@ -166,15 +177,21 @@ class BaseIMCDataset:
             else:
                 images = {}
 
-        # TODO: either always require sample_ids or this might break
-        #   rethink validations
-        # if images and masks:
-        # assert set(images) == set(masks)
-        # assert set(images) == sample_ids
-        # if images:
-        # assert set(images) == sample_ids
-        # if masks:
-        #     assert set(masks) == sample_ids
+        annotations_dir = paths["annotations_dir"]
+        if annotations_dir.exists():
+            annotations = spatial = pd.concat([pd.read_parquet(i, engine='fastparquet') for i in annotations_dir.glob("*.parquet")])
+            intensity, annotations = intensity.align(annotations, join="outer", axis=0)
+            assert not annotations.isna().any().any()
+        else:
+            annotations = None
+
+        if images is not None:
+            sample_ids = set(images.keys()).intersection(sample_ids)
+
+        if annotations is not None:
+            sample_ids = set(
+                annotations.index.get_level_values("sample_id")
+            ).intersection(sample_ids)
 
         self.sample_ids = sorted(sample_ids)
         # retain only the specified sample_ids
@@ -184,7 +201,10 @@ class BaseIMCDataset:
         self.intensity = (
             intensity.loc[list(sample_ids)] if intensity is not None else None
         )
-        self.spatial = spatial.loc[list(sample_ids)] if intensity is not None else None
+        self.spatial = spatial.loc[list(sample_ids)] if spatial is not None else None
+        self.annotations = (
+            annotations.loc[list(sample_ids)] if annotations is not None else None
+        )
 
         return {
             "samples": self.samples,
@@ -193,6 +213,7 @@ class BaseIMCDataset:
             "panel": self.panel,
             "intensity": self.intensity,
             "spatial": self.spatial,
+            "annotations": self.annotations,
         }
 
     def process(self):
@@ -272,6 +293,10 @@ class BaseIMCDataset:
     def annotations_dir(self):
         return self.metadata_dir / "annotations"
 
+    def get_annotations_dir(self, image_version: str, mask_version: str):
+        version_name = f"{image_version}-{mask_version}"
+        return self.annotations_dir / version_name
+
     def get_annotations_path(
         self, sample_name: str, image_version_name: str, mask_version_name: str
     ):
@@ -311,3 +336,69 @@ class BaseIMCDataset:
     def get_panel_path(self, image_version: str):
         images_dir = self.get_images_dir(image_version)
         return images_dir / "panel.parquet"
+
+    @property
+    def clinical_metadata_path(self):
+        return self.metadata_dir / "clinical.parquet"
+
+    def compute_features(self, image_version: str, mask_version: str):
+        from ai4bmr_imc.measure.measure import intensity_features, spatial_features
+        from ai4bmr_datasets.datasets.PCa import PCa
+        from tifffile import imread
+
+        dataset_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
+        ds = PCa(base_dir=dataset_dir)
+
+        img_dir = ds.get_images_dir(image_version)
+        assert img_dir.exists()
+
+        mask_dir = ds.get_masks_dir(mask_version)
+        assert mask_dir.exists()
+
+        panel_path = ds.get_panel_path(image_version=image_version)
+        assert panel_path.exists()
+        panel = pd.read_parquet(panel_path, engine="fastparquet")
+        panel = panel.reset_index().set_index("target")
+
+        sample_ids = set([i.stem for i in img_dir.glob("*.tiff")])
+        for i, sample_id in enumerate(sample_ids):
+            logger.info(f"[{i + 1}/{len(sample_ids)}] Processing {sample_id}")
+
+            img_path = img_dir / f"{sample_id}.tiff"
+            assert img_path.exists()
+
+            mask_path = mask_dir / f"{sample_id}.tiff"
+            assert mask_path.exists()
+
+            img = imread(img_path)
+            mask = imread(mask_path)
+            assert img.shape[1:] == mask.shape
+
+            intensity = intensity_features(img=img, mask=mask, panel=panel)
+            intensity = intensity.assign(sample_id=sample_id).set_index(
+                "sample_id", append=True
+            )
+            intensity = intensity.reorder_levels(["sample_id", "object_id"], axis=0)
+
+            spatial = spatial_features(mask=mask)
+            spatial = spatial.assign(sample_id=sample_id).set_index(
+                "sample_id", append=True
+            )
+            spatial = spatial.reorder_levels(["sample_id", "object_id"], axis=0)
+
+            assert intensity.index.equals(spatial.index)
+
+            intensity_path = (
+                ds.get_intensity_dir(
+                    image_version=image_version, mask_version=mask_version
+                )
+                / f"{sample_id}.parquet"
+            )
+            intensity_path.parent.mkdir(exist_ok=True, parents=True)
+            intensity.to_parquet(intensity_path, engine="fastparquet")
+
+            spatial_path = (
+                ds.get_spatial_dir(mask_version=mask_version) / f"{sample_id}.parquet"
+            )
+            spatial_path.parent.mkdir(exist_ok=True, parents=True)
+            spatial.to_parquet(spatial_path, engine="fastparquet")

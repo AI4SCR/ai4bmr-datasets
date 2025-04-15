@@ -1,13 +1,20 @@
-from pathlib import Path
-
 
 def test_PCa():
     from ai4bmr_datasets.datasets import PCa
+    from pathlib import Path
 
     base_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
-    dataset = PCa(base_dir=base_dir)
-    dataset.setup()
-    data = dataset.load()
+    ds = dataset = PCa(base_dir=base_dir)
+    self = ds
+    # ds.create_annotations()
+    # ds.create_metadata()
+    # ds.create_clinical_metadata()
+    # ds.create_tma_annotations()
+    # dataset.process()
+    data = dataset.load(
+        image_version="filtered", mask_version="filtered", features_as_published=False
+    )
+    data = dataset.load(image_version="filtered", features_as_published=False)
 
 
 def test_BLCa():
@@ -24,7 +31,11 @@ def test_TNBC():
     from ai4bmr_datasets.datasets.TNBC import TNBC
     from pathlib import Path
 
-    base_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC").expanduser().resolve()
+    base_dir = (
+        Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC")
+        .expanduser()
+        .resolve()
+    )
     ds = TNBC(base_dir=base_dir)
     # ds.process()
     data = ds.load()
@@ -35,7 +46,11 @@ def test_NSCLC():
     from ai4bmr_datasets.datasets.NSCLC import NSCLC
     from pathlib import Path
 
-    base_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/NSCLCv2").expanduser().resolve()
+    base_dir = (
+        Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/NSCLCv2")
+        .expanduser()
+        .resolve()
+    )
     ds = NSCLC(base_dir=base_dir)
     ds.process()
 
