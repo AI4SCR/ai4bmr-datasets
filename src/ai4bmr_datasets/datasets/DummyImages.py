@@ -12,23 +12,33 @@ class DummyTabular:
 
         rng = np.random.default_rng(seed=42)
 
-        index = pd.Index(range(num_samples), name="sample_id", dtype="str")
-        self.data = pd.DataFrame(
-            rng.random((self.num_samples, self.num_features)), index=index
-        )
-
-        label_ids = rng.integers(0, num_classes, num_samples)
-        label = np.array(["type_1", "type_2"])[label_ids]
+        self.data = pd.DataFrame(rng.random((self.num_samples, self.num_features)))
+        self.data.index = self.data.index.astype(str)
+        self.data.index.name = "sample_id"
 
         metadata = pd.DataFrame(
-            {"label_id": pd.Categorical(label_ids), "label": pd.Categorical(label)},
-            index=index,
+            rng.integers(0, num_classes, num_samples), columns=["label_id"], dtype='category'
         )
+
         self.metadata = metadata.convert_dtypes()
+        self.metadata['label'] = [['type_1', 'type_2'][i] for i in self.metadata['label_id']]
+        self.metadata['label'] = self.metadata['label'].astype('category')
+        self.metadata = self.metadata.convert_dtypes()
+        self.metadata.index = self.metadata.index.astype(str)
+        self.metadata.index.name = "sample_id"
+
+        self.sample_ids = self.metadata.index.to_list()
 
     def load(self):
         return dict(data=self.data, metadata=self.metadata)
 
+    def __getitem__(self, idx):
+        sample_id = self.sample_ids[idx]
+        return {
+            "sample_id": sample_id,
+            "data": self.data.loc[sample_id].to_numpy(),
+            "metadata": self.metadata.loc[sample_id].to_dict(),
+        }
 
 from pathlib import Path
 from skimage.io import imsave
@@ -39,7 +49,7 @@ class DummyImages:
 
     def __init__(
         self,
-        save_dir: Path = "~/data/datasets/dummy-images",
+        save_dir: Path = Path("~/data/datasets/dummy-images").expanduser(),
         num_samples: int = 10,
         num_channels: int = 3,
         height: int = 32,
