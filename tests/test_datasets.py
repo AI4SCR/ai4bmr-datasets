@@ -19,6 +19,7 @@ def test_PCa():
     data = dataset.load(
         image_version="filtered", mask_version="filtered", features_as_published=False
     )
+    # data['samples'].to_csv('/users/amarti51/pca-annotations.csv')
     data = dataset.load(image_version="filtered", features_as_published=False)
 
 

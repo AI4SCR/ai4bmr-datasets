@@ -409,29 +409,16 @@ class PCa(BaseIMCDataset):
 
         # df.gs_pat_1.unique()
         mapping = {
-            # nan, 4,
             "tumor not evident": "no tumor",
-            # 3,
-            # 'no tumor',
-            # 'not enough material',
-            # 'no tissue',
-            # 'not sure if tumor',
             "Tumor??": "not sure if tumor",
-            # 'not enough tumor',
-            # 'too much loss',
-            # 5,
             "no evident tumor": "no tumor",
             "n": "unclear annotation",
             "no": "unclear annotation",
         }
         df["gs_pat_1"] = df.gs_pat_1.map(lambda x: mapping.get(x, x))
 
-        # df.gs_pat_2.unique()
         mapping = {
-            # nan, 4, 3,
             "4 (3 is also an option)": 4,
-            # 5,
-            "/": "unclear_annotation",
             "4(few)": 4,
         }
         df["gs_pat_2"] = df.gs_pat_2.map(lambda x: mapping.get(x, x))
@@ -477,14 +464,11 @@ class PCa(BaseIMCDataset):
         filter_ = filter_ > 0
         df = df[~filter_]
 
-        mapping = {"nan": pd.NA}
+        mapping = {"nan": pd.NA, None: pd.NA}
         df = df.map(lambda x: mapping.get(x, x))
 
         filter_ = df.gs_pat_1.notna()
         df = df[filter_]
-
-        mapping = {"nan": pd.NA, None: pd.NA}
-        df = df.map(lambda x: mapping.get(x, x))
 
         df = df.convert_dtypes()
         df = df.rename(columns={"sample_name": "sample_id"}).set_index("sample_id")
