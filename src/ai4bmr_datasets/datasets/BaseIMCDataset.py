@@ -201,7 +201,7 @@ class BaseIMCDataset:
 
         annotations_dir = paths["annotations_dir"]
         if annotations_dir.exists():
-            annotations = spatial = pd.concat(
+            annotations = pd.concat(
                 [
                     pd.read_parquet(i, engine="fastparquet")
                     for i in annotations_dir.glob("*.parquet")
