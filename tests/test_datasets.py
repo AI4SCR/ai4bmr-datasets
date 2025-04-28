@@ -10,8 +10,8 @@ def test_PCa():
     # self = ds
     # ds.create_annotations()
     # ds.create_metadata()
-    # ds.create_clinical_metadata()
-    # ds.create_tma_annotations()
+    ds.create_clinical_metadata()
+    ds.create_tma_annotations()
     # dataset.process()
     import pandas as pd
 

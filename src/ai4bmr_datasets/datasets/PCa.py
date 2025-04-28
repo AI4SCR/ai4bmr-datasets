@@ -14,16 +14,14 @@ class PCa(BaseIMCDataset):
 
         # raw paths
         self.raw_clinical_metadata_path = (
-            base_dir / "01_raw" / "metadata" / "ROI_matching_blockID.xlsx"
+                base_dir / "01_raw" / "metadata" / "ROI_matching_blockID.xlsx"
         )
         self.raw_tma_annotations_path = (
-            base_dir / "01_raw" / "metadata" / "tma-annotations.xlsx"
+                base_dir / "01_raw" / "metadata" / "tma-annotations-v2.xlsx"
         )
 
         self.raw_tma_tidy_path = base_dir / "01_raw" / "metadata" / "TMA_tidy.txt"
-        self.raw_annotations_path = Path(
-            "/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/metadata/02_processed/labels.parquet"
-        )
+        self.raw_annotations_path = base_dir / "01_raw" / "annotations" / "labels.parquet"
 
         # populated by `self.load()`
         self.sample_ids = None
@@ -74,7 +72,7 @@ class PCa(BaseIMCDataset):
 
         sample_ids = set(annotations.index.get_level_values("sample_name"))
         for i, sample_id in enumerate(sample_ids):
-            logger.info(f"[{i+1}/{len(sample_ids)}] Processing sample {sample_id}")
+            logger.info(f"[{i + 1}/{len(sample_ids)}] Processing sample {sample_id}")
             object_ids = set(annotations.loc[sample_id].index)
             mask = imread(mask_dir / f"{sample_id}.tiff")
             mask = filter_mask(mask, object_ids)
@@ -89,9 +87,7 @@ class PCa(BaseIMCDataset):
         else:
             annotations_dir.mkdir(parents=True, exist_ok=True)
             labels = pd.read_parquet(self.raw_annotations_path)
-            labels = pd.read_parquet(
-                "/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/metadata/02_processed/labels.parquet"
-            )
+
             for grp_name, grp_data in labels.groupby("sample_name"):
                 grp_data.index.names = ["sample_id", "object_id"]
                 grp_data = grp_data.convert_dtypes()
@@ -404,18 +400,20 @@ class PCa(BaseIMCDataset):
         filter_ = df.sample_name.notna()
         df = df[filter_]
 
-        mapping = {"y": "yes", "n": "no", "/": "unclear_annotation", "nan": pd.NA}
+        mapping = {"y": "yes", "n": "no", "/": "no_evaluation", "nan": pd.NA}
         df = df.map(lambda x: mapping.get(x, x))
 
         # df.gs_pat_1.unique()
         mapping = {
             "tumor not evident": "no tumor",
-            "Tumor??": "not sure if tumor",
             "no evident tumor": "no tumor",
-            "n": "unclear annotation",
+            "Tumor??": "not sure if tumor",
             "no": "unclear annotation",
         }
         df["gs_pat_1"] = df.gs_pat_1.map(lambda x: mapping.get(x, x))
+        # df["gs_pat_1"].unique()
+        # filter_ = df["gs_pat_1"] == 'unclear annotation'
+        # df[filter_]
 
         mapping = {
             "4 (3 is also an option)": 4,
@@ -433,8 +431,8 @@ class PCa(BaseIMCDataset):
             lambda x: mapping.get(x, x)
         )
 
-        mapping = {"yno": "unclear_annotation"}
-        df["inflammation"] = df.inflammation.map(lambda x: mapping.get(x, x))
+        # mapping = {"yno": "unclear_annotation"}
+        # df["inflammation"] = df.inflammation.map(lambda x: mapping.get(x, x))
 
         mapping = {"n3": "no"}
         df["cribriform"] = df.cribriform.map(lambda x: mapping.get(x, x))
@@ -451,32 +449,63 @@ class PCa(BaseIMCDataset):
         for col in tidy_col_vals:
             df[col] = df[col].astype(str).map(tidy_name)
 
-        filter_ = df.isin(
+        # note: ensure all values are in the expected set of values
+        assert df[tidy_col_vals].isin([
+            # assessment not possible
+            'no_tissue',
+            'too_much_loss',
+            # 'no_evident_tumor', -> "no_tumor"
+            # 'tumor_not_evident', -> "no_tumor"
+            'no_evaluation',
+            'not_enough_tumor',
+            'not_enough_material',
+            'not_sure_if_tumor',
+            'unclear_annotation',
+            # valid cores
+            'nan',
+            'no_tumor',
+            'yes',
+            'no',
+            '3',
+            '4',
+            '5',
+        ]).all().all()
+
+        filter_ = df.gs_pat_1.isin(
             [
-                "not_enough_material",
-                "unclear_annotation",
-                "no_tissue",
-                "not_sure_if_tumor",
-                "not_enough_tumor",
-                "too_much_loss",
+                # assessment not possible
+                # 'no_tissue',
+                # 'too_much_loss',
+                # 'no_evident_tumor',
+                # 'tumor_not_evident',
+                # 'no_evaluation',
+                # 'not_enough_tumor',
+                # 'not_enough_material',
+                # 'not_sure_if_tumor',
+                # 'unclear_annotation',
+                # 'nan',
+                # cores with assessment
+                'no_tumor',
+                'yes',
+                'no',
+                '3',
+                '4',
+                '5',
             ]
-        ).sum(axis=1)
-        filter_ = filter_ > 0
-        df = df[~filter_]
+        )
+
+        df = df[filter_]
 
         mapping = {"nan": pd.NA, None: pd.NA}
         df = df.map(lambda x: mapping.get(x, x))
 
-        filter_ = df.gs_pat_1.notna()
-        df = df[filter_]
+        assert df.gs_pat_1.isna().sum() == 0
 
         df = df.convert_dtypes()
         df = df.rename(columns={"sample_name": "sample_id"}).set_index("sample_id")
-        # df.to_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/projects/ai4bmr-datasets/tests/tma_anno.csv')
 
-        # sample_id_to_tma_id = samples['tma_id'].to_dict()
-        # df['tma_id'] = df.index.map(sample_id_to_tma_id)
-        # assert not df.tma_id.isna().any()
+        # note: fix tma sample id for split sample 150
+        df.loc[df.tma_sample_id == "150_1", "tma_sample_id"] = "150"
 
         # NOTE: check that the data in samples and the data in the tma annotations are the same
         shared_sample_ids = list(set(df.index).intersection(set(samples.index)))
@@ -501,7 +530,6 @@ class PCa(BaseIMCDataset):
 
         df["gleason_score"] = pd.NA
         gleason_score = df.gs_pat_1.astype(str) + "+" + df.gs_pat_2.astype(str)
-
         filter_ = df.gs_pat_1.notna()
         df.loc[filter_, "gleason_score"] = gleason_score[filter_]
 
@@ -546,5 +574,7 @@ class PCa(BaseIMCDataset):
         ]
 
         df = df.astype({k: "category" for k in cat_cols})
+        # df.to_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/projects/ai4bmr-datasets/tests/tma_annotations.csv')
         samples = pd.concat([samples, df], axis=1)
+        samples = samples.convert_dtypes()
         samples.to_parquet(self.sample_metadata_path, engine="fastparquet")
