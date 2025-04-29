@@ -7,13 +7,13 @@ import pandas as pd
 from .BaseIMCDataset import BaseIMCDataset
 
 
-class PCa(BaseIMCDataset):
+class BLCa(BaseIMCDataset):
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
 
         # raw paths
-        self.raw_annotations_path = <PAT_TO_LABELS_PARQUET>
+        self.raw_annotations_path = ''
         self.mcd_metadata_path = self.base_dir / "metadata" / "02_processed" / "mcd_metadata.parquet"
 
         # populated by `self.load()`
@@ -86,7 +86,7 @@ class PCa(BaseIMCDataset):
         )
         sample_ids_with_no_acquisition = set(ids.sample_id) - set(
             mcd_metadata.sample_id
-        )
+        )    
 
         metadata = pd.merge(ids, mcd_metadata, how="outer")
         metadata[metadata.sample_id.isin(sample_ids_with_no_acquisition)].to_csv(
@@ -156,10 +156,21 @@ class PCa(BaseIMCDataset):
 
         # TODO: add your own columns
 
+        # add ROI and ROI_id
+        metadata_full['ROI'] = metadata_full['sample_id'].str.extract(r'([ABC])')
+        roi_map = {'A': 1, 'B': 2, 'C': 3}
+        metadata_full['ROI_id'] = metadata_full['ROI'].map(roi_map)
+
+        ## add responders and non reponsders 
+        metadata_full['RC: ypT'] = metadata_full['RC: ypT'].astype(int)
+        metadata_full['Resp_Status'] = metadata_full['RC: ypT'].apply(lambda x: 1 if x == 0 else 0)
+
         # convert to parquet compatible types
         metadata_full = metadata_full.convert_dtypes()
         metadata_full = metadata_full.set_index("sample_name")
         metadata_full.to_parquet(self.clinical_metadata_path, engine='fastparquet')
+
+        import pdb; pdb.set_trace()
 
 
     def create_annotations(self):
@@ -213,5 +224,12 @@ class PCa(BaseIMCDataset):
     @property
     def doi(self):
         return "unpublished"
+    
+
+
+base_dir = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/BLCa/')
+
+BLCa_dataset = BLCa(base_dir)
+BLCa_dataset.create_clinical_metadata()
 
 
