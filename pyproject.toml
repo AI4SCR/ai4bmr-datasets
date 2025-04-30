@@ -23,7 +23,8 @@ dependencies = [
     "tifffile",
     "scikit-image",
     "matplotlib",
-    "pyarrow"
+    "pyarrow",
+    "fastparquet"
 ]
 dynamic = ["version"]
 classifiers = [

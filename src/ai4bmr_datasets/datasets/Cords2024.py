@@ -11,7 +11,7 @@ from tifffile import imwrite
 from .BaseIMCDataset import BaseIMCDataset
 
 
-class NSCLC(BaseIMCDataset):
+class Cords2024(BaseIMCDataset):
 
     @property
     def id(self):

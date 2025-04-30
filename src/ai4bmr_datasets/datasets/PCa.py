@@ -51,7 +51,7 @@ class PCa(BaseIMCDataset):
     def process(self):
         self.create_clinical_metadata()
         self.create_tma_annotations()
-        self.create_metadata()
+        self.label_transfer()
         self.create_annotations()
 
     def create_masks_filtered_by_annotations(self):
@@ -94,6 +94,106 @@ class PCa(BaseIMCDataset):
                 grp_data = grp_data.astype("category")
                 annotations_path = annotations_dir / f"{grp_name}.parquet"
                 grp_data.to_parquet(annotations_path)
+
+    def label_transfer(self):
+        import pandas as pd
+
+        data_dir = self.raw_dir
+        path_annotations = Path(data_dir / "clustering" / "annotations.parquet")
+
+        # %%
+        annotations = pd.read_parquet(path_annotations, engine="pyarrow")
+        levels_to_drop = set(annotations.index.names) - {"sample_name", "object_id"}
+        index = annotations.index.droplevel(level=list(levels_to_drop))
+        annotations.index = index
+
+        # %%
+        # roi_240223_012 = annotations.loc[('240223_012',), :]
+        # roi_240223_012.group_name.value_counts()
+        # annotations = annotations.drop(labels='240223_012', level=0)
+        assert "240223_012" not in set(annotations.index.get_level_values("sample_name"))
+
+        # filter out specific `group_name` based on assessment of Francesco
+        filter_ = annotations.group_name == "epithelial-Synaptophysin_pos-p53_pos"
+        assert filter_.sum() == 56
+        annotations = annotations[~filter_]
+
+        # %%
+        path_labels = Path(self.raw_dir / 'metadata' / 'label-names.xlsx')
+        labels = pd.read_excel(path_labels, sheet_name="label-names", skiprows=0)
+
+        cols = ["name_in_annotations", "main_group", "label"]
+        filter_ = labels.columns.str.contains("meta_group")
+        meta_group_cols = labels.columns[filter_]
+        cols = cols + meta_group_cols.tolist()
+        labels = labels[cols]
+
+        assert labels.isna().any().any() == False
+        labels = labels.set_index("name_in_annotations")
+
+        assert set(labels.index) - set(annotations.group_name) == {
+            "epithelial-Synaptophysin_pos-p53_pos"
+        }
+
+        # %% reassign parent group names according to Francescos labels
+        main_group = labels["main_group"].to_dict()
+        annotations = annotations.assign(main_group=annotations.group_name.map(main_group))
+
+        for meta_group_col in meta_group_cols:
+            meta_group = labels[meta_group_col].to_dict()
+            annotations[meta_group_col] = annotations.group_name.map(meta_group)
+
+        label = labels["label"].to_dict()
+        annotations = annotations.assign(label=annotations.group_name.map(label))
+
+        assert annotations.isna().any().any() == False
+
+        # %% create ids
+        main_group_id_dict = sorted(annotations.main_group.unique())
+        main_group_id_dict = {k: v for v, k in enumerate(main_group_id_dict)}
+        annotations["main_group_id"] = annotations.main_group.map(main_group_id_dict)
+
+        for meta_group_col in meta_group_cols:
+            meta_group_id_dict = sorted(annotations[meta_group_col].unique())
+            meta_group_id_dict = {k: v for v, k in enumerate(meta_group_id_dict)}
+            annotations[f"{meta_group_col}_id"] = annotations[meta_group_col].map(
+                meta_group_id_dict
+            )
+
+        label_id_dict = sorted(annotations.label.unique())
+        label_id_dict = {k: v for v, k in enumerate(label_id_dict)}
+        annotations["label_id"] = annotations.label.map(label_id_dict)
+
+        assert annotations.isna().any().any() == False
+
+        # %%
+        id_cols = [col for col in annotations.columns if col.endswith("_id")]
+        for id_col in id_cols:
+            annotations.loc[:, id_col] = annotations[id_col].astype(int)
+
+        cols = ["main_group", "label"]
+        cell_counts = annotations[cols].groupby(cols).value_counts()
+        cell_counts.to_csv(data_dir / "metadata" / "labels-counts.csv")
+
+        # %%
+        cols = ["sample_name", "label"]
+        cell_counts = annotations[['label']].groupby(cols).value_counts().unstack()
+        cell_counts = cell_counts.convert_dtypes()
+
+        cell_freq = cell_counts.div(cell_counts.sum(axis=1), axis=0)
+        cell_freq = cell_freq.convert_dtypes()
+
+        cell_counts.columns = pd.MultiIndex.from_product([cell_counts.columns, ['counts']], names=['label', 'stat'])
+        cell_freq.columns = pd.MultiIndex.from_product([cell_freq.columns, ['freq']], names=['label', 'stat'])
+
+        cell_stats = pd.concat((cell_counts, cell_freq), axis=1)
+        cell_stats = cell_stats.sort_index(level=0, axis=1)
+        cell_stats.to_csv(data_dir / "metadata" / "label-stats.csv")
+
+        # %%
+
+        annotations.to_parquet(self.raw_annotations_path, engine='fastparquet')
+
 
     def create_images(self):
         pass
