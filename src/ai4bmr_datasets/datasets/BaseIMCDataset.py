@@ -296,7 +296,7 @@ class BaseIMCDataset:
         return self.metadata_dir / "clinical.parquet"
 
     def compute_features(self, image_version: str, mask_version: str):
-        from ai4bmr_imc.measure.measure import intensity_features, spatial_features
+        from ai4bmr_datasets.utils.imc.features import intensity_features, spatial_features
         from ai4bmr_datasets.datasets.PCa import PCa
         from tifffile import imread
 
