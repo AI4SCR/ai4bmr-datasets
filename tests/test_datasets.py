@@ -4,11 +4,16 @@ import pandas as pd
 def test_PCa():
     from ai4bmr_datasets.datasets import PCa
     from pathlib import Path
+    import pandas as pd
 
     base_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
     ds = dataset = PCa(base_dir=base_dir)
     # self = ds
+    # ds.label_transfer()
     # ds.create_annotations()
+
+    df = pd.read_parquet(ds.annotations_dir)
+
     # ds.create_metadata()
     # ds.create_clinical_metadata()
     # ds.create_tma_annotations()
@@ -48,8 +53,8 @@ def test_TNBC():
     ds.panel
 
 
-def test_NSCLC():
-    from ai4bmr_datasets.datasets.NSCLC import NSCLC
+def test_Cords2024():
+    from ai4bmr_datasets.datasets.Cords2024 import Cords2024
     from pathlib import Path
 
     base_dir = (
@@ -57,8 +62,20 @@ def test_NSCLC():
         .expanduser()
         .resolve()
     )
-    ds = NSCLC(base_dir=base_dir)
+    ds = Cords2024(base_dir=base_dir)
     ds.process()
 
     _ = ds.load()
     ds.panel
+
+def test_Cords2023():
+    from ai4bmr_datasets.datasets.Cords2023 import Cords2023
+    from pathlib import Path
+
+    base_dir = (
+        Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/Cords2023")
+        .expanduser()
+        .resolve()
+    )
+    ds = Cords2023(base_dir=base_dir)
+    ds.download()

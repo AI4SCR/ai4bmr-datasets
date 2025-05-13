@@ -43,7 +43,7 @@ class TNBC(BaseIMCDataset):
         self.observations_default = set()
         self.observations_unfiltered = set()
 
-    def process(self):
+    def prepare_data(self):
         self.create_panel()
         self.create_metadata()
         self.create_images()
@@ -100,7 +100,7 @@ class TNBC(BaseIMCDataset):
 
         panel_path = self.get_panel_path(image_version=self.version_name)
         panel_path.parent.mkdir(exist_ok=True, parents=True)
-        panel.to_parquet(panel_path)
+        panel.to_parquet(panel_path, engine='fastparquet')
 
     @staticmethod
     def get_tiff_metadata(path):
@@ -129,7 +129,7 @@ class TNBC(BaseIMCDataset):
         panel_path = self.get_panel_path(image_version=self.version_name)
         panel = pd.read_parquet(panel_path)
 
-        images_dir = self.get_images_dir(self.version_name)
+        images_dir = self.get_image_version_dir(self.version_name)
         images_dir.mkdir(exist_ok=True, parents=True)
 
         image_paths = sorted(
@@ -151,12 +151,14 @@ class TNBC(BaseIMCDataset):
             save_image(img, images_dir / f"{sample_id}.tiff")
 
     def create_masks(self):
+        from PIL import Image
+
         logger.info("Filtering masks")
 
-        masks_default_dir = self.get_masks_dir(mask_version=self.version_name)
+        masks_default_dir = self.get_mask_version_dir(mask_version=self.version_name)
         masks_default_dir.mkdir(exist_ok=True, parents=True)
 
-        masks_unfiltered_dir = self.get_masks_dir(mask_version="unfiltered")
+        masks_unfiltered_dir = self.get_mask_version_dir(mask_version="unfiltered")
         masks_unfiltered_dir.mkdir(exist_ok=True, parents=True)
 
         mask_paths = sorted(list(self.raw_masks_dir.glob(r"p*_labeledcellData.tiff")))
@@ -185,11 +187,10 @@ class TNBC(BaseIMCDataset):
                 mask_unfiltered = imread(mask_path)
 
                 # load segmentation mask from raw data
-                segm = imread(
-                    self.raw_images_dir
+                segm = Image.open(self.raw_images_dir
                     / f"TA459_multipleCores2_Run-4_Point{sample_id}"
-                    / "segmentation_interior.png"
-                )
+                    / "segmentation_interior.png")
+                segm = np.array(segm)
 
                 # note: set region with no segmentation to background
                 mask_unfiltered[segm == 0] = 0
@@ -285,9 +286,9 @@ class TNBC(BaseIMCDataset):
             cancer_type=samples["cancer_type_id"].map(cancer_type_map)
         )
 
-        path = self.get_samples_path()
+        path = self.clinical_metadata_path
         path.parent.mkdir(exist_ok=True, parents=True)
-        samples.to_parquet(self.get_samples_path())
+        samples.to_parquet(path, engine='fastparquet')
 
     def process_annotations(self):
         logger.info("Creating metadata [annotations]")
@@ -358,9 +359,9 @@ class TNBC(BaseIMCDataset):
         metadata = metadata.convert_dtypes()
 
         for grp_name, grp_data in metadata.groupby("sample_id"):
-            path = self.annotations_dir / self.version_name / f"{grp_name}.parquet"
+            path = self.metadata_dir / self.version_name / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
-            grp_data.to_parquet(path)
+            grp_data.to_parquet(path, engine='fastparquet')
 
     def create_metadata(self):
         self.process_clinical_metadata()
@@ -372,7 +373,7 @@ class TNBC(BaseIMCDataset):
     def create_features_spatial(self):
         logger.info("Creating features [spatial]")
 
-        samples = pd.read_parquet(self.get_samples_path())
+        samples = pd.read_parquet(self.clinical_metadata_path)
         spatial = pd.read_csv(self.raw_sca_path)
 
         index_columns = ["sample_id", "object_id"]
@@ -399,7 +400,7 @@ class TNBC(BaseIMCDataset):
             dir = self.spatial_dir / self.version_name
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
-            grp_data.to_parquet(path)
+            grp_data.to_parquet(path, engine='fastparquet')
 
         del default
 
@@ -412,15 +413,15 @@ class TNBC(BaseIMCDataset):
         unfiltered = unfiltered.loc[list(valid_samples)]
 
         for grp_name, grp_data in unfiltered.groupby("sample_id"):
-            dir = self.get_spatial_dir(mask_version="unfiltered")
+            dir = self.intensity_dir / self.version_name
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
-            grp_data.to_parquet(path)
+            grp_data.to_parquet(path, engine='fastparquet')
 
     def create_features_intensity(self):
         logger.info("Creating features [intensities]")
 
-        samples = pd.read_parquet(self.get_samples_path())
+        samples = pd.read_parquet(self.clinical_metadata_path)
         panel_path = self.get_panel_path(image_version=self.version_name)
         panel = pd.read_parquet(panel_path)
         intensity = pd.read_csv(self.raw_sca_path)
@@ -454,7 +455,7 @@ class TNBC(BaseIMCDataset):
             dir = self.intensity_dir / self.version_name
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
-            grp_data.to_parquet(path)
+            grp_data.to_parquet(path, engine='fastparquet')
 
     @property
     def name(self):
