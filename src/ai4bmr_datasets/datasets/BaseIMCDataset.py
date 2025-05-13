@@ -295,28 +295,38 @@ class BaseIMCDataset:
     def clinical_metadata_path(self):
         return self.metadata_dir / "clinical.parquet"
 
-    def compute_features(self, image_version: str, mask_version: str):
+    def compute_features(self, image_version: str, mask_version: str, force: bool = False):
         from ai4bmr_datasets.utils.imc.features import intensity_features, spatial_features
-        from ai4bmr_datasets.datasets.PCa import PCa
         from tifffile import imread
 
-        # TODO: this need to be generalized to all datasets
+        version_name = self.get_version_name(image_version=image_version, mask_version=mask_version)
+        save_intensity_dir = self.intensity_dir / version_name
+        save_spatial_dir = self.spatial_dir / version_name
 
-        dataset_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
-        ds = PCa(base_dir=dataset_dir)
+        if (save_intensity_dir.exists() or save_spatial_dir.exists()) and not force:
+            logger.error(f"Features directory {save_intensity_dir} already exists. Set force=True to overwrite to recompute.")
+            return
 
-        img_dir = ds.get_image_version_dir(image_version)
+        save_intensity_dir.mkdir(exist_ok=True, parents=True)
+        save_spatial_dir.mkdir(exist_ok=True, parents=True)
+
+        # PATHS
+        img_dir = self.get_image_version_dir(image_version)
         assert img_dir.exists()
 
-        mask_dir = ds.get_mask_version_dir(mask_version)
+        mask_dir = self.get_mask_version_dir(mask_version)
         assert mask_dir.exists()
 
-        panel_path = ds.get_panel_path(image_version=image_version)
+        panel_path = self.get_panel_path(image_version=image_version)
         assert panel_path.exists()
+
         panel = pd.read_parquet(panel_path, engine="fastparquet")
         panel = panel.reset_index().set_index("target")
 
-        sample_ids = set([i.stem for i in img_dir.glob("*.tiff")])
+        image_ids = set([i.stem for i in img_dir.glob("*.tiff")])
+        mask_ids = set([i.stem for i in mask_dir.glob("*.tiff")])
+        sample_ids = image_ids.intersection(mask_ids)
+
         for i, sample_id in enumerate(sample_ids):
             logger.info(f"[{i + 1}/{len(sample_ids)}] Processing {sample_id}")
 
@@ -331,30 +341,14 @@ class BaseIMCDataset:
             assert img.shape[1:] == mask.shape
 
             intensity = intensity_features(img=img, mask=mask, panel=panel)
-            intensity = intensity.assign(sample_id=sample_id).set_index(
-                "sample_id", append=True
-            )
+            intensity = intensity.assign(sample_id=sample_id).set_index("sample_id", append=True)
             intensity = intensity.reorder_levels(["sample_id", "object_id"], axis=0)
 
             spatial = spatial_features(mask=mask)
-            spatial = spatial.assign(sample_id=sample_id).set_index(
-                "sample_id", append=True
-            )
+            spatial = spatial.assign(sample_id=sample_id).set_index("sample_id", append=True)
             spatial = spatial.reorder_levels(["sample_id", "object_id"], axis=0)
 
             assert intensity.index.equals(spatial.index)
 
-            intensity_path = (
-                    ds.get_intensity_dir(
-                        image_version=image_version, mask_version=mask_version
-                    )
-                    / f"{sample_id}.parquet"
-            )
-            intensity_path.parent.mkdir(exist_ok=True, parents=True)
-            intensity.to_parquet(intensity_path, engine="fastparquet")
-
-            spatial_path = (
-                    ds.get_spatial_dir(mask_version=mask_version) / f"{sample_id}.parquet"
-            )
-            spatial_path.parent.mkdir(exist_ok=True, parents=True)
-            spatial.to_parquet(spatial_path, engine="fastparquet")
+            intensity.to_parquet(save_intensity_dir / f'{sample_id}.parquet', engine="fastparquet")
+            spatial.to_parquet(save_spatial_dir / f'{sample_id}.parquet', engine="fastparquet")
