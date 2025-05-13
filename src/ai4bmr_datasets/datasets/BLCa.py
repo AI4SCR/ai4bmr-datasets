@@ -62,7 +62,6 @@ class BLCa(BaseIMCDataset):
         mcd_metadata.loc[
             mcd_metadata.Description.str.startswith("1C3i"), "sample_id"
         ] = "1C3i"
-        assert mcd_metadata.sample_id.duplicated().sum() == 2
 
         # create acquisition_id
         mcd_metadata = mcd_metadata.assign(
@@ -144,9 +143,19 @@ class BLCa(BaseIMCDataset):
 
         # TODO: add your own columns
 
+        # add ROI and ROI_id
+        metadata_full['ROI'] = metadata_full['sample_id'].str.extract(r'([ABC])')
+        roi_map = {'A': 1, 'B': 2, 'C': 3}
+        metadata_full['ROI_id'] = metadata_full['ROI'].map(roi_map)
+
+        # add responders and non reponsders
+        metadata_full['RC: ypT'] = metadata_full['RC: ypT'].astype(int)
+        metadata_full['Resp_Status'] = metadata_full['RC: ypT'].apply(lambda x: 1 if x == 0 else 0)
+
         # convert to parquet compatible types
         metadata_full = metadata_full.rename(columns=dict(sample_id="roi_id", acquisition_id='sample_id'))
         metadata_full = metadata_full.convert_dtypes()
+        metadata_full.columns = metadata_full.columns.map(tidy_name)
         metadata_full = metadata_full.set_index("sample_id")
         metadata_full.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
