@@ -179,7 +179,12 @@ class BLCa(BaseIMCDataset):
                 grp_data.to_parquet(path, engine='fastparquet')
 
     def create_images(self):
-        pass
+        panel_paths = [p for p in self.images_dir.rglob("panel.csv")]
+        for path in panel_paths:
+            panel = pd.read_csv(path)
+            panel.index.name = 'channel_index'
+            panel = panel.rename(columns=dict(name='target'))
+            panel.to_parquet(path.with_suffix(".parquet"), engine='fastparquet')
 
     def create_masks(self):
         pass

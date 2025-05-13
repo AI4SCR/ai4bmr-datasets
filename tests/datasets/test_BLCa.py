@@ -4,4 +4,4 @@ from pathlib import Path
 base_dir = Path("/users/amarti51/prometex/data/datasets/BLCa")
 ds = BLCa(base_dir=base_dir)
 ds.prepare_data()
-ds.setup(image_version='filtered', mask_version='filtered', load_intensity=False, load_metadata=True)
+ds.setup(image_version='filtered', mask_version='cleaned', load_intensity=False, load_metadata=True)
