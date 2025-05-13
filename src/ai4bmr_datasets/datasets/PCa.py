@@ -64,10 +64,10 @@ class PCa(BaseIMCDataset):
             mapping = lambda x: x if x in object_ids else 0
             return np.vectorize(mapping)(mask)
 
-        mask_dir = self.get_masks_dir(mask_version="cleaned")
+        mask_dir = self.get_mask_version_dir(mask_version="cleaned")
         annotations = pd.read_parquet(self.raw_annotations_path)
 
-        new_mask_dir = self.get_masks_dir(mask_version="filtered")
+        new_mask_dir = self.get_mask_version_dir(mask_version="filtered")
         new_mask_dir.mkdir(parents=True, exist_ok=True)
 
         sample_ids = set(annotations.index.get_level_values("sample_name"))
@@ -190,6 +190,13 @@ class PCa(BaseIMCDataset):
         cell_stats = cell_stats.sort_index(level=0, axis=1)
         cell_stats.to_csv(data_dir / "metadata" / "label-stats.csv")
 
+        # %%
+        cell_freq = cell_freq.reset_index().melt(id_vars=['sample_name'])
+        top5_per_sample = cell_freq \
+            .sort_values(['sample_name', 'value'], ascending=[True, False]) \
+            .groupby('sample_name') \
+            .head(1)
+        top5_per_sample.to_csv(data_dir / "top-1-labels-by-sample.csv")
         # %%
 
         annotations.to_parquet(self.raw_annotations_path, engine='fastparquet')
@@ -482,11 +489,11 @@ class PCa(BaseIMCDataset):
         metadata = metadata.astype({k: "category" for k in cat_cols})
 
         # %%
-        self.sample_metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        metadata.to_parquet(self.sample_metadata_path, engine="fastparquet")
+        self.clinical_metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata.to_parquet(self.clinical_metadata_path, engine="fastparquet")
 
     def create_tma_annotations(self):
-        samples = pd.read_parquet(self.sample_metadata_path, engine="fastparquet")
+        samples = pd.read_parquet(self.clinical_metadata_path, engine="fastparquet")
         df = pd.read_excel(self.raw_tma_annotations_path, sheet_name="PCa_ROIs_final")
         # set(samples.index) - set(df.sample_name)
 
@@ -677,4 +684,4 @@ class PCa(BaseIMCDataset):
         # df.to_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/projects/ai4bmr-datasets/tests/tma_annotations.csv')
         samples = pd.concat([samples, df], axis=1)
         samples = samples.convert_dtypes()
-        samples.to_parquet(self.sample_metadata_path, engine="fastparquet")
+        samples.to_parquet(self.clinical_metadata_path, engine="fastparquet")

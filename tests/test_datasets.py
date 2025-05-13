@@ -8,9 +8,10 @@ def test_PCa():
 
     base_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
     ds = dataset = PCa(base_dir=base_dir)
-    self = ds
-    ds.label_transfer()
-    ds.create_annotations()
+    # self = ds
+    # ds.label_transfer()
+    # ds.create_annotations()
+
     df = pd.read_parquet(ds.annotations_dir)
 
     # ds.create_metadata()

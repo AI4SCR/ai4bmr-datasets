@@ -24,7 +24,9 @@ dependencies = [
     "scikit-image",
     "matplotlib",
     "pyarrow",
-    "fastparquet"
+    "fastparquet",
+    "geopandas",
+    "pyreadr"
 ]
 dynamic = ["version"]
 classifiers = [

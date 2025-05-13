@@ -146,7 +146,7 @@ class Cords2023(BaseIMCDataset):
         clinical_metadata.columns = clinical_metadata.columns.map(tidy_name)
         clinical_metadata = clinical_metadata.convert_dtypes()
 
-        samples_path = self.get_samples_path()
+        samples_path = self.clinical_metadata_path()
         samples_path.parent.mkdir(parents=True, exist_ok=True)
         clinical_metadata.to_parquet(samples_path)
 
@@ -173,13 +173,13 @@ class Cords2023(BaseIMCDataset):
         panel = pd.read_parquet(panel_path)
 
         acquisitions_dir = self.raw_acquisitions_dir
-        samples = pd.read_parquet(self.get_samples_path())
+        samples = pd.read_parquet(self.clinical_metadata_path())
         sample_ids = set(samples.index)
 
         acquisition_ids = set(i.stem for i in acquisitions_dir.glob("*.tiff"))
         ids = sample_ids.intersection(acquisition_ids)
 
-        save_dir = self.get_images_dir("published")
+        save_dir = self.get_image_version_dir("published")
         save_dir.mkdir(parents=True, exist_ok=True)
         for id_ in ids:
             img_path = self.raw_acquisitions_dir / f"{id_}.tiff"
