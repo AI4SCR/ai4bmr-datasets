@@ -7,13 +7,13 @@ import pandas as pd
 from .BaseIMCDataset import BaseIMCDataset
 
 
-class PCa(BaseIMCDataset):
+class BLCa(BaseIMCDataset):
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
 
         # raw paths
-        self.raw_annotations_path = <PAT_TO_LABELS_PARQUET>
+        self.raw_metadata_path = self.base_dir / '01_raw' / 'metadata' / '02_processed' / 'labels.parquet'
         self.mcd_metadata_path = self.base_dir / "metadata" / "02_processed" / "mcd_metadata.parquet"
 
         # populated by `self.load()`
@@ -25,29 +25,14 @@ class PCa(BaseIMCDataset):
         self.intensity = None
         self.spatial = None
 
-    def __len__(self):
-        return len(self.sample_ids)
-
-    def __getitem__(self, idx):
-        # TODO: this breaks if there is no self.samples
-        sample_id = self.samples.index[idx]
-        return {
-            "sample_id": sample_id,
-            "sample": self.samples.loc[sample_id],
-            "image": self.images[sample_id],
-            "mask": self.masks[sample_id],
-            "panel": self.panel,
-            "intensity": self.intensity.loc[sample_id],
-            "spatial": self.spatial.loc[sample_id],
-        }
-
-    def process(self):
-        # TODO
+    def prepare_data(self):
+        self.create_clinical_metadata()
+        self.create_metadata()
         pass
 
     def create_clinical_metadata(self):
-        raw_dir = self.base_dir / "metadata" / "01_raw"
-        processed_dir = self.base_dir / "metadata" / "02_processed"
+        raw_dir = self.raw_dir / "metadata" / "01_raw"
+        processed_dir = self.raw_dir / "metadata" / "02_processed"
 
         # ROI matching
         filename = "Analyses_cohort 2.xlsx"
@@ -63,10 +48,12 @@ class PCa(BaseIMCDataset):
         ids = pd.concat(cont)
         ids = ids.dropna(subset="sample_id")
         ids.loc[:, "patient_id"] = ids.patient_id.ffill()
+        assert ids.sample_id.duplicated().any() == False
         assert ids.patient_id.value_counts().max() <= 6
 
         # mcd data
-        mcd_metadata = pd.read_parquet(self.mcd_metadata_path)
+        mcd_metadata_path = self.raw_dir / 'metadata' / '02_processed' / 'mcd_metadata.parquet'
+        mcd_metadata = pd.read_parquet(mcd_metadata_path)
         # NOTE: rename acquisitions that were split
         mcd_metadata = mcd_metadata.assign(sample_id=mcd_metadata.Description)
         mcd_metadata.loc[
@@ -75,10 +62,11 @@ class PCa(BaseIMCDataset):
         mcd_metadata.loc[
             mcd_metadata.Description.str.startswith("1C3i"), "sample_id"
         ] = "1C3i"
+        assert mcd_metadata.sample_id.duplicated().sum() == 2
 
-        # create sample_name
+        # create acquisition_id
         mcd_metadata = mcd_metadata.assign(
-            sample_name=mcd_metadata.file_name_napari.map(lambda x: Path(x).stem)
+            acquisition_id=mcd_metadata.file_name_napari.map(lambda x: Path(x).stem)
         )
 
         sample_ids_with_not_in_analysis = set(mcd_metadata.sample_id) - set(
@@ -157,28 +145,29 @@ class PCa(BaseIMCDataset):
         # TODO: add your own columns
 
         # convert to parquet compatible types
+        metadata_full = metadata_full.rename(columns=dict(sample_id="roi_id", acquisition_id='sample_id'))
         metadata_full = metadata_full.convert_dtypes()
-        metadata_full = metadata_full.set_index("sample_name")
+        metadata_full = metadata_full.set_index("sample_id")
         metadata_full.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
 
-    def create_annotations(self):
+    def create_metadata(self):
         # %%
-        annotations_dir = self.get_annotations_dir(
-            image_version="filtered", mask_version="filtered"
-        )
-        if annotations_dir.exists():
+        raw_annotations_path = self.raw_dir / 'metadata' / '02_processed' / 'labels.parquet'
+        version_name = self.get_version_name(image_version="filtered", mask_version="cleaned")
+        save_dir = self.metadata_dir / version_name
+        if save_dir.exists():
             return
         else:
-            annotations_dir.mkdir(parents=True, exist_ok=True)
-            labels = pd.read_parquet(self.raw_annotations_path)
-            for grp_name, grp_data in labels.groupby("sample_name"):
-                grp_data.index.names = ["sample_id", "object_id"]
-                grp_data = grp_data.convert_dtypes()
-                # TODO: check that all columns are categorical
-                grp_data = grp_data.astype("category")
-                annotations_path = annotations_dir / f"{grp_name}.parquet"
-                grp_data.to_parquet(annotations_path, engine='fastparquet')
+            save_dir.mkdir(parents=True, exist_ok=True)
+            labels = pd.read_parquet(raw_annotations_path)
+            labels = labels.convert_dtypes()
+            labels = labels.astype("category")
+            labels.index.names = ["sample_id", "object_id"]
+
+            for grp_name, grp_data in labels.groupby("sample_id"):
+                path = save_dir / f"{grp_name}.parquet"
+                grp_data.to_parquet(path, engine='fastparquet')
 
     def create_images(self):
         pass
