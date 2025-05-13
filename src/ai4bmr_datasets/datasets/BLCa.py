@@ -28,7 +28,7 @@ class BLCa(BaseIMCDataset):
     def prepare_data(self):
         self.create_clinical_metadata()
         self.create_metadata()
-        pass
+        self.create_images()
 
     def create_clinical_metadata(self):
         raw_dir = self.raw_dir / "metadata" / "01_raw"
@@ -141,14 +141,12 @@ class BLCa(BaseIMCDataset):
         metadata_full = pd.merge(metadata, clinical_metadata, how="left")
         assert len(metadata) == len(metadata_full)
 
-        # TODO: add your own columns
+        # add group and group_id
+        metadata_full['group'] = metadata_full['sample_id'].str.extract(r'([ABC])')
+        group_map = {'A': 1, 'B': 2, 'C': 3}
+        metadata_full['group_id'] = metadata_full['group'].map(group_map)
 
-        # add ROI and ROI_id
-        metadata_full['ROI'] = metadata_full['sample_id'].str.extract(r'([ABC])')
-        roi_map = {'A': 1, 'B': 2, 'C': 3}
-        metadata_full['ROI_id'] = metadata_full['ROI'].map(roi_map)
-
-        # add responders and non reponsders
+        # add responders and non responders
         metadata_full['RC: ypT'] = metadata_full['RC: ypT'].astype(int)
         metadata_full['Resp_Status'] = metadata_full['RC: ypT'].apply(lambda x: 1 if x == 0 else 0)
 
