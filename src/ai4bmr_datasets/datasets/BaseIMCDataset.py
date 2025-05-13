@@ -6,8 +6,19 @@ import pandas as pd
 
 
 class BaseIMCDataset:
+    """
+    Base class for managing Imaging Mass Cytometry (IMC) datasets,
+    including loading images, masks, features (intensity, spatial), and metadata.
+    """
 
     def __init__(self, base_dir: Path):
+        """
+        Initialize the dataset with a base directory.
+
+        Args:
+            base_dir (Path): Base directory for the dataset that contains 01_raw and 02_processed folders.
+        """
+
         self.base_dir = base_dir
 
         # populated by `self.setup()`
@@ -49,6 +60,26 @@ class BaseIMCDataset:
             load_metadata: bool = False,
             align: bool = True,
     ):
+        """
+        Load and align data (images, masks, features, metadata) from disk.
+        If only image_version and mask_version are provided features and metadata will be loaded from the combined
+        version {image_version-mask_version}. To load specific versions of features and metadata please use the
+        corresponding keywords. This is useful when you want to load process features as published by a publication.
+
+        Align ensures that all loaded attributes share the same samples. This is useful because often not all samples
+        are present in images, masks or provided metadata.
+
+        Args:
+            image_version (str | None): Image version identifier.
+            mask_version (str | None): Mask version identifier.
+            feature_version (str | None): Feature version identifier.
+            metadata_version (str | None): Metadata version identifier.
+            load_intensity (bool): Whether to load intensity features.
+            load_spatial (bool): Whether to load spatial features.
+            load_metadata (bool): Whether to load observation-level metadata.
+            align (bool): Whether to align and intersect all available sample IDs.
+        """
+
 
         feature_version = feature_version or self.get_version_name(image_version=image_version, mask_version=mask_version)
         metadata_version = metadata_version or self.get_version_name(image_version=image_version, mask_version=mask_version)
@@ -237,27 +268,12 @@ class BaseIMCDataset:
     def metadata_dir(self):
         return self.processed_dir / "metadata"
 
-    def get_metadata_path(self, sample_id: str, version: str | None = None, image_version: str | None = None,
-                          mask_version: str | None = None):
-        return self.get_path(self.metadata_dir, sample_id=sample_id, version=version, image_version=image_version,
-                             mask_version=mask_version)
-
     @staticmethod
     def get_version_name(version: str | None = None, image_version: str | None = None, mask_version: str | None = None):
         if image_version is not None and mask_version is not None:
             return f"{image_version}-{mask_version}"
         else:
             return version
-
-    @staticmethod
-    def get_path(base_dir: Path, sample_id: str, version: str | None = None, image_version: str | None = None,
-                 mask_version: str | None = None):
-        if image_version is not None and mask_version is not None:
-            version_name = f"{image_version}-{mask_version}"
-        else:
-            version_name = version
-
-        return base_dir / version_name / f"{sample_id}.parquet"
 
     @property
     def features_dir(self):
@@ -283,6 +299,8 @@ class BaseIMCDataset:
         from ai4bmr_imc.measure.measure import intensity_features, spatial_features
         from ai4bmr_datasets.datasets.PCa import PCa
         from tifffile import imread
+
+        # TODO: this need to be generalized to all datasets
 
         dataset_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
         ds = PCa(base_dir=dataset_dir)
