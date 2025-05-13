@@ -153,7 +153,10 @@ class BLCa(BaseIMCDataset):
         # convert to parquet compatible types
         metadata_full = metadata_full.rename(columns=dict(sample_id="roi_id", acquisition_id='sample_id'))
         metadata_full = metadata_full.convert_dtypes()
+
         metadata_full.columns = metadata_full.columns.map(tidy_name)
+        metadata_full = metadata_full.rename(columns=dict(rc_yp_t='rc_ypt'))
+
         metadata_full = metadata_full.set_index("sample_id")
         metadata_full.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
