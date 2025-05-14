@@ -14,6 +14,8 @@ ds.clinical
 ds.setup(image_version='filtered', mask_version='cleaned', feature_version='for_clustering', load_intensity=True, load_metadata=False)
 ds.compute_features(image_version='filtered', mask_version='cleaned', force=True)
 
+
+
 # d1 = pd.read_parquet('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/BLCa/02_processed/features/intensity/for_clustering/240307_001.parquet')
 # d2 = pd.read_parquet('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/BLCa/02_processed/features/intensity/filtered-cleaned/240307_001.parquet')
 # d1.columns
