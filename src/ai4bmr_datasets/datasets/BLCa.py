@@ -180,17 +180,9 @@ class BLCa(BaseIMCDataset):
                 grp_data.to_parquet(path, engine='fastparquet')
 
     def create_images(self):
-        panel_paths = [p for p in self.images_dir.rglob("panel.csv")]
-        for path in panel_paths:
-            panel = pd.read_csv(path)
-            panel.index.name = 'channel_index'
-            panel = panel.rename(columns=dict(name='target'))
-            panel.to_parquet(path.with_suffix(".parquet"), engine='fastparquet')
-
-    def create_masks(self):
         pass
 
-    def create_metadata(self):
+    def create_masks(self):
         pass
 
     def create_features_spatial(self):
@@ -204,7 +196,14 @@ class BLCa(BaseIMCDataset):
         self.create_features_intensity()
 
     def create_panel(self):
-        pass
+        from ai4bmr_core.utils.tidy import tidy_name
+        panel_paths = [p for p in self.images_dir.rglob("panel.csv")]
+        for path in panel_paths:
+            panel = pd.read_csv(path)
+            panel.index.name = 'channel_index'
+            panel = panel.rename(columns=dict(name='target'))
+            panel.loc[:, 'target'] = panel.target.map(tidy_name)
+            panel.to_parquet(path.with_suffix(".parquet"), engine='fastparquet')
 
     @property
     def name(self):
@@ -218,4 +217,32 @@ class BLCa(BaseIMCDataset):
     def doi(self):
         return "unpublished"
 
+    def process_feature_version_for_clustering(self):
+        import pandas as pd
+        from ai4bmr_core.utils.tidy import tidy_name
 
+        panel = pd.read_csv(self.raw_dir / 'panel.csv')
+        panel.loc[:, 'name'] = panel.name.map(tidy_name)
+        col_map = panel.set_index('channel').name.to_dict()
+
+        intensity_dir = self.intensity_dir / "for_clustering"
+        spatial_dir = self.spatial_dir / "for_clustering"
+
+        for feature_dir in [intensity_dir, spatial_dir]:
+            for path in feature_dir.glob("*.parquet"):
+                sample_id = path.stem
+                data = pd.read_parquet(path)
+                data = data.rename(columns=col_map)
+                index = data.index.to_frame()[['id']]
+                index = index \
+                    .assign(object_id=index.id, sample_id=sample_id) \
+                    .drop(columns='id')
+                index = pd.MultiIndex.from_frame(index)
+                data.index = index
+                data.to_parquet(path, engine='fastparquet')
+
+        for feature_dir in [intensity_dir, spatial_dir]:
+            for path in feature_dir.glob("*.parquet"):
+                data = pd.read_parquet(path)
+                data = data.reorder_levels(['sample_id', 'object_id'], axis=0)
+                data.to_parquet(path, engine='fastparquet')

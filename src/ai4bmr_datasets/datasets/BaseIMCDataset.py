@@ -58,6 +58,7 @@ class BaseIMCDataset:
             load_intensity: bool = False,
             load_spatial: bool = False,
             load_metadata: bool = False,
+            sample_ids: list[str] | None = None,
             align: bool = True,
     ):
         """

@@ -40,6 +40,10 @@ class Cords2024(BaseIMCDataset):
         return "Cords2024"
 
     @property
+    def name(self):
+        return "Cords2024"
+
+    @property
     def doi(self):
         return "10.1016/j.ccell.2023.12.021"
 
