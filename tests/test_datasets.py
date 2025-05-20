@@ -48,8 +48,12 @@ def test_TNBC():
         .resolve()
     )
     ds = TNBC(base_dir=base_dir)
+    ds.setup(image_version='published', mask_version='published', metadata_version='published', load_metadata=True)
+
+    assert ds.images is not None
+    assert ds.panel is not None
     # ds.process()
-    data = ds.load()
+    # data = ds.load()
     ds.panel
 
 
