@@ -78,6 +78,7 @@ class PCa(BaseIMCDataset):
             mask = filter_mask(mask, object_ids)
             save_mask(mask=mask, save_path=new_mask_dir / f"{sample_id}.tiff")
 
+
     def create_annotations(self):
         annotations_dir = self.get_annotations_dir(
             image_version="filtered", mask_version="filtered"
@@ -135,53 +136,80 @@ class PCa(BaseIMCDataset):
             "epithelial-Synaptophysin_pos-p53_pos"
         }
 
-        # %% reassign parent group names according to Francescos labels
+        # %% reassign parent group names according to Francesco's labels
         main_group = labels["main_group"].to_dict()
         annotations = annotations.assign(main_group=annotations.group_name.map(main_group))
 
-        for meta_group_col in meta_group_cols:
-            meta_group = labels[meta_group_col].to_dict()
-            annotations[meta_group_col] = annotations.group_name.map(meta_group)
+        # for meta_group_col in meta_group_cols:
+        #     meta_group = labels[meta_group_col].to_dict()
+        #     annotations[meta_group_col] = annotations.group_name.map(meta_group)
 
         label = labels["label"].to_dict()
         annotations = annotations.assign(label=annotations.group_name.map(label))
 
         assert annotations.isna().any().any() == False
+        annotations.index.names = ['sample_id', 'object_id']
+        label_to_main_group = annotations.set_index('label')['main_group'].to_dict()
+
+        # %% ASSIGN RECLUSTERD CELLS
+        memberships = pd.read_parquet(self.raw_dir / 'reclustering/memberships.parquet')
+        label_names = pd.read_excel(self.raw_dir / 'reclustering/label-names.xlsx', dtype=str)
+        membership_to_label = label_names.set_index('membership')['label'].to_dict()
+        memberships['label'] = memberships['membership'].map(membership_to_label)
+        memberships['main_group'] = memberships['label'].map(label_to_main_group)
+        assert not memberships.label.isna().any()
+
+        filter_ = annotations.index.isin(memberships.index)
+        assert filter_.sum() == len(memberships)
+        annotations = annotations[~filter_]
+        annotations = pd.concat([annotations, memberships])
+        assert annotations.index.is_unique
+
+        annotations.loc[:, 'main_group'] = annotations.main_group.fillna('mixed')
 
         # %% create ids
         main_group_id_dict = sorted(annotations.main_group.unique())
         main_group_id_dict = {k: v for v, k in enumerate(main_group_id_dict)}
         annotations["main_group_id"] = annotations.main_group.map(main_group_id_dict)
 
-        for meta_group_col in meta_group_cols:
-            meta_group_id_dict = sorted(annotations[meta_group_col].unique())
-            meta_group_id_dict = {k: v for v, k in enumerate(meta_group_id_dict)}
-            annotations[f"{meta_group_col}_id"] = annotations[meta_group_col].map(
-                meta_group_id_dict
-            )
+        # for meta_group_col in meta_group_cols:
+        #     meta_group_id_dict = sorted(annotations[meta_group_col].unique())
+        #     meta_group_id_dict = {k: v for v, k in enumerate(meta_group_id_dict)}
+        #     annotations[f"{meta_group_col}_id"] = annotations[meta_group_col].map(
+        #         meta_group_id_dict
+        #     )
 
         label_id_dict = sorted(annotations.label.unique())
         label_id_dict = {k: v for v, k in enumerate(label_id_dict)}
         annotations["label_id"] = annotations.label.map(label_id_dict)
 
+        annotations = annotations[['label', 'main_group', 'label_id', 'main_group_id']]
         assert annotations.isna().any().any() == False
 
-        # %%
         id_cols = [col for col in annotations.columns if col.endswith("_id")]
         for id_col in id_cols:
             annotations.loc[:, id_col] = annotations[id_col].astype(int)
 
+        # %% STATS
         cols = ["main_group", "label"]
         cell_counts = annotations[cols].groupby(cols).value_counts()
         cell_counts.to_csv(data_dir / "metadata" / "labels-counts.csv")
 
         # %%
-        cols = ["sample_name", "label"]
+        cols = ["sample_id", "label"]
         cell_counts = annotations[['label']].groupby(cols).value_counts().unstack()
         cell_counts = cell_counts.convert_dtypes()
 
         cell_freq = cell_counts.div(cell_counts.sum(axis=1), axis=0)
         cell_freq = cell_freq.convert_dtypes()
+
+        top_n = 3
+        top5_per_sample = cell_freq.reset_index().melt(id_vars=['sample_id'])
+        top5_per_sample = top5_per_sample \
+            .sort_values(['sample_id', 'value'], ascending=[True, False]) \
+            .groupby('sample_id') \
+            .head(top_n)
+        top5_per_sample.to_csv(data_dir / f"top-{top_n}-labels-by-sample.csv")
 
         cell_counts.columns = pd.MultiIndex.from_product([cell_counts.columns, ['counts']], names=['label', 'stat'])
         cell_freq.columns = pd.MultiIndex.from_product([cell_freq.columns, ['freq']], names=['label', 'stat'])
@@ -191,14 +219,6 @@ class PCa(BaseIMCDataset):
         cell_stats.to_csv(data_dir / "metadata" / "label-stats.csv")
 
         # %%
-        cell_freq = cell_freq.reset_index().melt(id_vars=['sample_name'])
-        top5_per_sample = cell_freq \
-            .sort_values(['sample_name', 'value'], ascending=[True, False]) \
-            .groupby('sample_name') \
-            .head(1)
-        top5_per_sample.to_csv(data_dir / "top-1-labels-by-sample.csv")
-        # %%
-
         annotations.to_parquet(self.raw_annotations_path, engine='fastparquet')
 
 
