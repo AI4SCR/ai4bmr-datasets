@@ -99,10 +99,10 @@ class Jackson2023(BaseIMCDataset):
 
                 save_path = save_dir / f"{sample_id}.tiff"
                 if save_path.exists():
-                    logger.warning(f"Image file {save_path} already exists. Skipping.")
+                    logger.info(f"Image file {save_path} already exists. Skipping.")
                     continue
                 else:
-                    logger.warning(f"Creating image {save_path}")
+                    logger.info(f"Creating image {save_path}")
 
                 img = imread(img_path)
                 img = img[panel.page.values]
@@ -119,18 +119,18 @@ class Jackson2023(BaseIMCDataset):
         save_dir = self.masks_dir / self.get_version_name(version='published')
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        for (_, row) in clinical.iterrows():
+        for (sample_id, row) in clinical.iterrows():
             mask_path = raw_masks_dir / row.file_name_full_stack
             mask_path = str(mask_path).replace('.tiff', '_maks.tiff')
 
             if Path(mask_path).exists():
-                save_path = save_dir / f"{row.sample_id}.tiff"
+                save_path = save_dir / f"{sample_id}.tiff"
 
                 if save_path.exists():
-                    logger.warning(f"Mask file {save_path} already exists. Skipping.")
+                    logger.info(f"Mask file {save_path} already exists. Skipping.")
                     continue
                 else:
-                    logger.warning(f"Creating mask {save_path}")
+                    logger.info(f"Creating mask {save_path}")
 
                 mask = imread(mask_path)
 
