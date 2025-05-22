@@ -1,23 +1,14 @@
-import json
+import re
 from pathlib import Path
 
 import pandas as pd
-from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_core.utils.tidy import relabel_duplicates, tidy_name
 from loguru import logger
-from tifffile import imread
-from tifffile import imwrite
+from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import unzip_recursive
-import re
-from ai4bmr_core.utils.tidy import tidy_name, relabel_duplicates
 
-base_dir = Path("/users/amarti51/prometex/data/datasets/Jackson2023")
-ds = self = Jackson2023(base_dir=base_dir)
-ds.create_masks()
-
-
-# ds.download()
 
 class Jackson2023(BaseIMCDataset):
 
@@ -148,9 +139,6 @@ class Jackson2023(BaseIMCDataset):
                 logger.warning(f"Mask file {mask_path} does not exist. Skipping.")
 
     def create_metadata(self):
-        from ai4bmr_core.utils.tidy import tidy_name, relabel_duplicates
-        clinical = pd.read_parquet(self.clinical_metadata_path)
-
         bs_meta_clusters = pd.read_csv(
             self.raw_dir / 'single_cell_cluster_labels/Cluster_labels/Basel_metaclusters.csv')
         zh_meta_clusters = pd.read_csv(
@@ -161,60 +149,73 @@ class Jackson2023(BaseIMCDataset):
 
         pg_bs = pd.read_csv(self.raw_dir / 'single_cell_cluster_labels/Cluster_labels/PG_basel.csv')
         pg_zh = pd.read_csv(self.raw_dir / 'single_cell_cluster_labels/Cluster_labels/PG_zurich.csv')
-        # filter_ = pg_zh.core.str.startswith('ZTMA208_slide_non-breast')
-        # pg_zh = pg_zh[~filter_]
 
-        # sample_ids = pg_zh.core.str.replace('ZTMA208_slide_', '').map(tidy_name)
-        # pg_zh = pg_zh.rename(columns=dict(CellId='object_id'))
-        # pg_zh['sample_id'] = sample_ids
-        # pg_zh = pg_zh.set_index(['sample_id', 'object_id'])
-        # assert pg_zh.index.is_unique
+        # zh_sample_ids = set(zh_meta_clusters.id.str.split('_').str[:-1].str.join('_'))
+        # bs_sample_ids = set(bs_meta_clusters.id.str.split('_').str[:-1].str.join('_'))
 
         zh = pg_zh.merge(zh_meta_clusters, on="id", how="outer")
         bs = pg_bs.merge(bs_meta_clusters, on="id", how="outer")
 
-        # TODO: can we just drop? Where to those cells come from? -> some for example from ZTMA208_slide_non-breast*
+        # note: these are the number of annotated samples
+        #   the following samples are not annotated:
+        #       BaselTMA_SP43_Liver_X2Y1    4433
+        #       BaselTMA_SP43_Liver_X1Y1    2510
+        #       BaselTMA_SP42_Liver_X2Y1    2129
+        #       BaselTMA_SP41_Liver_X2Y1    1914
+        #       BaselTMA_SP41_Liver_X1Y1     184
+        #       ZTMA208_slide_control_Cy15x6      2951
+        #       ZTMA208_slide_12_Ay14x1           2709
+        #       ZTMA208_slide_51_Ay7x1            1790
+        #       ZTMA208_slide_64_Ay3x1            1569
+        #       ZTMA208_slide_3_Ay10x1            1495
+        #       ZTMA208_slide_17_Ay8x1            1347
+        #       ZTMA208_slide_control_Cy15x7      1279
+        #       ZTMA208_slide_55_Ay12x1           1248
+        #       ZTMA208_slide_5_Ay1x1             1156
+        #       ZTMA208_slide_61_Ay9x1            1142
+        #       ZTMA208_slide_69_Ay5x1            1111
+        #       ZTMA208_slide_42_Ay2x1            1081
+        #       ZTMA208_slide_26_Ay4x1             939
+        #       ZTMA208_slide_control_Cy15x8       772
+        #       ZTMA208_slide_non-breast_Dy1x0     547
+        #       ZTMA208_slide_39_Ay16x1            206
+        #       ZTMA208_slide_non-breast_Dy3x0     205
+        #       ZTMA208_slide_non-breast_Dy2x0     107
+        #       ZTMA208_slide_1_Ay13x1              28
+        #       ZTMA208_slide_20_Ay6x1              24
+        #       ZTMA208_slide_43_Ay11x1             11
         zh = zh[zh.cluster.notna()]
-        zh = zh.set_index(['sample_id', 'object_id'])
+        zh = zh.set_index(['id'])
         assert zh.index.is_unique
 
         bs = bs[bs.cluster.notna()]
         bs = bs.rename(columns={"PhenoGraphBasel": "PhenoGraph"})
-        bs = bs.set_index(['sample_id', 'object_id'])
-        # filter_ = bs.index.duplicated(keep=False)
-        # bs[filter_].sort_index()
-
+        bs = bs.set_index('id')
         assert bs.index.is_unique
-        assert set(zh.id).intersection(set(bs.id)) == set()
+        assert set(zh.index).intersection(set(bs.index)) == set()
 
         metadata = pd.concat([zh, bs])
         assert metadata.index.is_unique
         assert metadata.isna().any().any() == False
+        metadata = metadata.reset_index()
 
         metacluster_anno.columns = metacluster_anno.columns.map(tidy_name)
         metadata = metadata.merge(
             metacluster_anno, left_on="cluster", right_on="metacluster", how="left"
         )
+
         metadata = metadata.rename(columns={
             'CellId': 'object_id',
             'class': 'label0',
             'cell_type': 'label'
         })
-        assert (metadata.CellId.astype(str) != metadata.object_id).any() == False
-
-        metadata = metadata.drop(columns=['CellId', 'PhenoGraph', 'id', 'metacluster'])
-        metadata.columns = metadata.columns.map(tidy_name)
-        metadata = metadata.set_index(['sample_id', 'object_id'])
+        metadata = metadata.drop(columns=['PhenoGraph', 'id', 'metacluster'])
+        metadata = self.add_sample_id_and_object_id(metadata)
         assert metadata.index.is_unique
 
-        metacluster_anno.loc[:, 'label'] = metacluster_anno['cell_type'].str.replace('+', '_pos').map(tidy_name)
-        metacluster_anno.loc[:, 'label0'] = metacluster_anno['class'].map(tidy_name)
-
-        label_dict = metacluster_anno.set_index('metacluster')['label'].to_dict()
-        label0_dict = metacluster_anno.set_index('metacluster')['label0'].to_dict()
-
-        metadata['label'] = metadata['pheno_graph'].map(label_dict)
-        metadata['label0'] = metadata['pheno_graph'].map(label0_dict)
+        metadata.loc[:, 'label'] = metadata['label'].str.replace('+', '_pos').map(tidy_name)
+        metadata.loc[:, 'label0'] = metadata['label0'].map(tidy_name)
+        metadata.columns = metadata.columns.map(tidy_name)
 
         version_name = self.get_version_name(version='published')
         save_dir = self.metadata_dir / version_name
@@ -223,6 +224,18 @@ class Jackson2023(BaseIMCDataset):
         for grp_name, grp_dat in metadata.groupby('sample_id'):
             save_path = save_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
+
+    def add_sample_id_and_object_id(self, data):
+        sample_ids = data.core.str.replace('ZTMA208_slide_', '')
+        sample_ids = sample_ids.str.replace('BaselTMA_SP', '')
+
+        data = data.rename(columns={'CellId': 'object_id'})
+
+        data['sample_ids'] = sample_ids.map(tidy_name)
+        data = data.convert_dtypes()
+
+        data = data.set_index(['sample_ids', 'object_id'])
+        return data
 
     def create_clinical_metadata(self):
         from ai4bmr_core.utils.tidy import tidy_name
@@ -302,6 +315,91 @@ class Jackson2023(BaseIMCDataset):
         bs = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/BaselTMA/SC_dat.csv')
         zh = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/ZurichTMA/SC_dat.csv')
 
+        zh_channels = set(zh.channel)
+        bs_channels = set(bs.channel)
+        channels_in_both_cohorts = bs_channels.intersection(zh_channels)
+
+        spatial_feat = [
+            "Area",
+            "Eccentricity",
+            "EulerNumber",
+            "Extent",
+            "MajorAxisLength",
+            "MinorAxisLength",
+            "Number_Neighbors",
+            "Orientation",
+            "Percent_Touching",
+            "Perimeter",
+            "Solidity",
+        ]
+        expr_feat = channels_in_both_cohorts - set(spatial_feat)
+
+        bs = self.add_sample_id_and_object_id(bs)
+        assert bs.index.is_unique
+
+        zh = self.add_sample_id_and_object_id(bs)
+        assert zh.index.is_unique
+
+
+        panel = pd.read_parquet(self.get_panel_path('published'))
+
+        x = pd.concat([bs, zh])
+        dirty_to_clean = {
+            '473968La139Di Histone': 'Histone H3',
+            'phospho mTOR': 'mTOR',
+            '651779Pr141Di Cytoker': 'Cytokeratin 5',
+            'ArAr80 80ArArArAr80Di': 'undefined',
+            'Pb204 204PbPb204Di': 'undefined',
+            '3281668Nd142Di Fibrone': 'Fibronectin',
+            'I127 127II127Di': 'undefined',
+            '98922Yb174Di Cytoker': 'Cytokeratin 7',
+            '378871Yb172Di vWF': 'vWF',
+            'phospho S6': 'S6',
+            '8001752Sm152Di CD3epsi': 'CD3',
+            '10311241Ru99Di Rutheni': 'undefined',
+            '1441101Er168Di Ki67': 'Ki-67',
+            '10311245Ru104Di Rutheni': 'undefined',
+            '10311244Ru102Di Rutheni': 'undefined',
+            '112475Gd156Di Estroge': 'Rabbit IgG H L',
+            '1031747Er167Di ECadhe': 'undefined',
+            'Xe134 134XeXe134Di': 'undefined',
+            '971099Nd144Di Cytoker': 'Cytokeratin 8/18',
+            'Hg202 202HgHg202Di': 'undefined',
+            '201487Eu151Di cerbB': 'c-erbB-2 - Her2',
+            '3521227Gd155Di Slug': 'Slug',
+            '6967Gd160Di CD44': 'CD44',
+            '3111576Nd143Di Cytoker': 'Cytokeratin 19',
+            '77877Nd146Di CD68': 'CD68',
+            '1261726In113Di Histone': 'Histone H3',
+            'phospho Histone': 'Histone H3',
+            'In115 115InIn115Di': 'undefined',
+            'Pb207 207PbPb207Di': 'undefined',
+            '198883Yb176Di cleaved': 'cleaved PARP',
+            '1921755Sm149Di Vimenti': 'Vimentin',
+            '10311240Ru98Di Rutheni': 'undefined',
+            '10311242Ru100Di Rutheni': 'undefined',
+            '10311239Ru96Di Rutheni': 'undefined',
+            '234832Lu175Di panCyto': 'pan Cytokeratin',
+            '10311243Ru101Di Rutheni': 'undefined',
+            '92964Er166Di Carboni': 'Carbonic Anhydrase IX',
+            '361077Dy164Di CD20': 'CD20',
+            'Pb206 206PbPb206Di': 'undefined',
+            '312878Gd158Di Progest': 'Progesterone Receptor A/B',
+            '117792Dy163Di GATA3': 'GATA3',
+            '71790Dy162Di CD45': 'CD45',
+            '322787Nd150Di cMyc': 'c-Myc',
+            '10331254Ir193Di Iridium': 'DNA2',
+            'Nd145Di Twist': 'Twist',
+            '346876Sm147Di Keratin': 'Keratin 14 (KRT14)',
+            'Xe126 126XeXe126Di': 'undefined',
+            'Xe131 131XeXe131Di': 'undefined',
+            '1021522Tm169Di EGFR': 'EGFR',
+            '174864Nd148Di SMA': 'SMA',
+            '10331253Ir191Di Iridium': 'DNA1',
+            'Pb208 208PbPb208Di': 'undefined',
+            '207736Tb159Di p53': 'p53'
+        }
+
         # TODO from here
 
         path = self.raw_dir / 'intensity.parquet'
@@ -336,6 +434,8 @@ class Jackson2023(BaseIMCDataset):
         panel = panel.dropna(axis=0, how='all')
         panel['page'] = panel.FullStack.astype(int) - 1
         panel['target'] = panel.Target.map(tidy_name)
+        panel = panel.assign(target_original = panel.Target).drop(columns=['Target'])
+        panel.columns = panel.columns.map(tidy_name)
 
         filter_ = panel.target.isin(['ruthenium_tetroxide', 'argon_dimers'])
         panel = panel[~filter_]
@@ -350,3 +450,8 @@ class Jackson2023(BaseIMCDataset):
         panel_path = self.get_panel_path("published")
         panel_path.parent.mkdir(parents=True, exist_ok=True)
         panel.to_parquet(panel_path)
+
+
+base_dir = Path("/users/amarti51/prometex/data/datasets/Jackson2023")
+ds = self = Jackson2023(base_dir=base_dir)
+# ds.create_masks()
