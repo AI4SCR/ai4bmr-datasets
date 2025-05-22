@@ -26,7 +26,7 @@ dependencies = [
     "pyarrow",
     "fastparquet",
     "geopandas",
-    "pyreadr"
+    "fstlib",
 ]
 dynamic = ["version"]
 classifiers = [

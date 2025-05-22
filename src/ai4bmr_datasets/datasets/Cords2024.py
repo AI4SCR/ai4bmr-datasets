@@ -40,6 +40,10 @@ class Cords2024(BaseIMCDataset):
         return "Cords2024"
 
     @property
+    def name(self):
+        return "Cords2024"
+
+    @property
     def doi(self):
         return "10.1016/j.ccell.2023.12.021"
 
@@ -452,6 +456,10 @@ class Cords2024(BaseIMCDataset):
         assert keep.sum() == 43
 
         panel["target"] = targets.str[0].map(tidy_name).values
+        # add suffix to target for duplicates (iridium)
+        panel['target'] = panel.target + '_' + panel.groupby('target').cumcount().astype(str)
+        panel.loc[:, 'target'] = panel.target.str.replace('_0$', '', regex=True)
+
         panel["keep"] = keep
 
         panel.columns = panel.columns.map(tidy_name)

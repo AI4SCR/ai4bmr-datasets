@@ -6,8 +6,19 @@ import pandas as pd
 
 
 class BaseIMCDataset:
+    """
+    Base class for managing Imaging Mass Cytometry (IMC) datasets,
+    including loading images, masks, features (intensity, spatial), and metadata.
+    """
 
     def __init__(self, base_dir: Path):
+        """
+        Initialize the dataset with a base directory.
+
+        Args:
+            base_dir (Path): Base directory for the dataset that contains 01_raw and 02_processed folders.
+        """
+
         self.base_dir = base_dir
 
         # populated by `self.setup()`
@@ -47,8 +58,29 @@ class BaseIMCDataset:
             load_intensity: bool = False,
             load_spatial: bool = False,
             load_metadata: bool = False,
+            sample_ids: list[str] | None = None,
             align: bool = True,
     ):
+        """
+        Load and align data (images, masks, features, metadata) from disk.
+        If only image_version and mask_version are provided features and metadata will be loaded from the combined
+        version {image_version-mask_version}. To load specific versions of features and metadata please use the
+        corresponding keywords. This is useful when you want to load process features as published by a publication.
+
+        Align ensures that all loaded attributes share the same samples. This is useful because often not all samples
+        are present in images, masks or provided metadata.
+
+        Args:
+            image_version (str | None): Image version identifier.
+            mask_version (str | None): Mask version identifier.
+            feature_version (str | None): Feature version identifier.
+            metadata_version (str | None): Metadata version identifier.
+            load_intensity (bool): Whether to load intensity features.
+            load_spatial (bool): Whether to load spatial features.
+            load_metadata (bool): Whether to load observation-level metadata.
+            align (bool): Whether to align and intersect all available sample IDs.
+        """
+
 
         feature_version = feature_version or self.get_version_name(image_version=image_version, mask_version=mask_version)
         metadata_version = metadata_version or self.get_version_name(image_version=image_version, mask_version=mask_version)
@@ -237,27 +269,12 @@ class BaseIMCDataset:
     def metadata_dir(self):
         return self.processed_dir / "metadata"
 
-    def get_metadata_path(self, sample_id: str, version: str | None = None, image_version: str | None = None,
-                          mask_version: str | None = None):
-        return self.get_path(self.metadata_dir, sample_id=sample_id, version=version, image_version=image_version,
-                             mask_version=mask_version)
-
     @staticmethod
     def get_version_name(version: str | None = None, image_version: str | None = None, mask_version: str | None = None):
         if image_version is not None and mask_version is not None:
             return f"{image_version}-{mask_version}"
         else:
             return version
-
-    @staticmethod
-    def get_path(base_dir: Path, sample_id: str, version: str | None = None, image_version: str | None = None,
-                 mask_version: str | None = None):
-        if image_version is not None and mask_version is not None:
-            version_name = f"{image_version}-{mask_version}"
-        else:
-            version_name = version
-
-        return base_dir / version_name / f"{sample_id}.parquet"
 
     @property
     def features_dir(self):
@@ -279,26 +296,38 @@ class BaseIMCDataset:
     def clinical_metadata_path(self):
         return self.metadata_dir / "clinical.parquet"
 
-    def compute_features(self, image_version: str, mask_version: str):
-        from ai4bmr_imc.measure.measure import intensity_features, spatial_features
-        from ai4bmr_datasets.datasets.PCa import PCa
+    def compute_features(self, image_version: str, mask_version: str, force: bool = False):
+        from ai4bmr_datasets.utils.imc.features import intensity_features, spatial_features
         from tifffile import imread
 
-        dataset_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa")
-        ds = PCa(base_dir=dataset_dir)
+        version_name = self.get_version_name(image_version=image_version, mask_version=mask_version)
+        save_intensity_dir = self.intensity_dir / version_name
+        save_spatial_dir = self.spatial_dir / version_name
 
-        img_dir = ds.get_image_version_dir(image_version)
+        if (save_intensity_dir.exists() or save_spatial_dir.exists()) and not force:
+            logger.error(f"Features directory {save_intensity_dir} already exists. Set force=True to overwrite to recompute.")
+            return
+
+        save_intensity_dir.mkdir(exist_ok=True, parents=True)
+        save_spatial_dir.mkdir(exist_ok=True, parents=True)
+
+        # PATHS
+        img_dir = self.get_image_version_dir(image_version)
         assert img_dir.exists()
 
-        mask_dir = ds.get_mask_version_dir(mask_version)
+        mask_dir = self.get_mask_version_dir(mask_version)
         assert mask_dir.exists()
 
-        panel_path = ds.get_panel_path(image_version=image_version)
+        panel_path = self.get_panel_path(image_version=image_version)
         assert panel_path.exists()
+
         panel = pd.read_parquet(panel_path, engine="fastparquet")
         panel = panel.reset_index().set_index("target")
 
-        sample_ids = set([i.stem for i in img_dir.glob("*.tiff")])
+        image_ids = set([i.stem for i in img_dir.glob("*.tiff")])
+        mask_ids = set([i.stem for i in mask_dir.glob("*.tiff")])
+        sample_ids = image_ids.intersection(mask_ids)
+
         for i, sample_id in enumerate(sample_ids):
             logger.info(f"[{i + 1}/{len(sample_ids)}] Processing {sample_id}")
 
@@ -313,30 +342,14 @@ class BaseIMCDataset:
             assert img.shape[1:] == mask.shape
 
             intensity = intensity_features(img=img, mask=mask, panel=panel)
-            intensity = intensity.assign(sample_id=sample_id).set_index(
-                "sample_id", append=True
-            )
+            intensity = intensity.assign(sample_id=sample_id).set_index("sample_id", append=True)
             intensity = intensity.reorder_levels(["sample_id", "object_id"], axis=0)
 
             spatial = spatial_features(mask=mask)
-            spatial = spatial.assign(sample_id=sample_id).set_index(
-                "sample_id", append=True
-            )
+            spatial = spatial.assign(sample_id=sample_id).set_index("sample_id", append=True)
             spatial = spatial.reorder_levels(["sample_id", "object_id"], axis=0)
 
             assert intensity.index.equals(spatial.index)
 
-            intensity_path = (
-                    ds.get_intensity_dir(
-                        image_version=image_version, mask_version=mask_version
-                    )
-                    / f"{sample_id}.parquet"
-            )
-            intensity_path.parent.mkdir(exist_ok=True, parents=True)
-            intensity.to_parquet(intensity_path, engine="fastparquet")
-
-            spatial_path = (
-                    ds.get_spatial_dir(mask_version=mask_version) / f"{sample_id}.parquet"
-            )
-            spatial_path.parent.mkdir(exist_ok=True, parents=True)
-            spatial.to_parquet(spatial_path, engine="fastparquet")
+            intensity.to_parquet(save_intensity_dir / f'{sample_id}.parquet', engine="fastparquet")
+            spatial.to_parquet(save_spatial_dir / f'{sample_id}.parquet', engine="fastparquet")
