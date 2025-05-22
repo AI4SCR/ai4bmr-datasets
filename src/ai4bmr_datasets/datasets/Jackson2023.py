@@ -8,7 +8,7 @@ from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import unzip_recursive
-
+from ai4bmr_core.utils.tidy import tidy_name
 
 class Jackson2023(BaseIMCDataset):
 
@@ -45,6 +45,7 @@ class Jackson2023(BaseIMCDataset):
         self.create_panel()
         self.create_images()
         self.create_masks()
+        self.create_features()
 
     def download(self, force: bool = False):
         import requests
@@ -82,11 +83,6 @@ class Jackson2023(BaseIMCDataset):
 
         logger.info("✅ Download and extraction completed.")
 
-    def get_sample_id_from_path(self, path):
-        path = str(path)
-        search = re.search(r"TMA_(\d+)_(\w+)_s0_a(\d+)", path)
-        return '_'.join(search.groups())
-
     def create_images(self):
         panel = pd.read_parquet(self.get_panel_path('published'))
         clinical = pd.read_parquet(self.clinical_metadata_path)
@@ -96,15 +92,17 @@ class Jackson2023(BaseIMCDataset):
         save_dir = self.images_dir / self.get_version_name(version='published')
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        for (_, row) in clinical.iterrows():
+        for (sample_id, row) in clinical.iterrows():
             img_path = raw_images_dir / row.file_name_full_stack
 
             if img_path.exists():
 
-                save_path = save_dir / f"{row.sample_id}.tiff"
+                save_path = save_dir / f"{sample_id}.tiff"
                 if save_path.exists():
                     logger.warning(f"Image file {save_path} already exists. Skipping.")
                     continue
+                else:
+                    logger.warning(f"Creating image {save_path}")
 
                 img = imread(img_path)
                 img = img[panel.page.values]
@@ -131,6 +129,8 @@ class Jackson2023(BaseIMCDataset):
                 if save_path.exists():
                     logger.warning(f"Mask file {save_path} already exists. Skipping.")
                     continue
+                else:
+                    logger.warning(f"Creating mask {save_path}")
 
                 mask = imread(mask_path)
 
@@ -229,21 +229,22 @@ class Jackson2023(BaseIMCDataset):
         sample_ids = data.core.str.replace('ZTMA208_slide_', '')
         sample_ids = sample_ids.str.replace('BaselTMA_SP', '')
 
-        data = data.rename(columns={'CellId': 'object_id'})
-
-        data['sample_ids'] = sample_ids.map(tidy_name)
+        data['sample_id'] = sample_ids.map(tidy_name)
         data = data.convert_dtypes()
+        data = data.set_index(['sample_id'])
 
-        data = data.set_index(['sample_ids', 'object_id'])
+        if 'CellId' in data.columns:
+            data = data.rename(columns={'CellId': 'object_id'})
+            data = data.set_index(['object_id'], append=True)
+
         return data
 
     def create_clinical_metadata(self):
-        from ai4bmr_core.utils.tidy import tidy_name
 
         bs = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/BaselTMA/Basel_PatientMetadata.csv')
         zh = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/ZurichTMA/Zuri_PatientMetadata.csv')
 
-        bs = bs.rename(columns={'Post_surgeryTx': 'Post_surgeryTx_other'})
+        bs = bs.rename(columns={'Post_surgeryTx': 'Post_surgeryTx_2'})
 
         bs.columns = bs.columns.map(tidy_name)
         zh.columns = zh.columns.map(tidy_name)
@@ -272,14 +273,14 @@ class Jackson2023(BaseIMCDataset):
         zh = zh.map(lambda x: val_map.get(x, x))
         bs = bs.map(lambda x: val_map.get(x, x))
 
-        z = set(zh.columns)
-        b = set(bs.columns)
-        cols = z.intersection(b)
-        z - b
-        b - z
+        # z = set(zh.columns)
+        # b = set(bs.columns)
+        # cols = z.intersection(b)
+        # z - b
+        # b - z
 
-        metadata_cols = {
-            "FileName_FullStack",
+        metadata_cols = [
+            # "FileName_FullStack",  # we keep this to track the images easily
             "Height_FullStack",
             "TMABlocklabel",
             "TMALocation",
@@ -290,36 +291,32 @@ class Jackson2023(BaseIMCDataset):
             "yLocation",
             "AllSamplesSVSp4.Array",
             "Comment",
-        }
+        ]
+        metadata_cols = [tidy_name(i) for i in metadata_cols]
 
         metadata = pd.concat([bs, zh], ignore_index=True)
         assert (metadata.core.value_counts() == 1).all()
 
+        metadata = metadata.drop(columns=metadata_cols)
+
+        metadata = self.add_sample_id_and_object_id(metadata)
+
         metadata = metadata.convert_dtypes()
+        for col in metadata.select_dtypes(include=['object', 'string']).columns:
+            if col == 'file_name_full_stack':
+                continue
+            metadata.loc[:, col] = metadata[col].map(lambda x: tidy_name(str(x)) if not pd.isna(x) else x)
 
-        metadata = metadata.astype(str)
-        sample_ids = metadata.core.str.strip().map(tidy_name)
-        sample_ids = sample_ids.str.replace('basel_tma_sp', '')
-        sample_ids = sample_ids.str.replace('ztma208_slide_', '')
-        metadata['sample_id'] = sample_ids
-        metadata.set_index('sample_id')
-
+        metadata = metadata.convert_dtypes()
         self.clinical_metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
-    def create_features_spatial(self):
-        pass
+    def create_features(self):
+        logger.info(f'Creating `published` features')
 
-    def create_features_intensity(self):
-
+        panel = pd.read_parquet(self.get_panel_path('published'))
         bs = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/BaselTMA/SC_dat.csv')
         zh = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/ZurichTMA/SC_dat.csv')
-
-        zh_channels = set(zh.channel)
-        bs_channels = set(bs.channel)
-        channel_names = zh_channels.union(bs_channels)
-        channel_names = channel_names - set(spatial_feat)
-        channels_in_both_cohorts = bs_channels.intersection(zh_channels)
 
         spatial_feat = [
             "Area",
@@ -334,47 +331,44 @@ class Jackson2023(BaseIMCDataset):
             "Perimeter",
             "Solidity",
         ]
-        expr_feat = channels_in_both_cohorts - set(spatial_feat)
+        expr_feat = set(panel.channel_name) - set(spatial_feat)
+        assert len(expr_feat) == 35
 
+        feats = expr_feat.union(spatial_feat)
+        bs = bs[bs.channel.isin(feats)]
+        zh = zh[zh.channel.isin(feats)]
+
+        bs = bs.pivot(index=["CellId", 'core'], columns="channel", values="mc_counts").reset_index()
         bs = self.add_sample_id_and_object_id(bs)
+        bs = bs.drop(columns=['core'])
         assert bs.index.is_unique
 
-        zh = self.add_sample_id_and_object_id(bs)
+        zh = zh.pivot(index=["CellId", 'core'], columns="channel", values="mc_counts").reset_index()
+        zh = self.add_sample_id_and_object_id(zh)
+        zh = zh.drop(columns=['core'])
         assert zh.index.is_unique
 
-
-        panel = pd.read_parquet(self.get_panel_path('published'))
-
         x = pd.concat([bs, zh])
+        assert x.isna().sum().sum() == 0
 
-
-
-        # TODO from here
-
-        path = self.raw_dir / 'intensity.parquet'
-        metadata = pd.read_parquet(path)
-
-        ids = metadata['object_id'].str.split('_')
-        sample_id = ids.str[:-1].str.join('_')
-        object_id = ids.str[-1]
-
-        metadata['sample_id'] = sample_id
-        metadata['object_id'] = object_id
-
-        metadata = metadata.convert_dtypes()
-        metadata = metadata.set_index(['sample_id', 'object_id'])
+        intensity = x.loc[:, x.columns.isin(expr_feat)]
+        spatial = x.loc[:, x.columns.isin(spatial_feat)]
 
         version_name = self.get_version_name(version='published')
+
+        # intensity
         save_dir = self.intensity_dir / version_name
         save_dir.mkdir(parents=True, exist_ok=True)
-
-        for grp_name, grp_dat in metadata.groupby('sample_id'):
+        for grp_name, grp_dat in intensity.groupby('sample_id'):
             save_path = save_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
-    def create_features(self):
-        self.create_features_spatial()
-        self.create_features_intensity()
+        # spatial
+        save_dir = self.spatial_dir / version_name
+        save_dir.mkdir(parents=True, exist_ok=True)
+        for grp_name, grp_dat in spatial.groupby('sample_id'):
+            save_path = save_dir / f"{grp_name}.parquet"
+            grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_panel(self):
         panel = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/Basel_Zuri_StainingPanel.csv')
@@ -394,6 +388,8 @@ class Jackson2023(BaseIMCDataset):
         panel.loc[panel.metal_mass == 'Eu153', 'target'] = 'histone_h3_phospho'
         assert len(panel) == 43
 
+        # NOTE: {'phospho Erk12', '1971527Ho165Di bCaten', '483739Yb171Di Sox9', '2971330Dy161Di EpCAM'}
+        #   have only been measured in the Zurich cohort
         metal_mass_to_channel_name = {
             "In113": "1261726In113Di Histone",
             "La139": "473968La139Di Histone",
@@ -443,6 +439,12 @@ class Jackson2023(BaseIMCDataset):
         panel['target_alternative'] = panel.metal_mass.map(lambda x: alternative_targets_dict.get(x, pd.NA))
         panel = panel[~filter_]
         assert not panel.page.duplicated().any()
+
+        # remove channels that are not in basel cohort
+        channels_only_in_zurich = {'phospho Erk12', '1971527Ho165Di bCaten', '483739Yb171Di Sox9', '2971330Dy161Di EpCAM'}
+        filter_ = panel.channel_name.isin(channels_only_in_zurich)
+        panel = panel[~filter_]
+        assert len(panel) == 35
 
         # panel[['target', 'channel_name', 'metal_mass',]]
         # panel[['target', 'target_alternative', 'metal_mass',]]
