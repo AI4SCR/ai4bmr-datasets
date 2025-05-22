@@ -317,6 +317,8 @@ class Jackson2023(BaseIMCDataset):
 
         zh_channels = set(zh.channel)
         bs_channels = set(bs.channel)
+        channel_names = zh_channels.union(bs_channels)
+        channel_names = channel_names - set(spatial_feat)
         channels_in_both_cohorts = bs_channels.intersection(zh_channels)
 
         spatial_feat = [
@@ -344,61 +346,8 @@ class Jackson2023(BaseIMCDataset):
         panel = pd.read_parquet(self.get_panel_path('published'))
 
         x = pd.concat([bs, zh])
-        dirty_to_clean = {
-            '473968La139Di Histone': 'Histone H3',
-            'phospho mTOR': 'mTOR',
-            '651779Pr141Di Cytoker': 'Cytokeratin 5',
-            'ArAr80 80ArArArAr80Di': 'undefined',
-            'Pb204 204PbPb204Di': 'undefined',
-            '3281668Nd142Di Fibrone': 'Fibronectin',
-            'I127 127II127Di': 'undefined',
-            '98922Yb174Di Cytoker': 'Cytokeratin 7',
-            '378871Yb172Di vWF': 'vWF',
-            'phospho S6': 'S6',
-            '8001752Sm152Di CD3epsi': 'CD3',
-            '10311241Ru99Di Rutheni': 'undefined',
-            '1441101Er168Di Ki67': 'Ki-67',
-            '10311245Ru104Di Rutheni': 'undefined',
-            '10311244Ru102Di Rutheni': 'undefined',
-            '112475Gd156Di Estroge': 'Rabbit IgG H L',
-            '1031747Er167Di ECadhe': 'undefined',
-            'Xe134 134XeXe134Di': 'undefined',
-            '971099Nd144Di Cytoker': 'Cytokeratin 8/18',
-            'Hg202 202HgHg202Di': 'undefined',
-            '201487Eu151Di cerbB': 'c-erbB-2 - Her2',
-            '3521227Gd155Di Slug': 'Slug',
-            '6967Gd160Di CD44': 'CD44',
-            '3111576Nd143Di Cytoker': 'Cytokeratin 19',
-            '77877Nd146Di CD68': 'CD68',
-            '1261726In113Di Histone': 'Histone H3',
-            'phospho Histone': 'Histone H3',
-            'In115 115InIn115Di': 'undefined',
-            'Pb207 207PbPb207Di': 'undefined',
-            '198883Yb176Di cleaved': 'cleaved PARP',
-            '1921755Sm149Di Vimenti': 'Vimentin',
-            '10311240Ru98Di Rutheni': 'undefined',
-            '10311242Ru100Di Rutheni': 'undefined',
-            '10311239Ru96Di Rutheni': 'undefined',
-            '234832Lu175Di panCyto': 'pan Cytokeratin',
-            '10311243Ru101Di Rutheni': 'undefined',
-            '92964Er166Di Carboni': 'Carbonic Anhydrase IX',
-            '361077Dy164Di CD20': 'CD20',
-            'Pb206 206PbPb206Di': 'undefined',
-            '312878Gd158Di Progest': 'Progesterone Receptor A/B',
-            '117792Dy163Di GATA3': 'GATA3',
-            '71790Dy162Di CD45': 'CD45',
-            '322787Nd150Di cMyc': 'c-Myc',
-            '10331254Ir193Di Iridium': 'DNA2',
-            'Nd145Di Twist': 'Twist',
-            '346876Sm147Di Keratin': 'Keratin 14 (KRT14)',
-            'Xe126 126XeXe126Di': 'undefined',
-            'Xe131 131XeXe131Di': 'undefined',
-            '1021522Tm169Di EGFR': 'EGFR',
-            '174864Nd148Di SMA': 'SMA',
-            '10331253Ir191Di Iridium': 'DNA1',
-            'Pb208 208PbPb208Di': 'undefined',
-            '207736Tb159Di p53': 'p53'
-        }
+
+
 
         # TODO from here
 
@@ -428,7 +377,6 @@ class Jackson2023(BaseIMCDataset):
         self.create_features_intensity()
 
     def create_panel(self):
-        # TODO: double check panel, I remember there was a problem with naming of one of the channels
         panel = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/Basel_Zuri_StainingPanel.csv')
 
         panel = panel.dropna(axis=0, how='all')
@@ -440,8 +388,64 @@ class Jackson2023(BaseIMCDataset):
         filter_ = panel.target.isin(['ruthenium_tetroxide', 'argon_dimers'])
         panel = panel[~filter_]
 
-        panel = relabel_duplicates(panel, 'target')
+        panel = panel.rename(columns={'metal_tag': 'metal_mass'})
+        panel.loc[panel.metal_mass == 'Er167', 'target'] = 'e_cadherin_p_cadherin'
+        panel.loc[panel.metal_mass == 'La139', 'target'] = 'histone_h3_trimethylate'
+        panel.loc[panel.metal_mass == 'Eu153', 'target'] = 'histone_h3_phospho'
         assert len(panel) == 43
+
+        metal_mass_to_channel_name = {
+            "In113": "1261726In113Di Histone",
+            "La139": "473968La139Di Histone",
+            "Pr141": "651779Pr141Di Cytoker",
+            "Nd142": "3281668Nd142Di Fibrone",
+            "Nd143": "3111576Nd143Di Cytoker",
+            "Nd144": "971099Nd144Di Cytoker",
+            "Nd145": "Nd145Di Twist",
+            "Nd146": "77877Nd146Di CD68",
+            "Sm147": "346876Sm147Di Keratin",
+            "Nd148": "174864Nd148Di SMA",
+            "Sm149": "1921755Sm149Di Vimenti",
+            "Nd150": "322787Nd150Di cMyc",
+            "Eu151": "201487Eu151Di cerbB",
+            "Sm152": "8001752Sm152Di CD3epsi",
+            "Eu153": "phospho Histone",
+            "Sm154": "phospho Erk12",
+            "Gd155": "3521227Gd155Di Slug",
+            "Gd156": "112475Gd156Di Estroge",
+            "Gd158": "312878Gd158Di Progest",
+            "Tb159": "207736Tb159Di p53",
+            "Gd160": "6967Gd160Di CD44",
+            "Dy161": "2971330Dy161Di EpCAM",
+            "Dy162": "71790Dy162Di CD45",
+            "Dy163": "117792Dy163Di GATA3",
+            "Dy164": "361077Dy164Di CD20",
+            "Ho165": "1971527Ho165Di bCaten",
+            "Er166": "92964Er166Di Carboni",
+            "Er167": "1031747Er167Di ECadhe",
+            "Er168": "1441101Er168Di Ki67",
+            "Tm169": "1021522Tm169Di EGFR",
+            "Er170": "phospho S6",
+            "Yb171": "483739Yb171Di Sox9",
+            "Yb172": "378871Yb172Di vWF",
+            "Yb173": "phospho mTOR",
+            "Yb174": "98922Yb174Di Cytoker",
+            "Lu175": "234832Lu175Di panCyto",
+            "Yb176": "198883Yb176Di cleaved",
+            "Ir191": "10331253Ir191Di Iridium",
+            "Ir193": "10331254Ir193Di Iridium",
+        }
+
+        panel['channel_name'] = panel.metal_mass.map(metal_mass_to_channel_name)
+        filter_ = panel.metal_mass.duplicated()
+        alternative_targets_dict = panel[filter_].set_index('metal_mass').target.to_dict()
+        del alternative_targets_dict['Gd158']
+        panel['target_alternative'] = panel.metal_mass.map(lambda x: alternative_targets_dict.get(x, pd.NA))
+        panel = panel[~filter_]
+        assert not panel.page.duplicated().any()
+
+        # panel[['target', 'channel_name', 'metal_mass',]]
+        # panel[['target', 'target_alternative', 'metal_mass',]]
 
         panel = panel.convert_dtypes()
         panel = panel.reset_index(drop=True)
