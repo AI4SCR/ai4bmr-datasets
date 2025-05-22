@@ -13,7 +13,7 @@ from loguru import logger
 from .BaseIMCDataset import BaseIMCDataset
 
 
-class TNBC(BaseIMCDataset):
+class Keren2018(BaseIMCDataset):
     """
     Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
     Save Ionpath file as tnbc.
@@ -459,11 +459,11 @@ class TNBC(BaseIMCDataset):
 
     @property
     def name(self):
-        return "TNBC"
+        return "Keren2018"
 
     @property
     def id(self):
-        return "TNBC-v2"
+        return "Keren2018"
 
     @property
     def doi(self):

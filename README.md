@@ -99,11 +99,11 @@ tar -xvf TNBC.tar
 ```python
 from pathlib import Path
 
-from ai4bmr_datasets.datasets import TNBC
+from ai4bmr_datasets.datasets import Keren2018
 
 # NOTE: on the cluster use: /work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC
 base_dir = Path('~/data/datasets/TNBC').expanduser()
-dataset = TNBC(base_dir=base_dir)
+dataset = Keren2018(base_dir=base_dir)
 data = dataset.load()
 
 # data is a dictionary
