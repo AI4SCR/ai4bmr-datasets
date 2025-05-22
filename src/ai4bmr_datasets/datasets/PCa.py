@@ -80,20 +80,18 @@ class PCa(BaseIMCDataset):
 
 
     def create_annotations(self):
-        annotations_dir = self.get_annotations_dir(
-            image_version="filtered", mask_version="filtered"
-        )
-        if annotations_dir.exists():
+        version_name = self.get_version_name(image_version="filtered", mask_version="filtered")
+        metadata_dir = self.metadata_dir / version_name
+        if metadata_dir.exists():
             return
         else:
-            annotations_dir.mkdir(parents=True, exist_ok=True)
+            metadata_dir.mkdir(parents=True, exist_ok=True)
             labels = pd.read_parquet(self.raw_annotations_path)
 
-            for grp_name, grp_data in labels.groupby("sample_name"):
-                grp_data.index.names = ["sample_id", "object_id"]
+            for grp_name, grp_data in labels.groupby("sample_id"):
                 grp_data = grp_data.convert_dtypes()
                 grp_data = grp_data.astype("category")
-                annotations_path = annotations_dir / f"{grp_name}.parquet"
+                annotations_path = metadata_dir / f"{grp_name}.parquet"
                 grp_data.to_parquet(annotations_path)
 
     def label_transfer(self):
