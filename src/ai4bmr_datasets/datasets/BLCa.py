@@ -1,8 +1,11 @@
 from pathlib import Path
-from loguru import logger
-from ai4bmr_core.utils.tidy import tidy_name
 
+import numpy as np
 import pandas as pd
+import tifffile
+import yaml
+from ai4bmr_core.utils.tidy import tidy_name
+from loguru import logger
 
 from .BaseIMCDataset import BaseIMCDataset
 
@@ -28,9 +31,15 @@ class BLCa(BaseIMCDataset):
     def prepare_data(self):
         self.create_clinical_metadata()
         self.create_metadata()
-        self.create_images()
+        self.create_mask_version_for_all_cells_used_in_clustering()
+        self.create_mask_version_for_annotated_cells()
+
+        self.compute_features(image_version="filtered", mask_version="clustered")
+        self.compute_features(image_version="filtered", mask_version="annotated")
 
     def create_clinical_metadata(self):
+        logger.info("Creating clinical metadata")
+
         raw_dir = self.raw_dir / "metadata" / "01_raw"
         processed_dir = self.raw_dir / "metadata" / "02_processed"
 
@@ -160,40 +169,148 @@ class BLCa(BaseIMCDataset):
         metadata_full = metadata_full.set_index("sample_id")
         metadata_full.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
+    def create_mask_version_for_all_cells_used_in_clustering(self):
+        logger.info("Creating masks for clustered cells")
+
+        cluster_ids = pd.read_parquet(
+            self.raw_dir / 'clustering/2024-07-17_13-56/cluster-ids.parquet')
+
+        object_ids = cluster_ids['id'].str.split('_').str[-1:].str.join('_')
+        sample_ids = cluster_ids['id'].str.split('_').str[:-1].str.join('_')
+        cluster_ids['sample_id'] = sample_ids
+        cluster_ids['object_id'] = object_ids.astype(int)
+
+        masks_dir = self.raw_dir / 'masks' / 'deepcell'
+        save_dir = self.masks_dir / 'clustered'
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        for sample_id, grp_data in cluster_ids.groupby('sample_id'):
+            mask_deepcell = tifffile.imread(masks_dir / f'{sample_id}.tiff')
+            object_ids = grp_data['object_id'].values
+
+            valid_ids = np.isin(mask_deepcell, object_ids)
+            mask = np.where(valid_ids, mask_deepcell, 0)
+            tifffile.imwrite(save_dir / f'{sample_id}.tiff', mask)
+
+        for path in save_dir.glob("*.tiff"):
+            mask = tifffile.imread(path)
+            uniq_objs = np.unique(mask)
+            assert len(uniq_objs) > 1
+
+    def create_mask_version_for_annotated_cells(self):
+        logger.info("Creating masks for annotated cells")
+
+        labels = pd.read_parquet(self.raw_dir / 'metadata/02_processed/labels.parquet')
+        labels = labels.sort_index()
+
+        # check with legacy annotations
+        metadata_dir = self.metadata_dir / 'filtered-clustered'
+        metadata = pd.concat(
+            [
+                pd.read_parquet(i, engine="fastparquet")
+                for i in metadata_dir.glob("*.parquet")
+            ]
+        )
+        assert not metadata.isna().all().any()
+
+        metadata = metadata[metadata.exclude == False]
+        metadata = metadata.sort_index()
+        assert labels.index.equals(metadata.index)
+
+        # load the actual data we need for the mask generation
+        metadata_dir = self.metadata_dir / 'filtered-annotated'
+        annotated = pd.concat(
+            [
+                pd.read_parquet(i, engine="fastparquet")
+                for i in metadata_dir.glob("*.parquet")
+            ]
+        )
+        assert not annotated.isna().all().any()
+
+        annotated = annotated.sort_index()
+        assert metadata.index.equals(annotated.index)
+
+        masks_dir = self.raw_dir / 'masks' / 'deepcell'
+        save_dir = self.masks_dir / 'annotated'
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        for sample_id, grp_data in annotated.groupby('sample_id'):
+            mask_deepcell = tifffile.imread(masks_dir / f'{sample_id}.tiff')
+            object_ids = grp_data.index.get_level_values('object_id').values
+
+            valid_ids = np.isin(mask_deepcell, object_ids)
+            mask = np.where(valid_ids, mask_deepcell, 0)
+            tifffile.imwrite(save_dir / f'{sample_id}.tiff', mask)
 
     def create_metadata(self):
+        # object_labels = pd.read_parquet(
+        #     self.raw_dir / 'clustering/2024-07-17_13-56/object-labels.parquet')
+        logger.info("Creating metadata for clustered cells")
+
+        cluster_ids = pd.read_parquet(
+            self.raw_dir / 'clustering/2024-07-17_13-56/cluster-ids.parquet')
+
+        with open(self.raw_dir / 'clustering/2024-07-17_13-56/cluster-annotations.yaml') as f:
+            cluster_annos = yaml.safe_load(f)
+
+        cols = [i for i in cluster_ids if i.startswith('subcluster')]
+        data = cluster_ids.set_index('id')[cols]
+        records = []
+        for (idx, row) in data.iterrows():
+            ids = list(filter(lambda x: x != None, row))
+            if len(ids) == 0:
+                id = '-1'
+            else:
+                id = ids[-1]
+            records.append({'index': idx, 'cluster_id': id})
+
+        records = pd.DataFrame(records)
+
+        cluster_annos = pd.DataFrame(cluster_annos)
+        cluster_annos = cluster_annos.rename(columns={'id': 'cluster_id'})
+        records = pd.merge(records, cluster_annos, on='cluster_id', how='left')
+
+        records.loc[:, 'exclude'] = [False if pd.isna(i) else True for i in records['exclude']]
+
+        object_ids = records['index'].str.split('_').str[-1:].str.join('_')
+        sample_ids = records['index'].str.split('_').str[:-1].str.join('_')
+        records['sample_id'] = sample_ids
+        records['object_id'] = object_ids.astype(int)
+        records = records.set_index(['sample_id', 'object_id'])
+        records = records.drop(columns=['index', 'subclustered'])
+
+        records = records.rename(columns=dict(name='label'))
+        records.columns = records.columns.map(tidy_name)
+        records = records.convert_dtypes()
+
         # %%
-        raw_annotations_path = self.raw_dir / 'metadata' / '02_processed' / 'labels.parquet'
-        version_name = self.get_version_name(image_version="filtered", mask_version="cleaned")
+        version_name = self.get_version_name(image_version="filtered", mask_version="clustered")
         save_dir = self.metadata_dir / version_name
         if save_dir.exists():
             return
         else:
             save_dir.mkdir(parents=True, exist_ok=True)
-            labels = pd.read_parquet(raw_annotations_path)
-            labels = labels.convert_dtypes()
-            labels = labels.astype("category")
-            labels.index.names = ["sample_id", "object_id"]
 
-            for grp_name, grp_data in labels.groupby("sample_id"):
+            for grp_name, grp_data in records.groupby("sample_id"):
                 path = save_dir / f"{grp_name}.parquet"
                 grp_data.to_parquet(path, engine='fastparquet')
 
-    def create_images(self):
-        pass
+        # %% HERE WE REMOVE CELLS THAT ARE EXCLUDE == True
+        logger.info("Creating metadata for annotated cells")
 
-    def create_masks(self):
-        pass
+        records = records[records['exclude'] == False]
+        records = records.convert_dtypes()
 
-    def create_features_spatial(self):
-        pass
+        version_name = self.get_version_name(image_version="filtered", mask_version="annotated")
+        save_dir = self.metadata_dir / version_name
+        if save_dir.exists():
+            return
+        else:
+            save_dir.mkdir(parents=True, exist_ok=True)
 
-    def create_features_intensity(self):
-        pass
-
-    def create_features(self):
-        self.create_features_spatial()
-        self.create_features_intensity()
+            for grp_name, grp_data in records.groupby("sample_id"):
+                path = save_dir / f"{grp_name}.parquet"
+                grp_data.to_parquet(path, engine='fastparquet')
 
     def create_panel(self):
         from ai4bmr_core.utils.tidy import tidy_name
@@ -216,33 +333,3 @@ class BLCa(BaseIMCDataset):
     @property
     def doi(self):
         return "unpublished"
-
-    def process_feature_version_for_clustering(self):
-        import pandas as pd
-        from ai4bmr_core.utils.tidy import tidy_name
-
-        panel = pd.read_csv(self.raw_dir / 'panel.csv')
-        panel.loc[:, 'name'] = panel.name.map(tidy_name)
-        col_map = panel.set_index('channel').name.to_dict()
-
-        intensity_dir = self.intensity_dir / "for_clustering"
-        spatial_dir = self.spatial_dir / "for_clustering"
-
-        for feature_dir in [intensity_dir, spatial_dir]:
-            for path in feature_dir.glob("*.parquet"):
-                sample_id = path.stem
-                data = pd.read_parquet(path)
-                data = data.rename(columns=col_map)
-                index = data.index.to_frame()[['id']]
-                index = index \
-                    .assign(object_id=index.id, sample_id=sample_id) \
-                    .drop(columns='id')
-                index = pd.MultiIndex.from_frame(index)
-                data.index = index
-                data.to_parquet(path, engine='fastparquet')
-
-        for feature_dir in [intensity_dir, spatial_dir]:
-            for path in feature_dir.glob("*.parquet"):
-                data = pd.read_parquet(path)
-                data = data.reorder_levels(['sample_id', 'object_id'], axis=0)
-                data.to_parquet(path, engine='fastparquet')

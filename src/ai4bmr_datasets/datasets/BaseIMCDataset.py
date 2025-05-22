@@ -308,9 +308,6 @@ class BaseIMCDataset:
             logger.error(f"Features directory {save_intensity_dir} already exists. Set force=True to overwrite to recompute.")
             return
 
-        save_intensity_dir.mkdir(exist_ok=True, parents=True)
-        save_spatial_dir.mkdir(exist_ok=True, parents=True)
-
         # PATHS
         img_dir = self.get_image_version_dir(image_version)
         assert img_dir.exists()
@@ -327,6 +324,10 @@ class BaseIMCDataset:
         image_ids = set([i.stem for i in img_dir.glob("*.tiff")])
         mask_ids = set([i.stem for i in mask_dir.glob("*.tiff")])
         sample_ids = image_ids.intersection(mask_ids)
+        assert len(sample_ids) > 0, f"No matching samples found in {img_dir} or {mask_dir}"
+
+        save_intensity_dir.mkdir(exist_ok=True, parents=True)
+        save_spatial_dir.mkdir(exist_ok=True, parents=True)
 
         for i, sample_id in enumerate(sample_ids):
             logger.info(f"[{i + 1}/{len(sample_ids)}] Processing {sample_id}")
