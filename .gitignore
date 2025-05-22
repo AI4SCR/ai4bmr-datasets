@@ -294,3 +294,6 @@ _version.py
 
 # dotenv
 .env
+
+# scratch
+scratch/
