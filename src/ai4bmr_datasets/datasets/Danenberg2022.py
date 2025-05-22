@@ -39,12 +39,11 @@ class Danenberg2022(BaseIMCDataset):
     def prepare_data(self):
         self.download()
 
-        self.create_clinical_metadata()
-
         self.create_panel()
         self.create_images()
         self.create_masks()
-        self.create_features()
+        self.create_metadata_and_intensity()
+        self.create_clinical_metadata()
 
     def download(self, force: bool = False):
         import requests
@@ -78,14 +77,30 @@ class Danenberg2022(BaseIMCDataset):
 
         logger.info("✅ Download and extraction completed.")
 
-    def get_metabric_id(self, path):
+    def get_metabric_id(self, path: str):
         return re.search(r'MB\d+', path).group(0)
 
-    def get_sample_id(self, path):
-        return re.search(r'MB\d+_\d+', path).group(0)
+    def get_sample_id(self, path: str):
+        match = re.search(r'MB(\d+)_(\d+)', path)
+        return f'MB_{match.group(1)}_{match.group(2)}'
 
     def get_mask_version(self, path):
-        return re.search(r'MB\d+_\d+_(\w+)Mask.\tiff', path).group(1)
+        match = re.search(r'MB(\d+)_(\d+)_(\w+)Mask\.tiff', path)
+        return match.group(3)
+
+    def convert_fst_to_parquet(self):
+        import subprocess
+        import textwrap
+
+        r_script = f"""
+        library(fst)
+        library(arrow)
+        df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst")
+        write_parquet(df, "{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet")
+        """
+        r_script = textwrap.dedent(r_script)
+
+        subprocess.run(["Rscript", "-e", r_script], check=True)
 
     def create_images(self):
         images_dir = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/Images'
@@ -96,11 +111,14 @@ class Danenberg2022(BaseIMCDataset):
         save_dir.mkdir(parents=True, exist_ok=True)
 
         for img_path in img_paths:
-            sample_id = self.get_sample_id(str(img_path))
+            try:
+                sample_id = self.get_sample_id(str(img_path))
+            except Exception as e:
+                print('debug', img_path)
 
             save_path = save_dir / f"{sample_id}.tiff"
             if save_path.exists():
-                logger.warning(f"Image file {save_path} already exists. Skipping.")
+                logger.info(f"Image file {save_path} already exists. Skipping.")
                 continue
             else:
                 logger.info(f"Creating image {save_path}")
@@ -125,76 +143,109 @@ class Danenberg2022(BaseIMCDataset):
             save_path = save_dir / f"{sample_id}.tiff"
 
             if save_path.exists():
-                logger.warning(f"Image file {save_path} already exists. Skipping.")
+                logger.info(f"Mask file {save_path} already exists. Skipping.")
                 continue
             else:
-                logger.info(f"Creating image {save_path}")
+                logger.info(f"Creating mask {save_path}")
 
             img = imread(img_path)
             assert img.ndim == 2
 
             imwrite(save_path, img)
 
-    def create_metadata(self):
+    def create_metadata_and_intensity(self):
+        logger.info('Creating `published` metadata and intensity')
 
         panel = pd.read_parquet(self.get_panel_path('published'))
         sc = pd.read_csv(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/SingleCells.csv')
-        import pyreadr
-
-        scfst = pyreadr.read_r('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/Danenberg2022/01_raw/mbtme_imc_public/MBTMEIMCPublic/SingleCells.fst')
-        clinicalfst = pyreadr.read_r('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/Danenberg2022/01_raw/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst')
 
         sample_ids = sc.metabric_id.str.replace('-', '_') + '_' + sc.ImageNumber.astype(str)
         sc['sample_id'] = sample_ids
         sc = sc.rename(columns={'ObjectNumber': 'object_id'})
+        sc = sc.set_index(['sample_id', 'object_id'])
         sc.columns = sc.columns.map(tidy_name)
+
+        # INTENSITY
+        logger.info('Creating `published` intensity')
+
+        # note: some marker as not as in the panel.target.
+        marker_to_target = {
+            'er': "estrogen_receptor_alpha",
+            'cd45ro': 'cd45',
+            'her2_3b5': 'c_erb_b_2_her2_3b5',
+            'her2_d8f12': 'c_erb_b_2_her2_d8f12',
+            'ck5': 'cytokeratin_5',
+            'ck8_18': 'cytokeratin_8_18',
+            'icos': 'cd278_icos',
+            'ox40': 'cd134',
+            'pd_1': 'cd279_pd_1',
+            'gitr': 'gitr_tnfrsf18',
+            'b2m': 'beta_2_microglobulin',
+            'cd8': 'cd8a',
+            'pdgfrb': 'cd140b_pdgf_receptor_beta',
+            'cxcl12': 'cxcl12_sdf_1',
+            'pan_ck': 'pan_cytokeratin',
+            'c_caspase3': 'cleaved_caspase3',
+        }
+        sc.columns = sc.columns.map(lambda x: marker_to_target.get(x, x))
 
         expr_cols = set(panel.target)
         expr_cols = list(expr_cols.intersection(set(sc.columns)))
+        assert set(panel.target) == set(expr_cols)
+
         expr = sc[expr_cols]
-        sc = sc.drop(columns=expr_cols)
-
-        metadata_cols = ['is_tumour', 'metabric_id', 'her2_3b5', 'is_normal', 'ox40', 'is_dcis', 'pd_1', 'pan_ck',
-                         'her2_d8f12', 'image_number', 'c_caspase3', 'sample_id', 'gitr', 'cd8', 'er', 'b2m',
-                         'is_epithelial', 'ck5', 'is_interface', 'cell_phenotype', 'cd45ro', 'cxcl12',
-                         'is_perivascular', 'pdgfrb', 'object_id', 'location_center_x', 'icos', 'ck8_18',
-                         'location_center_y', 'is_hot_aggregate', 'area_shape_area']
-
-        set(sc.columns)
-
-        annot = pd.read_excel(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/SingleCellsAnnotation.xlsx')
-
-        metadata.columns = metadata.columns.map(tidy_name)
+        expr = expr.convert_dtypes()
+        assert expr.columns == panel.target
 
         version_name = self.get_version_name(version='published')
-        save_dir = self.metadata_dir / version_name
+        save_dir = self.intensity_dir / version_name
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        for grp_name, grp_dat in metadata.groupby('sample_id'):
+        for grp_name, grp_dat in expr.groupby('sample_id'):
             save_path = save_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
-    def add_sample_id_and_object_id(self, data):
-        sample_ids = data.core.str.replace('ZTMA208_slide_', '')
-        sample_ids = sample_ids.str.replace('BaselTMA_SP', '')
+        # METADATA
+        logger.info('Creating `published` metadata')
 
-        data['sample_id'] = sample_ids.map(tidy_name)
-        data = data.convert_dtypes()
-        data = data.set_index(['sample_id'])
+        sc = sc.drop(columns=expr_cols)
 
-        if 'CellId' in data.columns:
-            data = data.rename(columns={'CellId': 'object_id'})
-            data = data.set_index(['object_id'], append=True)
+        metadata_cols = ['image_number', 'object_id', 'metabric_id', 'cell_phenotype', 'is_epithelial', 'is_tumour',
+                         'is_normal', 'is_dcis', 'is_interface', 'is_perivascular', 'is_hot_aggregate',
+                         'area_shape_area', 'sample_id']
 
-        return data
+        coord_cols = ['location_center_x', 'location_center_y']
+
+        # note: we have 32 cell types in contrast to the 16 in the publication?
+        #   - 'Ki67^{+}' but also 'Ep Ki67^{+}'
+        #   - no 'ER^{hi}CXCL12^{+}'
+        #   - 'CD57^{+}' but also 'MHC I^{hi}CD57^{+}', 'Ep CD57^{+}'
+        # TODO: these seem to be the
+        # df = pd.read_csv(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/SI_metaclusters.csv')
+
+        sc['label'] = sc.cell_phenotype.str.replace('+', '_pos').str.replace('&', 'and').map(tidy_name)
+
+        sc = sc.convert_dtypes()
+
+        save_dir = self.metadata_dir / version_name
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        for grp_name, grp_dat in sc.groupby('sample_id'):
+            save_path = save_dir / f"{grp_name}.parquet"
+            grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_clinical_metadata(self):
 
-        metadata = pd.read_csv(
-            self.raw_dir / 'single_cell_and_metadata/Data_publication/BaselTMA/Basel_PatientMetadata.csv')
-        pass
+        metadata = pd.read_parquet(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet')
+        metadata.columns = metadata.columns.map(tidy_name)
+        metadata['metabric_id'] = metadata.metabric_id.str.replace('-', '_')
 
-        metadata = self.add_sample_id_and_object_id(metadata)
+        meta = pd.read_parquet(self.processed_dir / 'metadata/published').index.to_frame()
+        meta = meta[['sample_id']].drop_duplicates().reset_index(drop=True)
+        meta['metabric_id'] = meta.sample_id.str.split('_').str[:-1].str.join('_')
+
+        metadata = pd.merge(metadata, meta, on='metabric_id', how='right')
+        metadata = metadata.set_index('sample_id')
 
         metadata = metadata.convert_dtypes()
         for col in metadata.select_dtypes(include=['object', 'string']).columns:
@@ -206,13 +257,16 @@ class Danenberg2022(BaseIMCDataset):
         self.clinical_metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
-    def create_features(self):
-        logger.info(f'Creating `published` features')
-        pass
-
     def create_panel(self):
         panel = pd.read_csv(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/AbPanel.csv')
+        order = pd.read_csv(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/markerStackOrder.csv')
+        assert (panel.metaltag == order.Isotope).all()
         assert (panel.full == 1).all()
+
+        # based on supplementary table 1
+        panel.loc[panel.metaltag == 'Ho165', 'target'] = 'estrogen_receptor_alpha'
+        panel.loc[panel.metaltag == 'Eu151', 'target'] = 'c_erb_b_2_her2_3B5'
+        panel.loc[panel.metaltag == 'Tb159', 'target'] = 'c_erb_b_2_her2_D8F12'
 
         panel = panel.drop(columns=['ilastik', 'full', 'Unnamed: 10', 'tubenumber', 'to_sort', 'function_order'])
         panel = panel.rename(columns=dict(metaltag='metal_mass'))
@@ -221,13 +275,8 @@ class Danenberg2022(BaseIMCDataset):
 
         panel = panel.convert_dtypes()
         panel.index.name = "channel_index"
+        assert (panel.target.value_counts() == 1).all()
 
         panel_path = self.get_panel_path("published")
         panel_path.parent.mkdir(parents=True, exist_ok=True)
         panel.to_parquet(panel_path)
-
-
-base_dir = Path("/users/amarti51/prometex/data/datasets/Danenberg2022")
-ds = self = Danenberg2022(base_dir=base_dir)
-ds.download()
-# ds.create_masks()
