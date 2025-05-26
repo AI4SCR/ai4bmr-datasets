@@ -3,35 +3,13 @@ from pathlib import Path
 
 import pandas as pd
 from ai4bmr_core.utils.tidy import tidy_name
+import numpy as np
+from ai4bmr_datasets.utils.download import unzip_recursive
 from loguru import logger
-from tifffile import imread
-from tifffile import imwrite
-
-from .BaseIMCDataset import BaseIMCDataset
+from tifffile import imread, imwrite
+from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 import re
 
-
-def unzip_recursive(zip_path: Path, extract_dir: Path = None):
-    import zipfile
-    from loguru import logger
-
-    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        extracted_names = zip_ref.namelist()
-        extract_dir = extract_dir or zip_path.parent / zip_path.stem
-        is_extracted = all((extract_dir / name).exists() for name in extracted_names)
-        if is_extracted:
-            if logger:
-                logger.info(f"Skipping extraction for {zip_path.name}, files already exist.")
-        else:
-            if logger:
-                logger.info(f"Unzipping {zip_path.name}")
-            zip_ref.extractall(extract_dir)
-
-        # Recursively unzip any .zip files in extracted content
-        for name in extracted_names:
-            extracted_path = extract_dir / name
-            if extracted_path.suffix == ".zip":
-                unzip_recursive(extracted_path)
 
 class Cords2024(BaseIMCDataset):
 
@@ -89,7 +67,7 @@ class Cords2024(BaseIMCDataset):
         self.create_panel()
         self.create_images()
         self.create_masks()
-
+        self.create_annotated_masks()
 
     def download(self, force: bool = False):
         import requests
@@ -100,46 +78,46 @@ class Cords2024(BaseIMCDataset):
 
         file_map = {
             "https://zenodo.org/records/7961844/files/2020115_LC_NSCLC_TMA_86_A.mcd.zip?download=1": download_dir
-            / "2020115_LC_NSCLC_TMA_86_A.mcd.zip",
+                                                                                                     / "2020115_LC_NSCLC_TMA_86_A.mcd.zip",
             "https://zenodo.org/records/7961844/files/2020117_LC_NSCLC_TMA_86_B.mcd.zip?download=1": download_dir
-            / "2020117_LC_NSCLC_TMA_86_B.mcd.zip",
+                                                                                                     / "2020117_LC_NSCLC_TMA_86_B.mcd.zip",
             "https://zenodo.org/records/7961844/files/2020120_LC_NSCLC_TMA_86_C.mcd.zip?download=1": download_dir
-            / "2020120_LC_NSCLC_TMA_86_C.mcd.zip",
+                                                                                                     / "2020120_LC_NSCLC_TMA_86_C.mcd.zip",
             "https://zenodo.org/records/7961844/files/20201219_LC_NSCLC_TMA_178_A.mcd.zip?download=1": download_dir
-            / "20201219_LC_NSCLC_TMA_178_A.mcd.zip",
+                                                                                                       / "20201219_LC_NSCLC_TMA_178_A.mcd.zip",
             "https://zenodo.org/records/7961844/files/20201222_LC_NSCLC_TMA_178_B_2.mcd.zip?download=1": download_dir
-            / "20201222_LC_NSCLC_TMA_178_B_2.mcd.zip",
+                                                                                                         / "20201222_LC_NSCLC_TMA_178_B_2.mcd.zip",
             "https://zenodo.org/records/7961844/files/20201224_LC_NSCLC_TMA_178_C.mcd.zip?download=1": download_dir
-            / "20201224_LC_NSCLC_TMA_178_C.mcd.zip",
+                                                                                                       / "20201224_LC_NSCLC_TMA_178_C.mcd.zip",
             "https://zenodo.org/records/7961844/files/20201226_LC_NSCLC_TMA_175_A.mcd.zip?download=1": download_dir
-            / "20201226_LC_NSCLC_TMA_175_A.mcd.zip",
+                                                                                                       / "20201226_LC_NSCLC_TMA_175_A.mcd.zip",
             "https://zenodo.org/records/7961844/files/20201228_LC_NSCLC_TMA_175_B.mcd.zip?download=1": download_dir
-            / "20201228_LC_NSCLC_TMA_175_B.mcd.zip",
+                                                                                                       / "20201228_LC_NSCLC_TMA_175_B.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210101_LC_NSCLC_TMA_175_C.mcd.zip?download=1": download_dir
-            / "20210101_LC_NSCLC_TMA_175_C.mcd.zip",
+                                                                                                       / "20210101_LC_NSCLC_TMA_175_C.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210104_LC_NSCLC_TMA_176_A.mcd.zip?download=1": download_dir
-            / "20210104_LC_NSCLC_TMA_176_A.mcd.zip",
+                                                                                                       / "20210104_LC_NSCLC_TMA_176_A.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210109_LC_NSCLC_TMA_176_C.mcd.zip?download=1": download_dir
-            / "20210109_LC_NSCLC_TMA_176_C.mcd.zip",
+                                                                                                       / "20210109_LC_NSCLC_TMA_176_C.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210112_LC_NSCLC_TMA_176_B.mcd.zip?download=1": download_dir
-            / "20210112_LC_NSCLC_TMA_176_B.mcd.zip",
+                                                                                                       / "20210112_LC_NSCLC_TMA_176_B.mcd.zip",
             "https://zenodo.org/records/7961844/files/2020121_LC_NSCLC_TMA_87_A.mcd.zip?download=1": download_dir
-            / "2020121_LC_NSCLC_TMA_87_A.mcd.zip",
+                                                                                                     / "2020121_LC_NSCLC_TMA_87_A.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210123_LC_NSCLC_TMA_87_B.mcd.zip?download=1": download_dir
-            / "20210123_LC_NSCLC_TMA_87_B.mcd.zip",
+                                                                                                      / "20210123_LC_NSCLC_TMA_87_B.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210126_LC_NSCLC_TMA_87_C.mcd.zip?download=1": download_dir
-            / "20210126_LC_NSCLC_TMA_87_C.mcd.zip",
+                                                                                                      / "20210126_LC_NSCLC_TMA_87_C.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_A.mcd.zip?download=1": download_dir
-            / "20210129_LC_NSCLC_TMA_88_A.mcd.zip",
+                                                                                                      / "20210129_LC_NSCLC_TMA_88_A.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_B.mcd.zip?download=1": download_dir
-            / "20210129_LC_NSCLC_TMA_88_B.mcd.zip",
+                                                                                                      / "20210129_LC_NSCLC_TMA_88_B.mcd.zip",
             "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_C.mcd.zip?download=1": download_dir
-            / "20210129_LC_NSCLC_TMA_88_C.mcd.zip",
+                                                                                                      / "20210129_LC_NSCLC_TMA_88_C.mcd.zip",
             "https://zenodo.org/records/7961844/files/comp_csv_files.zip?download=1": download_dir
-            / "comp_csv_files.zip",
+                                                                                      / "comp_csv_files.zip",
             "https://zenodo.org/records/7961844/files/Cell%20masks.zip?download=1": download_dir / "cell_masks_zenodo.zip",
             "https://drive.usercontent.google.com/download?id=1wXboMZpkLzk7ZP1Oib1q4NBwvFGK_h7G&confirm=xxx": download_dir
-            / "cell_masks_google_drive.zip",
+                                                                                                              / "cell_masks_google_drive.zip",
             "https://zenodo.org/records/7961844/files/SingleCellExperiment%20Objects.zip?download=1": download_dir / 'single_cell_experiment_objects.zip'
         }
 
@@ -249,8 +227,10 @@ class Cords2024(BaseIMCDataset):
 
         for i, (sample_id, uniq_meta_objs, uniq_mask_objs) in enumerate(mismatches):
             logger.info(f"Sample ID: {sample_id}")
-            logger.info(f"Unique mask objects: {len(uniq_mask_objs)} (min: {min(uniq_mask_objs)}, max: {max(uniq_mask_objs)})")
-            logger.info(f"Unique metadata objects: {len(uniq_meta_objs)} (min: {min(uniq_meta_objs)}, max: {max(uniq_meta_objs)})")
+            logger.info(
+                f"Unique mask objects: {len(uniq_mask_objs)} (min: {min(uniq_mask_objs)}, max: {max(uniq_mask_objs)})")
+            logger.info(
+                f"Unique metadata objects: {len(uniq_meta_objs)} (min: {min(uniq_meta_objs)}, max: {max(uniq_meta_objs)})")
             if i == 10:
                 break
 
@@ -347,6 +327,40 @@ class Cords2024(BaseIMCDataset):
             else:
                 logger.info(f'Skipping mask {mask_path}. No corresponding image found.')
 
+    def create_annotated_masks(self):
+        version = 'published'
+        metadata = pd.read_parquet(self.metadata_dir / version, engine='fastparquet')
+
+        masks_dir = self.masks_dir / version
+        save_dir = self.masks_dir / 'annotated'
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # remove core 178 as the object ids in the annotated data are no longer aligned with the masks as they
+        # had to regenerate the masks
+        filter_ = metadata.index.get_level_values('sample_id').str.startswith('178_B')
+        metadata = metadata[~filter_]
+
+        for sample_id, sample_data in metadata.groupby(level='sample_id'):
+            save_path = save_dir / f"{sample_id}.tiff"
+
+            if save_path.exists():
+                logger.info(f"Skipping annotated mask {save_path}. Already exists.")
+                continue
+
+            mask_path = masks_dir / f"{sample_id}.tiff"
+            if not mask_path.exists():
+                logger.warning(f'No corresponding mask found for {mask_path}. Skipping.')
+                continue
+
+            logger.info(f"Saving annotated mask {save_path}")
+            mask = imread(mask_path)
+            objs = sample_data.index.get_level_values('object_id').astype(int).unique()
+            missing_objs = set(mask.flatten()) - set(objs) - { 0 }
+            if missing_objs:
+                logger.info(f'Missing objects in mask {sample_id}: {missing_objs}')
+            mask_filtered = np.where(np.isin(mask, objs), mask, 0)
+            imwrite(save_path, mask_filtered)
+
     def create_clinical_metadata(self):
         from ai4bmr_core.utils.tidy import tidy_name
         import re
@@ -366,7 +380,8 @@ class Cords2024(BaseIMCDataset):
         # check ids against images
         image_ids = {i.stem for i in self.get_image_version_dir('published').glob("*.tiff")}
         no_clinical_metadata = image_ids - sample_ids
-        logger.info(f"No clinical metadata for {len(no_clinical_metadata)} ROIs found: {', '.join(no_clinical_metadata)}")
+        logger.info(
+            f"No clinical metadata for {len(no_clinical_metadata)} ROIs found: {', '.join(no_clinical_metadata)}")
         no_image_ids = sample_ids - image_ids
         logger.info(f"No images for {len(no_image_ids)} patients found: {', '.join(no_image_ids)}")
 

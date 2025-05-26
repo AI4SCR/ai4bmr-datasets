@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-
+import numpy as np
 import pandas as pd
 from loguru import logger
 from tifffile import imread, imwrite
@@ -280,3 +280,4 @@ class Danenberg2022(BaseIMCDataset):
         panel_path = self.get_panel_path("published")
         panel_path.parent.mkdir(parents=True, exist_ok=True)
         panel.to_parquet(panel_path)
+
