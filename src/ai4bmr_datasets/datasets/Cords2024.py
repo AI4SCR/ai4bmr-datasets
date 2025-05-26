@@ -58,7 +58,7 @@ class Cords2024(BaseIMCDataset):
             # "spatial": self.spatial.loc[sample_id],
         }
 
-    def process(self):
+    def prepare_data(self):
         self.download()
         self.process_acquisitions()
 
