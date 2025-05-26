@@ -204,15 +204,15 @@ class Jackson2023(BaseIMCDataset):
             metacluster_anno, left_on="cluster", right_on="metacluster", how="left"
         )
 
+        metadata = metadata.reset_index(drop=True).drop(columns=['PhenoGraph'])
+        metadata = self.add_sample_id_and_object_id(metadata)
+        assert metadata.index.is_unique
+        metadata = metadata.drop(columns=['id', 'core', 'metacluster'])
+
         metadata = metadata.rename(columns={
-            'CellId': 'object_id',
             'class': 'label0',
             'cell_type': 'label'
         })
-        metadata = metadata.drop(columns=['PhenoGraph', 'id', 'metacluster'])
-        metadata = self.add_sample_id_and_object_id(metadata)
-        assert metadata.index.is_unique
-
         metadata.loc[:, 'label'] = metadata['label'].str.replace('+', '_pos').map(tidy_name)
         metadata.loc[:, 'label0'] = metadata['label0'].map(tidy_name)
         metadata.columns = metadata.columns.map(tidy_name)
@@ -352,7 +352,14 @@ class Jackson2023(BaseIMCDataset):
         assert x.isna().sum().sum() == 0
 
         intensity = x.loc[:, x.columns.isin(expr_feat)]
+        mapping = panel.set_index('channel_name')['target'].to_dict()
+        intensity = intensity.rename(columns=mapping)
+        intensity = intensity[panel.target]
+        assert not intensity.columns.isna().any()
+        assert intensity.columns.value_counts().unique().item() == 1
+
         spatial = x.loc[:, x.columns.isin(spatial_feat)]
+        spatial.columns = spatial.columns.map(tidy_name)
 
         version_name = self.get_version_name(version='published')
 
@@ -458,6 +465,3 @@ class Jackson2023(BaseIMCDataset):
         panel.to_parquet(panel_path)
 
 
-base_dir = Path("/users/amarti51/prometex/data/datasets/Jackson2023")
-ds = self = Jackson2023(base_dir=base_dir)
-# ds.create_masks()
