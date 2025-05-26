@@ -4,14 +4,13 @@ import pandas as pd
 
 from ai4bmr_datasets.datamodels.Image import Image, Mask
 
-
 class BaseIMCDataset:
     """
     Base class for managing Imaging Mass Cytometry (IMC) datasets,
     including loading images, masks, features (intensity, spatial), and metadata.
     """
 
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         """
         Initialize the dataset with a base directory.
 
@@ -19,7 +18,7 @@ class BaseIMCDataset:
             base_dir (Path): Base directory for the dataset that contains 01_raw and 02_processed folders.
         """
 
-        self.base_dir = base_dir
+        self.base_dir = self.resolve_base_dir(base_dir=base_dir)
 
         self.sample_ids = None
         self.clinical_metadata = None
@@ -29,6 +28,16 @@ class BaseIMCDataset:
         self.panel = None
         self.intensity = None
         self.spatial = None
+
+    def resolve_base_dir(self, base_dir: Path | None):
+        import os
+        if base_dir is None:
+            base_dir = os.environ.get("AI4BMR_DATASETS_BASE_DIR", None)
+            if base_dir is None:
+                base_dir = Path.home().resolve() / '.cache' / 'ai4bmr_datasets' / self.name
+            else:
+                base_dir = Path(base_dir)
+        return base_dir
 
     def __len__(self):
         return len(self.sample_ids)
