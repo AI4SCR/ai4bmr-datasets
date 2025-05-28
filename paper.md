@@ -47,7 +47,7 @@ allows scientists to focus on biological and analytical questions rather than da
 preprocessing pipelines across different studies that people can easily adapt and extend by providing predefined interfaces for common processing steps.
 
 The importance of data standardization in spatial omics has been highlighted by recent efforts in the community (e.g.,
-developing standards for sharing spatial transcriptomics data [@doi:10.1016/j.xgen.2023.100374]), underscoring the need
+developing standards for sharing spatial transcriptomics data [@SharingSpatial2023]), underscoring the need
 for tools like `ai4bmr-datasets` that facilitate data sharing, reproducibility, and comparative analysis. By harmonizing
 data access, our package enables more straightforward integration of spatial omics data into machine learning and
 statistical modeling frameworks, ultimately accelerating biomedical discovery.
@@ -56,10 +56,10 @@ statistical modeling frameworks, ultimately accelerating biomedical discovery.
 
 The package supports the following public spatial omics datasets:
 
-- **Keren et al. 2018** – IMC of triple-negative breast cancer [@doi:10.1016/j.cell.2018.08.039]
-- **Jackson et al. 2023** – Breast cancer IMC dataset with clinical annotations [@doi:10.1038/s41586-019-1876-x]
-- **Danenberg et al. 2022** – MIBI dataset from the METABRIC cohort [@doi:10.1038/s41588-022-01041-y]
-- **Cords et al. 2024** – IMC of NSCLC with fibroblast phenotyping [@doi:10.1016/j.ccell.2023.12.021]
+- **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
+- **Jackson et al. 2023** – Breast cancer IMC dataset with clinical annotations [@Jackson2020]
+- **Danenberg et al. 2022** – MIBI dataset from the METABRIC cohort [@Danenberg2022]
+- **Cords et al. 2024** – IMC of NSCLC with fibroblast phenotyping [@Cords2024]
 
 Additionally, dummy datasets are provided to mimic real data structure for development and testing purposes.
 
