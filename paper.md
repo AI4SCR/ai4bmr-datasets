@@ -21,7 +21,7 @@ affiliations:
   - index: 3
     name: University of Lausanne (UNIL), Lausanne, Switzerland
 date: 28 May 2025
-bibliography: paper.bib
+bibliography: /Users/adrianomartinelli/projects/ai4bmr-datasets/paper.md
 ---
 
 # Summary
@@ -71,8 +71,9 @@ naming conventions and data schemas, making them immediately usable for downstre
 
 ```python
 from ai4bmr_datasets import Keren2018
+from pathlib import Path
 
-dataset = Keren2018(base_dir="<PATH>")
+dataset = Keren2018(base_dir=Path("<PATH>"))
 dataset.prepare_data()
 dataset.setup(image_version="v1", mask_version="v1")
 
