@@ -9,7 +9,7 @@ def test_BLCa():
 
     ds.setup(image_version='filtered',
              mask_version='annotated',
-             load_intensity=True, load_metadata=True)
+             load_intensity=True, load_metadata=True, align=True)
 
     ds.setup(image_version='filtered',
              mask_version='clustered',
