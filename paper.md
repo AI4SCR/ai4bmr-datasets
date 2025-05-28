@@ -8,7 +8,7 @@ tags:
   - computational pathology
 authors:
   - name: Adriano Martinelli
-    orcid: 0000-0002-7197-0552
+    orcid: 0000-0002-9288-5103
     affiliation: 1
   - name: Marianna Rapsomaniki
     orcid: 0000-0003-3883-4871
