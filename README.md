@@ -141,3 +141,14 @@ data['samples'].loc[image.id]
 module load p7zip/17.05 gcc/12.3.0
 7z x NSCLC.zip
 ```
+
+# Render PDF
+```bash
+pandoc paper.md \
+  --from markdown \
+  --to pdf \
+  --output paper.pdf \
+  --citeproc \
+  --bibliography=paper.bib \
+  --pdf-engine=tectonic
+```

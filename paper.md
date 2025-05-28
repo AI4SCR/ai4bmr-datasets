@@ -9,10 +9,10 @@ tags:
 authors:
   - name: Adriano Martinelli
     orcid: 0000-0002-7197-0552
-    affiliations: [ 1, 2 ]
+    affiliation: 1
   - name: Marianna Rapsomaniki
     orcid: 0000-0003-3883-4871
-    affiliations: [ 1, 3 ]
+    affiliation: 1, 3
 affiliations:
   - index: 1
     name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
@@ -20,8 +20,9 @@ affiliations:
     name: ETH Zürich, Zürich, Switzerland
   - index: 3
     name: University of Lausanne (UNIL), Lausanne, Switzerland
-date: 28 May 2025
-bibliography: /Users/adrianomartinelli/projects/ai4bmr-datasets/paper.md
+date: 2025-05-28
+bibliography: paper.bib
+#csl: https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl
 ---
 
 # Summary
@@ -55,11 +56,12 @@ statistical modeling frameworks, ultimately accelerating biomedical discovery.
 # Supported Datasets
 
 The package supports the following public spatial omics datasets:
+# TODO: add stats
 
 - **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
-- **Jackson et al. 2023** – Breast cancer IMC dataset with clinical annotations [@Jackson2020]
-- **Danenberg et al. 2022** – MIBI dataset from the METABRIC cohort [@Danenberg2022]
-- **Cords et al. 2024** – IMC of NSCLC with fibroblast phenotyping [@Cords2024]
+- **Jackson et al. 2023** – IMC of breast cancer [@Jackson2020]
+- **Danenberg et al. 2022** – IMC of breast cancer [@Danenberg2022]
+- **Cords et al. 2024** – IMC of NSCLC [@Cords2024]
 
 Additionally, dummy datasets are provided to mimic real data structure for development and testing purposes.
 
@@ -92,5 +94,4 @@ community and envision this package as a foundation for reproducible spatial omi
 
 # References
 
-```{bibliography}
 
