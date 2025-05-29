@@ -1,9 +1,8 @@
 from pathlib import Path
 from loguru import logger
-
-from ..datamodels.Image import Image, Mask
 import pandas as pd
 
+from ai4bmr_datasets.datamodels.Image import Image, Mask
 
 class BaseIMCDataset:
     """
@@ -11,7 +10,7 @@ class BaseIMCDataset:
     including loading images, masks, features (intensity, spatial), and metadata.
     """
 
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         """
         Initialize the dataset with a base directory.
 
@@ -19,9 +18,8 @@ class BaseIMCDataset:
             base_dir (Path): Base directory for the dataset that contains 01_raw and 02_processed folders.
         """
 
-        self.base_dir = base_dir
+        self.base_dir = self.resolve_base_dir(base_dir=base_dir)
 
-        # populated by `self.setup()`
         self.sample_ids = None
         self.clinical_metadata = None
         self.metadata = None
@@ -30,6 +28,16 @@ class BaseIMCDataset:
         self.panel = None
         self.intensity = None
         self.spatial = None
+
+    def resolve_base_dir(self, base_dir: Path | None):
+        import os
+        if base_dir is None:
+            base_dir = os.environ.get("AI4BMR_DATASETS_BASE_DIR", None)
+            if base_dir is None:
+                base_dir = Path.home().resolve() / '.cache' / 'ai4bmr_datasets' / self.name
+            else:
+                base_dir = Path(base_dir)
+        return base_dir
 
     def __len__(self):
         return len(self.sample_ids)
@@ -59,7 +67,8 @@ class BaseIMCDataset:
             load_spatial: bool = False,
             load_metadata: bool = False,
             sample_ids: list[str] | None = None,
-            align: bool = True,
+            align: bool = False,
+            join: str = "outer",
     ):
         """
         Load and align data (images, masks, features, metadata) from disk.
@@ -183,6 +192,8 @@ class BaseIMCDataset:
                 intensity, spatial = intensity.align(spatial, join="outer", axis=0)
 
             if metadata is not None and intensity is not None:
+                assert set(metadata.index) <= set(intensity.index)
+                assert set(intensity.index) <= set(metadata.index)
                 assert set(metadata.index) == set(intensity.index)
                 intensity, metadata = intensity.align(metadata, join="outer", axis=0)
 
@@ -230,6 +241,56 @@ class BaseIMCDataset:
 
     def create_panel(self):
         pass
+
+    def create_annotated(self):
+        metadata_version = 'published'
+        metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
+        intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
+
+        mask_version = 'published_nucleus'
+        masks_dir = self.masks_dir / mask_version
+
+        # ANNOTATED DATA
+        version = 'annotated'
+        save_masks_dir = self.masks_dir / version
+        save_masks_dir.mkdir(parents=True, exist_ok=True)
+
+        save_intensity_dir = self.intensity_dir / version
+        save_intensity_dir.mkdir(parents=True, exist_ok=True)
+
+        save_metadata_dir = self.metadata_dir / version
+        save_metadata_dir.mkdir(parents=True, exist_ok=True)
+
+        for sample_id, sample_data in metadata.groupby(level='sample_id'):
+            save_path = save_masks_dir / f"{sample_id}.tiff"
+
+            if save_path.exists():
+                logger.info(f"Skipping annotated mask {save_path}. Already exists.")
+                continue
+
+            mask_path = masks_dir / f"{sample_id}.tiff"
+            if not mask_path.exists():
+                logger.warning(f'No corresponding mask found for {sample_id}. Skipping.')
+                continue
+
+            logger.info(f"Saving annotated mask {save_path}")
+
+            mask = imread(mask_path)
+            objs = set(sample_data.index.get_level_values('object_id').astype(int).unique())
+            mask_objs = set([int(i) for i in mask.flatten()]) - {0}
+            intx = objs.intersection(mask_objs)
+            missing_objs = objs.union(mask_objs) - intx
+            if missing_objs:
+                logger.warning(f'{sample_id} has {len(missing_objs)} missing objects')
+
+            mask_filtered = np.where(np.isin(mask, objs), mask, 0)
+            imwrite(save_path, mask_filtered)
+
+            anno_data = sample_data.xs(list(intx), level='object_id')
+            anno_data.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
+
+            intensity_data = intensity.xs(sample_id, level='sample_id').xs(list(intx), level='object_id')
+
 
     @property
     def name(self):

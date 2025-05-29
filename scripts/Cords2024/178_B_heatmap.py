@@ -88,3 +88,23 @@ cg.figure.show()
 cg.figure.savefig(save_dir / f'clustermap-{prefix}.png')
 plt.close(cg.figure)
 
+# %%
+sample_id = '178_B_100'
+
+spatial_dir = ds.spatial_dir / feature_version
+spatial = pd.concat(
+    [
+        pd.read_parquet(i, engine="fastparquet")
+        for i in spatial_dir.glob("*.parquet")
+        if i.name.startswith(prefix)
+    ]
+)
+
+dat = spatial.loc[sample_id]
+meta = metadata.loc[sample_id]
+pdat = pd.concat((dat, meta), axis=1)
+pdat.isna().any(axis=1).sum()
+ax = sns.scatterplot(data=pdat, x='x', y='y', hue='cell_category', s=10)
+ax.invert_yaxis()
+ax.figure.show()
+ax.figure.savefig(save_dir / f'scatterplot-{sample_id}.png')
