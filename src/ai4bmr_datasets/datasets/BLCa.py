@@ -29,6 +29,9 @@ class BLCa(BaseIMCDataset):
         self.spatial = None
 
     def prepare_data(self):
+        self.process_acquisitions()
+        self.create_panel()
+
         self.create_clinical_metadata()
         self.create_metadata()
         self.create_mask_version_for_all_cells_used_in_clustering()
@@ -36,6 +39,101 @@ class BLCa(BaseIMCDataset):
 
         self.compute_features(image_version="filtered", mask_version="clustered")
         self.compute_features(image_version="filtered", mask_version="annotated")
+
+    def process_acquisitions(self):
+        import json
+        import re
+        from skimage.io import imwrite
+        from readimc import MCDFile
+
+        acquisitions_dir = ''
+        acquisitions_dir.mkdir(parents=True, exist_ok=True)
+
+        num_failed_reads = 0
+
+        mcd_paths = [i for i in self.raw_dir.rglob("*.mcd") if i.is_file()]
+        for mcd_path in mcd_paths:
+            logger.info(f"Processing {mcd_path.name}")
+            mcd_id = re.search(r".+_TMA_(\d+_\w+).mcd", mcd_path.name).group(1)
+            mcd_id = mcd_id.replace('B_2', 'B')
+
+            with MCDFile(mcd_path) as f:
+                for slide in f.slides:
+                    for acq in slide.acquisitions:
+
+                        item = dict(
+                            id=acq.id,
+                            description=acq.description,
+                            mcd_name=mcd_path.name,
+                            channel_names=acq.channel_names,
+                            channel_labels=acq.channel_labels,
+                            num_channels=acq.num_channels,
+                            metal_names=acq.channel_metals,
+                        )
+
+                        image_name = (
+                            f"{mcd_id}_{acq.id}"  # should be equivalent to 'Tma_ac'
+                        )
+                        metadata_path = acquisitions_dir / f"{image_name}.json"
+                        image_path = acquisitions_dir / f"{image_name}.tiff"
+
+                        if image_path.exists():
+                            logger.info(f"Skipping image {image_path}. Already exists.")
+                            continue
+
+                        try:
+                            logger.info(f"Reading acquisition of image {image_name}")
+                            img = f.read_acquisition(acq)
+                            imwrite(image_path, img)
+                            with open(metadata_path, "w") as f_json:
+                                json.dump(item, f_json)
+                        except OSError:
+                            logger.error(f"Failed to read acquisition! ")
+                            num_failed_reads += 1
+                            continue
+
+
+    def create_panel(self):
+        from ai4bmr_core.utils.tidy import tidy_name
+        import json
+        import pandas as pd
+        panel = None
+
+        for img_metadata_path in self.raw_acquisitions_dir.glob("*.json"):
+            with open(img_metadata_path, "r") as f:
+                img_metadata = json.load(f)
+                df = pd.DataFrame(img_metadata)
+                df = df[["channel_names", "channel_labels", "metal_names"]]
+
+            if panel is None:
+                panel = df
+            else:
+                assert panel.equals(df)
+
+        targets = panel["channel_labels"].str.split("_")
+        keep = targets.str.len() == 2
+
+        assert keep.sum() == 43
+        panel["target"] = targets.str[0].map(tidy_name).values
+        # add suffix to target for duplicates (iridium)
+        panel['target'] = panel.target + '_' + panel.groupby('target').cumcount().astype(str)
+        panel.loc[:, 'target'] = panel.target.str.replace('_0$', '', regex=True)
+
+        panel["keep"] = keep
+
+        panel.columns = panel.columns.map(tidy_name)
+        panel = panel.convert_dtypes()
+        panel["page"] = range(len(panel))
+        panel.index.name = "channel_index"
+
+        panel.to_parquet(self.raw_acquisitions_dir / "panel.parquet")
+
+        panel = panel[panel.keep].reset_index(drop=True)
+        panel.index.name = "channel_index"
+        panel_path = self.get_panel_path("published")
+        panel_path.parent.mkdir(parents=True, exist_ok=True)
+        panel.to_parquet(panel_path)
+
 
     def create_clinical_metadata(self):
         logger.info("Creating clinical metadata")
