@@ -1,153 +1,123 @@
-# Dataset
-Utilities to data handling in the AI4BMR group.
+---
+title: "ai4bmr-datasets: A unified interface for spatial omics data access for computer vision and machine learning"
+tags:
+  - Python
+  - spatial omics
+  - imaging mass cytometry
+  - spatial transcriptomics
+  - computational pathology
+authors:
+  - name: Adriano Martinelli
+    orcid: 0000-0002-9288-5103
+    affiliation: 1
+  - name: Marianna Rapsomaniki
+    orcid: 0000-0003-3883-4871
+    affiliation: 1, 3
+affiliations:
+  - index: 1
+    name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
+  - index: 2
+    name: ETH Zürich, Zürich, Switzerland
+  - index: 3
+    name: University of Lausanne (UNIL), Lausanne, Switzerland
+date: 2025-05-28
+bibliography: paper.bib
+#csl: https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl
+---
 
-# Dataset Structure
-Each dataset has the following attributes that can be null:
+# Summary
 
-- 'samples': with Index `sample_id`
-- 'images': float image with intensities
-- 'masks': integer images with `object_ids`
-- 'panel': with Index `channel_index` and a column `target`
-- 'intensity': with MultiIndex (`sample_id`, `object_id`)
-- 'spatial': with MultiIndex (`sample_id`, `object_id`)
+**ai4bmr-datasets** is an open-source Python package that provides a harmonized and standardized interface for accessing
+spatial omics datasets, including imaging mass cytometry (IMC) and multiplexed ion beam imaging (MIBI) data. The
+package enables researchers to load raw spatially-resolved omics data from multiple studies in a unified format, apply
+and retrieve data structures ready for downstream analysis or model training. By
+focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and single-cell
+data formats), `ai4bmr-datasets` promotes reproducible and efficient research in computational and spatial
+biology. The library is currently used internally within our group, but is designed to serve the broader community
+working on spatial omics by easing data access and integration into machine learning workflows.
 
-those indices and columns are enforced.
+# Supported Datasets
 
-## Guidelines
-- Images and masks are saved as tifffiles (we might want to switch to ome.tiff) using the `save_image` and `save_mask` utilities
-- Images and masks are loaded lazily with the [`Image`](src/ai4bmr_datasets/datamodels/Image.py) and [`Mask`](src/ai4bmr_datasets/datamodels/Image.py) classes
-  - All tabular data is saved as typed parquet files
-    - before saving data always clean the column names with [`tidy_name`](https://github.com/AI4SCR/ai4bmr-core/blob/67d5505255ce85b832781118af537719a8f03c2b/src/ai4bmr_core/utils/tidy.py#L4)
-      ```python
-      target=panel.target.map(tidy_name)
-      ```
-    - before saving data always convert to base dtypes with [`pd.convert_dtypes`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.convert_dtypes.html)
+The package supports the following public spatial omics datasets:
 
+# TODO: add stats
 
-# Pre-requisites
+- **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
+- **Jackson et al. 2023** – IMC of breast cancer [@Jackson2020]
+- **Danenberg et al. 2022** – IMC of breast cancer [@Danenberg2022]
+- **Cords et al. 2024** – IMC of NSCLC [@Cords2024]
 
-- Access to the github.com/AI4SCR
-- Access to the cluster
-- Access to the project `prometex` (maybe you already have read access, just try)
+Additionally, dummy datasets are provided to mimic real data structure for development and testing purposes.
 
-# Installation
+Each dataset is accessible through a standardized class interface that mimics the lightning philosophy and includes
+methods for downloading, preparing, and
+accessing processed components (images, masks, metadata, and spatial coordinates). These datasets follow consistent
+naming conventions and data schemas, making them immediately usable for downstream tasks.
 
-```bash
-git clone git+ssh://git@github.com/AI4SCR/ai4bmr-core.git
-git clone git+ssh://git@github.com/AI4SCR/ai4bmr-datasets.git
-pip install -e ai4bmr-core
-pip install -e ai4bmr-datasets
-```
+## Data
 
-# Example
+**Data Model:** All datasets are represented in a **consistent format**, enabling the same code to work across different
+cancer types. Each loaded dataset is essentially a dictionary with the following keys:
 
-You can either run the code below directly on the cluster or you need to download the data first.
+- `metadata` – Observation-level metadata (pandas DataFrame) including a key `label`
+- `clinical` – Clinical / Sample-level metadata (pandas DataFrame)
+- `images` – Dictionary of image objects
+- `masks` – Dictionary of mask objects
+- `panel` – Imaging panel description (DataFrame), including a key `target`
+- `intensity` – Object / Single-cell intensity features (DataFrame)
+- `spatial` – Object / Single-cell spatial features (DataFrame)
 
-## Download data from cluster
+These components are enforced and standardized across datasets.
 
-If you want to play, start with `TNBC`, this is
-a [public dataset](https://www.sciencedirect.com/science/article/pii/S0092867418311000?via%3Dihub)
-and it is the smallest of the three available datasets.
+**Efficient Data Loading:** Images and masks are **lazily loaded** from disk to avoid unnecessary memory use. Tabular
+data are stored in Parquet format for fast access.
 
-### (Optional) Configure access to the UNIL cluster via SSH
+## Installation
 
-- Create an SSH key pair (see online tutorials search for `ssh-keygen` or refer to our internal wiki)
-- If you do not have an SSH config file yet create one:
-
-```bash
-touch ~/.ssh/config
-```
-
-- Add the following configuration to the file
-
-```bash
-Host unil
-    Hostname curnagl.dcsr.unil.ch
-    AddKeysToAgent Yes
-    ForwardAgent yes
-    IdentityFile ~/.ssh/<NAME_OF_YOUR_PRIVATE_KEY>
-    User <USERNAME>
-```
-
-### Download the data
-
-- Create a dataset folder
-
-```bash
-# create data folder, adapt as needed
-mkdir -p ~/data/datasets
-cd ~/data/datasets || exit
-```
-
-- Download the data with `rsync`
-- If you did not configure your `~/.ssh/config` file you need to replace `unil` with `<USERNAME>@curnagl.dcsr.unil.ch`
+You can install the package as follows:
 
 ```bash
-# all datasets
-rsync -ahvP unil:"/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/*.tar" .
-# specific dataset
-rsync -ahvP unil:/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC.tar .
-# unzip the dataset
-tar -xvf TNBC.tar
+pip install git+https://github.com/AI4SCR/ai4bmr-core.git 
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 ```
 
-## Load TNBC data
+## Quickstart
 
-- This is an example, access for `BLCa` and `PCa` is similar.
+1**Load the dataset:**
 
 ```python
 from pathlib import Path
+from ai4bmr_datasets.datasets import Keren2018  # or another dataset class
 
-from ai4bmr_datasets.datasets import Keren2018
+base_dir = Path("/path/to/TNBC")  # if none saved to `~/.cache/ai4bmr-datasets`
+ds = Keren2018(base_dir=base_dir)
+ds.prepare_data()  # download and prepare the dataset, only needed once
+ds.setup(image_version='published', mask_version='published')
 
-# NOTE: on the cluster use: /work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/TNBC
-base_dir = Path('~/data/datasets/TNBC').expanduser()
-dataset = Keren2018(base_dir=base_dir)
-data = dataset.load()
-
-# data is a dictionary
-print(data.keys())
-
-# access images, checkout the [Image.py](src%2Fai4bmr_datasets%2Fdatamodels%2FImage.py)
-# the returned images are only loaded into memory upon calling the `.data` attribute
-# an image is ~50MB
-images = data['images']
-sample_id = list(images.keys())[0]
-image = images[sample_id]
-print(image.data.shape)  # C x H x W
-image.metadata  # metadata of the image, aka the panel, also accesible via data['panel']
-
-# segmentation mask of the image
-# the returned mask are only loaded into memory upon calling the `.data` attribute
-mask = data['masks'][image.id]
-mask.data.shape
-assert mask.data.shape == image.data.shape[1:]
-mask.metadata  # metadata of the mask, not yet implemented for BLCa, PCa
-
-# get single cell data for the image
-df = data['data']
-sc = df[(df.index.get_level_values('sample_id') == image.id)]
-
-# get patient data for the image
-data['samples'].loc[image.id]
-
+print(ds.images)  # list of images
+print(ds.masks)  # list of masks
+print(ds.intensity.shape)  # cell x marker matrix
+print(ds.metadata.shape)  # cell x annotation matrix
 ```
 
-### NSCLC
+3. **Access components:**
 
-```bash
-# extract on cluster
-module load p7zip/17.05 gcc/12.3.0
-7z x NSCLC.zip
+```python
+images = ds.images
+masks = ds.masks
+
+sample_id = next(iter(images.keys()))
+image_obj = images[sample_id]
+mask_obj = masks[sample_id]
+
+img_array = image_obj.data
+mask_array = mask_obj.data
+
+print("Image shape:", img_array.shape)
+print("Mask shape:", mask_array.shape)
 ```
 
-# Render PDF
-```bash
-pandoc paper.md \
-  --from markdown \
-  --to pdf \
-  --output paper.pdf \
-  --citeproc \
-  --bibliography=paper.bib \
-  --pdf-engine=tectonic
-```
+## Contact
+Adriano Martinelli <adriano.martinelli@chuv.ch> or <adrianom@student.ethz.ch>
+
+
