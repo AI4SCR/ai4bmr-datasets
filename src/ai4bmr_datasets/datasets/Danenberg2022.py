@@ -38,6 +38,7 @@ class Danenberg2022(BaseIMCDataset):
 
     def prepare_data(self):
         self.download()
+        self.process_rdata()
 
         self.create_panel()
         self.create_images()
@@ -88,19 +89,49 @@ class Danenberg2022(BaseIMCDataset):
         match = re.search(r'MB(\d+)_(\d+)_(\w+)Mask\.tiff', path)
         return match.group(3)
 
-    def convert_fst_to_parquet(self):
+    def process_rdata(self):
         import subprocess
         import textwrap
 
+        logger.info('Converting fts files to Parquet format')
+
         r_script = f"""
+        options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+        if (!requireNamespace("BiocManager", quietly = TRUE)) {{
+            install.packages("BiocManager", quiet = TRUE)
+        }}
+
+        install_if_missing_cran <- function(pkg) {{
+            if (!requireNamespace(pkg, quietly = TRUE)) {{
+                install.packages(pkg, dependencies = TRUE, quiet = TRUE)
+            }}
+        }}
+
+        install_if_missing_cran("arrow")
+        install_if_missing_cran("fst")
+        
         library(fst)
         library(arrow)
+        
         df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst")
         write_parquet(df, "{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet")
+        
+        df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/SingleCells.fst")
+        write_parquet(df, "{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/SingleCells.parquet")
         """
         r_script = textwrap.dedent(r_script)
 
-        subprocess.run(["Rscript", "-e", r_script], check=True)
+        # TODO: this will run only on slurm
+        # subprocess.run(["Rscript", "-e", r_script], check=True)
+        # Wrap the command in a shell to load modules and run the R script
+        shell_command = textwrap.dedent(f"""
+            module load r-light/4.4.1
+            Rscript -e '{r_script.strip()}'
+        """)
+
+        # Run using bash shell to ensure module environment is available
+        subprocess.run(["bash", "-c", shell_command], check=True)
 
     def create_images(self):
         images_dir = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/Images'

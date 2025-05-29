@@ -1,14 +1,14 @@
 import json
+import re
 from pathlib import Path
 
-import pandas as pd
-from ai4bmr_core.utils.tidy import tidy_name
 import numpy as np
-from ai4bmr_datasets.utils.download import unzip_recursive
+import pandas as pd
 from loguru import logger
 from tifffile import imread, imwrite
+
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-import re
+from ai4bmr_datasets.utils.download import unzip_recursive
 
 
 class Cords2024(BaseIMCDataset):
@@ -31,7 +31,6 @@ class Cords2024(BaseIMCDataset):
 
         # raw data paths
         self.raw_clinical_metadata = self.raw_dir / "comp_csv_files" / "cp_csv" / "clinical_data_ROI.csv"
-        # self.raw_panel = self.raw_dir / "cp_csv" / "panel.csv"
         self.raw_acquisitions_dir = self.raw_dir / "acquisitions"
 
         # populated by `self.load()`
@@ -43,23 +42,9 @@ class Cords2024(BaseIMCDataset):
         self.intensity = None
         self.spatial = None
 
-    def __len__(self):
-        return len(self.sample_ids)
-
-    def __getitem__(self, idx):
-        sample_id = self.samples.index[idx]
-        return {
-            "sample_id": sample_id,
-            # "sample": self.samples.loc[sample_id],
-            "image": self.images[sample_id],
-            # "mask": self.masks[sample_id],
-            "panel": self.panel,
-            # "intensity": self.intensity.loc[sample_id],
-            # "spatial": self.spatial.loc[sample_id],
-        }
-
     def prepare_data(self):
         self.download()
+        self.process_rdata()
         self.process_acquisitions()
 
         self.create_clinical_metadata()
@@ -206,7 +191,7 @@ class Cords2024(BaseIMCDataset):
                             with open(metadata_path, "w") as f_json:
                                 json.dump(item, f_json)
                         except OSError:
-                            logger.info(f"Failed to read acquisition! ")
+                            logger.error(f"Failed to read acquisition! ")
                             num_failed_reads += 1
                             continue
 
@@ -236,17 +221,53 @@ class Cords2024(BaseIMCDataset):
 
         item = list(filter(lambda x: x[0] == '178_B_71', mismatches))
 
+    def create_panel(self):
+        from ai4bmr_core.utils.tidy import tidy_name
+        import json
+        import pandas as pd
+        panel = None
+
+        for img_metadata_path in self.raw_acquisitions_dir.glob("*.json"):
+            with open(img_metadata_path, "r") as f:
+                img_metadata = json.load(f)
+                df = pd.DataFrame(img_metadata)
+                df = df[["channel_names", "channel_labels", "metal_names"]]
+
+            if panel is None:
+                panel = df
+            else:
+                assert panel.equals(df)
+
+        targets = panel["channel_labels"].str.split("_")
+        keep = targets.str.len() == 2
+
+        assert keep.sum() == 43
+        panel["target"] = targets.str[0].map(tidy_name).values
+        # add suffix to target for duplicates (iridium)
+        panel['target'] = panel.target + '_' + panel.groupby('target').cumcount().astype(str)
+        panel.loc[:, 'target'] = panel.target.str.replace('_0$', '', regex=True)
+
+        panel["keep"] = keep
+
+        panel.columns = panel.columns.map(tidy_name)
+        panel = panel.convert_dtypes()
+        panel["page"] = range(len(panel))
+        panel.index.name = "channel_index"
+
+        panel.to_parquet(self.raw_acquisitions_dir / "panel.parquet")
+
+        panel = panel[panel.keep].reset_index(drop=True)
+        panel.index.name = "channel_index"
+        panel_path = self.get_panel_path("published")
+        panel_path.parent.mkdir(parents=True, exist_ok=True)
+        panel.to_parquet(panel_path)
+
     def create_images(self):
         panel_path = self.get_panel_path("published")
         panel = pd.read_parquet(panel_path)
 
         acquisitions_dir = self.raw_acquisitions_dir
-        # samples = pd.read_parquet(self.clinical_metadata_path())
-        # sample_ids = set(samples.index)
-
-        acquisition_ids = set(i.stem for i in acquisitions_dir.glob("*.tiff"))
         acquisition_paths = list(acquisitions_dir.glob("*.tiff"))
-        # ids = sample_ids.intersection(acquisition_ids)
 
         save_dir = self.get_image_version_dir("published")
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -279,8 +300,7 @@ class Cords2024(BaseIMCDataset):
         mask_paths_with_ids = [(self.get_sample_id_from_path(path), path) for path in mask_paths]
         mask_paths_from_176_A_with_ids = [(self.get_sample_id_from_path(path), path) for path in mask_paths_from_176_A]
         mask_paths_from_176_A_with_ids = [(x[0].replace('176_B', '176_A'), x[1])
-                                          for x in mask_paths_from_176_A_with_ids
-                                          ]
+                                          for x in mask_paths_from_176_A_with_ids]
 
         mask_paths_with_ids = mask_paths_with_ids + mask_paths_from_176_A_with_ids
 
@@ -355,7 +375,7 @@ class Cords2024(BaseIMCDataset):
             logger.info(f"Saving annotated mask {save_path}")
             mask = imread(mask_path)
             objs = sample_data.index.get_level_values('object_id').astype(int).unique()
-            missing_objs = set(mask.flatten()) - set(objs) - { 0 }
+            missing_objs = set(mask.flatten()) - set(objs) - {0}
             if missing_objs:
                 logger.info(f'Missing objects in mask {sample_id}: {missing_objs}')
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
@@ -429,24 +449,24 @@ class Cords2024(BaseIMCDataset):
         pass
 
     def create_features_intensity(self):
-        path = self.raw_dir / 'intensity.parquet'
-        metadata = pd.read_parquet(path)
+        path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/intensity.parquet'
+        intensity = pd.read_parquet(path)
 
-        ids = metadata['object_id'].str.split('_')
+        ids = intensity['object_id'].str.split('_')
         sample_id = ids.str[:-1].str.join('_')
         object_id = ids.str[-1]
 
-        metadata['sample_id'] = sample_id
-        metadata['object_id'] = object_id
+        intensity['sample_id'] = sample_id
+        intensity['object_id'] = object_id
 
-        metadata = metadata.convert_dtypes()
-        metadata = metadata.set_index(['sample_id', 'object_id'])
+        intensity = intensity.convert_dtypes()
+        intensity = intensity.set_index(['sample_id', 'object_id'])
 
-        version_name = self.get_version_name(version='published')
+        version_name = 'published'
         save_dir = self.intensity_dir / version_name
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        for grp_name, grp_dat in metadata.groupby('sample_id'):
+        for grp_name, grp_dat in intensity.groupby('sample_id'):
             save_path = save_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
@@ -454,39 +474,62 @@ class Cords2024(BaseIMCDataset):
         self.create_features_spatial()
         self.create_features_intensity()
 
-    def create_panel(self):
-        panel = None
-        for img_metadata_path in self.raw_acquisitions_dir.glob("*.json"):
-            with open(img_metadata_path, "r") as f:
-                img_metadata = json.load(f)
-            df = pd.DataFrame(img_metadata)
-            df = df[["channel_names", "channel_labels", "metal_names"]]
-            if panel is None:
-                panel = df
-            else:
-                assert panel.equals(df)
+    def process_rdata(self):
+        import subprocess
+        import textwrap
 
-        targets = panel["channel_labels"].str.split("_")
-        keep = targets.str.len() == 2
-        assert keep.sum() == 43
+        logger.info('Converting RDS files to Parquet format')
 
-        panel["target"] = targets.str[0].map(tidy_name).values
-        # add suffix to target for duplicates (iridium)
-        panel['target'] = panel.target + '_' + panel.groupby('target').cumcount().astype(str)
-        panel.loc[:, 'target'] = panel.target.str.replace('_0$', '', regex=True)
+        sce_anno_path = self.raw_dir / 'single_cell_experiment_objects' / 'SingleCellExperiment Objects/sce_all_annotated.rds'
+        assert sce_anno_path.exists()
 
-        panel["keep"] = keep
+        save_metadata_path = sce_anno_path.parent / 'cell_types.parquet'
+        save_intensity_path = sce_anno_path.parent / 'intensity.parquet'
 
-        panel.columns = panel.columns.map(tidy_name)
-        panel = panel.convert_dtypes()
-        panel["page"] = range(len(panel))
-        panel.index.name = "channel_index"
+        r_script = textwrap.dedent(f"""
+            options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-        panel.to_parquet(self.raw_acquisitions_dir / "panel.parquet")
+            if (!requireNamespace("BiocManager", quietly = TRUE)) {{
+                install.packages("BiocManager", quiet = TRUE)
+            }}
 
-        panel = panel[panel.keep].reset_index(drop=True)
-        panel.index.name = "channel_index"
-        panel_path = self.get_panel_path("published")
-        panel_path.parent.mkdir(parents=True, exist_ok=True)
-        panel.to_parquet(panel_path)
+            install_if_missing_cran <- function(pkg) {{
+                if (!requireNamespace(pkg, quietly = TRUE)) {{
+                    install.packages(pkg, dependencies = TRUE, quiet = TRUE)
+                }}
+            }}
 
+            install_if_missing_bioc <- function(pkg) {{
+                if (!requireNamespace(pkg, quietly = TRUE)) {{
+                    BiocManager::install(pkg, ask = FALSE, update = FALSE)
+                }}
+            }}
+
+            install_if_missing_cran("arrow")
+            install_if_missing_bioc("SingleCellExperiment")
+
+            library(arrow)
+            library(SingleCellExperiment)
+
+            data <- readRDS("{sce_anno_path}")
+            coldat <- colData(data)
+            cell_types <- coldat[, c("cell_category", "cell_type", "cell_subtype")]
+            cell_types <- as.data.frame(cell_types)
+            cell_types$object_id <- rownames(cell_types)
+            write_parquet(cell_types, "{save_metadata_path}")
+            
+            intensity = assay(data, 'counts')
+            intensity = as.data.frame(intensity)
+            write_parquet(
+              intensity,
+              "{save_intensity_path}")
+        """)
+
+        # TODO: this will run only on slurm
+        # subprocess.run(["Rscript", "-e", r_script], check=True)
+        # Wrap the command in a shell to load modules and run the R script
+        shell_command = textwrap.dedent(f"""
+            module load r-light/4.4.1
+            Rscript -e '{r_script.strip()}'
+        """)
+        subprocess.run(shell_command, shell=True, check=True)
