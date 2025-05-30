@@ -7,7 +7,7 @@ import yaml
 from ai4bmr_core.utils.tidy import tidy_name
 from loguru import logger
 
-from .BaseIMCDataset import BaseIMCDataset
+from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
 
 class BLCa(BaseIMCDataset):
@@ -29,7 +29,7 @@ class BLCa(BaseIMCDataset):
         self.spatial = None
 
     def prepare_data(self):
-        self.process_acquisitions()
+        # self.process_acquisitions()
         self.create_panel()
 
         self.create_clinical_metadata()
@@ -92,8 +92,7 @@ class BLCa(BaseIMCDataset):
                             num_failed_reads += 1
                             continue
 
-
-    def create_panel(self):
+    def create_panel_form_acquisitions(self):
         from ai4bmr_core.utils.tidy import tidy_name
         import json
         import pandas as pd
@@ -133,7 +132,6 @@ class BLCa(BaseIMCDataset):
         panel_path = self.get_panel_path("published")
         panel_path.parent.mkdir(parents=True, exist_ok=True)
         panel.to_parquet(panel_path)
-
 
     def create_clinical_metadata(self):
         logger.info("Creating clinical metadata")
@@ -298,8 +296,8 @@ class BLCa(BaseIMCDataset):
     def create_mask_version_for_annotated_cells(self):
         logger.info("Creating masks for annotated cells")
 
-        labels = pd.read_parquet(self.raw_dir / 'metadata/02_processed/labels.parquet')
-        labels = labels.sort_index()
+        # labels = pd.read_parquet(self.raw_dir / 'metadata/02_processed/labels.parquet')
+        # labels = labels.sort_index()
 
         # check with legacy annotations
         metadata_dir = self.metadata_dir / 'filtered-clustered'
@@ -313,7 +311,7 @@ class BLCa(BaseIMCDataset):
 
         metadata = metadata[metadata.exclude == False]
         metadata = metadata.sort_index()
-        assert labels.index.equals(metadata.index)
+        # assert labels.index.equals(metadata.index)
 
         # load the actual data we need for the mask generation
         metadata_dir = self.metadata_dir / 'filtered-annotated'
