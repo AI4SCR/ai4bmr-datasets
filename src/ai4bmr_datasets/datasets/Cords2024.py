@@ -52,6 +52,8 @@ class Cords2024(BaseIMCDataset):
         self.create_panel()
         self.create_images()
         self.create_masks()
+
+        self.create_metadata()
         self.create_annotated_masks()
 
     def download(self, force: bool = False):
@@ -424,7 +426,7 @@ class Cords2024(BaseIMCDataset):
         clinical_metadata.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
     def create_metadata(self):
-        path = self.raw_dir / 'cell_types.parquet'
+        path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/cell_types.parquet'
         metadata = pd.read_parquet(path)
 
         ids = metadata['object_id'].str.split('_')
@@ -437,7 +439,7 @@ class Cords2024(BaseIMCDataset):
         metadata = metadata.convert_dtypes()
         metadata = metadata.set_index(['sample_id', 'object_id'])
 
-        version_name = self.get_version_name(version='published')
+        version_name = 'published'
         save_dir = self.metadata_dir / version_name
         save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -450,6 +452,8 @@ class Cords2024(BaseIMCDataset):
 
     def create_features_intensity(self):
         path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/intensity.parquet'
+        import os
+        os.environ['ARROW_ENABLE_THRIFT_SIZE_LIMIT'] = '0'  # disables limit
         intensity = pd.read_parquet(path)
 
         ids = intensity['object_id'].str.split('_')
@@ -478,13 +482,16 @@ class Cords2024(BaseIMCDataset):
         import subprocess
         import textwrap
 
-        logger.info('Converting RDS files to Parquet format')
-
         sce_anno_path = self.raw_dir / 'single_cell_experiment_objects' / 'SingleCellExperiment Objects/sce_all_annotated.rds'
         assert sce_anno_path.exists()
 
         save_metadata_path = sce_anno_path.parent / 'cell_types.parquet'
-        save_intensity_path = sce_anno_path.parent / 'intensity.parquet'
+        save_intensity_dir = sce_anno_path.parent / 'intensity'
+        if save_metadata_path.exists() and save_intensity_dir.exists():
+            logger.info(f"RDS to Parquet conversion, files already exist. Skipping.")
+            return
+
+        logger.info('Converting RDS files to Parquet format')
 
         r_script = textwrap.dedent(f"""
             options(repos = c(CRAN = "https://cloud.r-project.org"))
@@ -520,9 +527,12 @@ class Cords2024(BaseIMCDataset):
             
             intensity = assay(data, 'counts')
             intensity = as.data.frame(intensity)
-            write_parquet(
+            write_dataset(
               intensity,
-              "{save_intensity_path}")
+              path = "{save_intensity_dir}",
+              format = "parquet",
+              max_rows_per_file = 100000
+            )
         """)
 
         # TODO: this will run only on slurm
