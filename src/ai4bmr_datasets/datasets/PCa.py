@@ -48,7 +48,7 @@ class PCa(BaseIMCDataset):
             "spatial": self.spatial.loc[sample_id],
         }
 
-    def process(self):
+    def prepare_data(self):
         self.create_clinical_metadata()
         self.create_tma_annotations()
         self.label_transfer()
