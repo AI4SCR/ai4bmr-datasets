@@ -12,13 +12,10 @@ from ai4bmr_datasets.utils.download import unzip_recursive
 
 
 class Cords2024(BaseIMCDataset):
+    name = "Cords2024"
 
     @property
     def id(self):
-        return "Cords2024"
-
-    @property
-    def name(self):
         return "Cords2024"
 
     @property

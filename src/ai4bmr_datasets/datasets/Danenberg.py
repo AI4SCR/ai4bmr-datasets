@@ -1,23 +1,20 @@
 import re
 from pathlib import Path
-import numpy as np
+
 import pandas as pd
+from ai4bmr_core.utils.tidy import tidy_name
 from loguru import logger
 from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import unzip_recursive
-from ai4bmr_core.utils.tidy import tidy_name
 
 
 class Danenberg2022(BaseIMCDataset):
+    name = "Danenberg2022"
 
     @property
     def id(self):
-        return "Danenberg2022"
-
-    @property
-    def name(self):
         return "Danenberg2022"
 
     @property

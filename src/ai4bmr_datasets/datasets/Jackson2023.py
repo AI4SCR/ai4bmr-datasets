@@ -10,13 +10,10 @@ from ai4bmr_datasets.utils.download import unzip_recursive
 from ai4bmr_core.utils.tidy import tidy_name
 
 class Jackson2023(BaseIMCDataset):
+    name = "Jackson2023"
 
     @property
     def id(self):
-        return "Jackson2023"
-
-    @property
-    def name(self):
         return "Jackson2023"
 
     @property

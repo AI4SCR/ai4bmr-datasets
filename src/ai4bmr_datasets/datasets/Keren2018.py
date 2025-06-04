@@ -12,6 +12,8 @@ from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
 
 class Keren2018(BaseIMCDataset):
+    name = 'Keren2018'
+
     """
     Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
     Save Ionpath file as tnbc.
