@@ -7,11 +7,11 @@ def test_prepare_data(dataset_name):
 
     match dataset_name:
         case "Jackson2023":
-            from ai4bmr_datasets.datasets.Jackson2023 import Jackson2023 as Dataset
+            from ai4bmr_datasets import Jackson2023 as Dataset
         case "Danenberg2022":
-            from ai4bmr_datasets.datasets.Danenberg2022 import Danenberg2022 as Dataset
+            from ai4bmr_datasets import Danenberg2022 as Dataset
         case "Cords2024":
-            from ai4bmr_datasets.datasets.Cords2024 import Cords2024 as Dataset
+            from ai4bmr_datasets import Cords2024 as Dataset
         case _:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
 
@@ -21,12 +21,12 @@ def test_prepare_data(dataset_name):
         ds = Dataset(base_dir=base_dir)
         ds.prepare_data()
 
-        image_version = mask_version = metadata_version = 'published'
+        image_version = metadata_version = feature_version = 'published'
+        mask_version = 'published_cell' if dataset_name == "Danenberg2022" else 'published'
         ds.setup(image_version=image_version,
                  mask_version=mask_version,
-                 metadata_version=metadata_version,
-                 load_metadata=True,
-                 load_intensity=True)
+                 metadata_version=metadata_version, load_metadata=True,
+                 feature_version=feature_version, load_intensity=True)
     except Exception as e:
         print(f"Error preparing dataset {dataset_name}: {e}")
     finally:

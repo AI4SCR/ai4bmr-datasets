@@ -7,6 +7,7 @@ def test_Keren2018():
     feature_version = 'published-unfiltered'
 
     ds = self = Keren2018(base_dir=base_dir)
+    ds.download()
     ds.setup(image_version=image_version, mask_version=mask_version,
              metadata_version=metadata_version, feature_version=feature_version,
              load_metadata=True, load_intensity=True)
