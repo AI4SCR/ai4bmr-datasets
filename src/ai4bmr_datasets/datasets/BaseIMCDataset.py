@@ -5,6 +5,10 @@ import pandas as pd
 from ai4bmr_datasets.datamodels.Image import Image, Mask
 
 class BaseIMCDataset:
+    name: str = None
+    id: str = None
+    doi: str = None
+
     """
     Base class for managing Imaging Mass Cytometry (IMC) datasets,
     including loading images, masks, features (intensity, spatial), and metadata.
@@ -21,7 +25,7 @@ class BaseIMCDataset:
         self.base_dir = self.resolve_base_dir(base_dir=base_dir)
 
         self.sample_ids = None
-        self.clinical_metadata = None
+        self.clinical = None
         self.metadata = None
         self.images = None
         self.masks = None
@@ -52,7 +56,7 @@ class BaseIMCDataset:
             "intensity": self.intensity.loc[sample_id],
             "spatial": self.spatial.loc[sample_id],
             "metadata": dict(
-                sample_level=self.clinical_metadata.loc[sample_id],
+                sample_level=self.clinical.loc[sample_id],
                 observation_level=self.metadata.loc[sample_id],
             ),
         }
@@ -214,35 +218,10 @@ class BaseIMCDataset:
             self.spatial = spatial
             self.metadata = metadata
 
-    def process(self):
-        raise NotImplementedError("process method must be implemented")
-
-    def create_images(self):
-        pass
-
-    def create_masks(self):
-        pass
-
-    def create_clinical_metadata(self):
-        pass
-
-    def create_metadata(self):
-        pass
-
-    def create_features_spatial(self):
-        pass
-
-    def create_features_intensity(self):
-        pass
-
-    def create_features(self):
-        self.create_features_spatial()
-        self.create_features_intensity()
-
-    def create_panel(self):
-        pass
-
     def create_annotated(self):
+        from skimage.io import imread, imsave
+        import numpy as np
+
         metadata_version = 'published'
         metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
         intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
@@ -284,7 +263,7 @@ class BaseIMCDataset:
                 logger.warning(f'{sample_id} has {len(missing_objs)} missing objects')
 
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
-            imwrite(save_path, mask_filtered)
+            imsave(save_path, mask_filtered)
 
             anno_data = sample_data.xs(list(intx), level='object_id')
             anno_data.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
