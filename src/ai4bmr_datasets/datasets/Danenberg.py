@@ -12,14 +12,8 @@ from ai4bmr_datasets.utils.download import unzip_recursive
 
 class Danenberg2022(BaseIMCDataset):
     name = "Danenberg2022"
-
-    @property
-    def id(self):
-        return "Danenberg2022"
-
-    @property
-    def doi(self):
-        return "10.1038/s41588-022-01041-y"
+    id = "Danenberg2022"
+    doi = "10.1038/s41588-022-01041-y"
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)

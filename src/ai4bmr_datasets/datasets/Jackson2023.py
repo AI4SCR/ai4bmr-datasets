@@ -11,14 +11,8 @@ from ai4bmr_core.utils.tidy import tidy_name
 
 class Jackson2023(BaseIMCDataset):
     name = "Jackson2023"
-
-    @property
-    def id(self):
-        return "Jackson2023"
-
-    @property
-    def doi(self):
-        return "10.1038/s41586-019-1876-x"
+    id = "Jackson2023"
+    doi = "10.1038/s41586-019-1876-x"
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)

@@ -293,18 +293,6 @@ class BaseIMCDataset:
 
 
     @property
-    def name(self):
-        return "name"
-
-    @property
-    def id(self):
-        return "id"
-
-    @property
-    def doi(self):
-        return "doi"
-
-    @property
     def raw_dir(self):
         return self.base_dir / "01_raw"
 
