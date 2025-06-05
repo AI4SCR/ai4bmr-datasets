@@ -249,6 +249,9 @@ class Cords2024(BaseIMCDataset):
         panel["keep"] = keep
 
         panel.columns = panel.columns.map(tidy_name)
+        panel = panel.rename(columns={'channel_names': 'metal_tag',
+                                      'channel_labels': 'channel_label',
+                                      'metal_names': 'metal_name'})
         panel = panel.convert_dtypes()
         panel["page"] = range(len(panel))
         panel.index.name = "channel_index"
@@ -445,13 +448,85 @@ class Cords2024(BaseIMCDataset):
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_features_spatial(self):
-        pass
+        logger.info('Creating spatial features')
+
+        from ai4bmr_core.utils.tidy import tidy_name
+        path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/spatial.parquet'
+        spatial = pd.read_parquet(path)
+
+        ids = spatial['object_id'].str.split('_')
+        sample_id = ids.str[:-1].str.join('_')
+        object_id = ids.str[-1]
+
+        spatial['sample_id'] = sample_id
+        spatial['object_id'] = object_id
+
+        spatial.columns = spatial.columns.map(tidy_name)
+        spatial = spatial.convert_dtypes()
+        spatial = spatial.set_index(['sample_id', 'object_id'])
+
+        version_name = 'published'
+        save_dir = self.spatial_dir / version_name
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        for grp_name, grp_dat in spatial.groupby('sample_id'):
+            save_path = save_dir / f"{grp_name}.parquet"
+            grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_features_intensity(self):
+        logger.info('Creating intensity features')
+
         path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/intensity.parquet'
-        import os
-        os.environ['ARROW_ENABLE_THRIFT_SIZE_LIMIT'] = '0'  # disables limit
         intensity = pd.read_parquet(path)
+        panel = pd.read_parquet(self.get_panel_path('published'))
+
+        column_to_target = {
+            'Myeloperoxidase (MPO)': 'myelope',
+            'FSP1 / S100A4': 'fsp1_s1',
+            'SMA': 'sma',
+            'Histone H3': 'histone',
+            'FAP': 'fap',
+            'HLA-DR': 'hla_dr',
+            'CD146': 'cd146',
+            'Cadherin-11': 'cadheri',
+            'Carbonic Anhydrase IX': 'carboni',
+            'Collagen I + Fibronectin': 'collage',
+            'VCAM1': 'vcam1',
+            'CD20': 'cd20',
+            'CD68': 'cd68',
+            'Indoleamine 2- 3-dioxygenase (IDO)': 'indolea',
+            'CD3': 'cd3',
+            'Podoplanin': 'podopla',
+            'MMP11': 'mmp11',
+            'CD279 (PD-1)': 'cd279_p',
+            'CD73': 'cd73',
+            'MMP9': 'mmp9',
+            'p75 (CD271)': 'p75_cd2',
+            'TCF1/TCF7': 'tcf1tcf',
+            'CD10': 'cd10',
+            'Vimentin': 'vimenti',
+            'FOXP3': 'foxp3',
+            'CD45RA + CD45R0': 'cd45ra',
+            'PNAd': 'pnad',
+            'CD8a': 'cd8a',
+            'CD248 / Endosialin': 'cd248_e',
+            'LYVE-1': 'lyve_1',
+            'PDGFR-b': 'cd140b',
+            'CD34': 'cd34',
+            'CD4': 'cd4',
+            'vWF + CD31': 'cd31',
+            'CXCL12': 'anti_hu',
+            'CCL21': 'ccl21_6',
+            'Pan Cytokeratin + Keratin Epithelial': 'pan_cyto',
+            'Cadherin-6': 'k_cadhe',
+            'Iridium_191': 'iridium',
+            'Iridium_193': 'iridium_1',
+            'Ki-67': 'ki_67',
+            'Caveolin-1': 'caveoli',
+            'CD15': 'cd15'
+        }
+        # target_to_column = {v: k for k, v in column_to_target.items()}
+        intensity = intensity.rename(columns=column_to_target)
 
         ids = intensity['object_id'].str.split('_')
         sample_id = ids.str[:-1].str.join('_')
@@ -462,6 +537,7 @@ class Cords2024(BaseIMCDataset):
 
         intensity = intensity.convert_dtypes()
         intensity = intensity.set_index(['sample_id', 'object_id'])
+        assert set(panel.target) - set(intensity.columns) == set()
 
         version_name = 'published'
         save_dir = self.intensity_dir / version_name
@@ -483,8 +559,9 @@ class Cords2024(BaseIMCDataset):
         assert sce_anno_path.exists()
 
         save_metadata_path = sce_anno_path.parent / 'cell_types.parquet'
-        save_intensity_dir = sce_anno_path.parent / 'intensity'
-        if save_metadata_path.exists() and save_intensity_dir.exists():
+        save_intensity_path = sce_anno_path.parent / 'intensity.parquet'
+        save_spatial_path = sce_anno_path.parent / 'spatial.parquet'
+        if save_metadata_path.exists() and save_intensity_path.exists() and save_spatial_path.exists():
             logger.info(f"RDS to Parquet conversion, files already exist. Skipping.")
             return
 
@@ -522,14 +599,15 @@ class Cords2024(BaseIMCDataset):
             cell_types$object_id <- rownames(cell_types)
             write_parquet(cell_types, "{save_metadata_path}")
             
-            intensity = assay(data, 'counts')
+            spatial <- coldat[, c("Center_X", "Center_Y", "Area", "MajorAxisLength", "MinorAxisLength", "Compartment")]
+            spatial <- as.data.frame(spatial)
+            spatial$object_id <- rownames(spatial)
+            write_parquet(spatial, "{save_spatial_path}")
+            
+            intensity = t(assay(data, 'counts'))
             intensity = as.data.frame(intensity)
-            write_dataset(
-              intensity,
-              path = "{save_intensity_dir}",
-              format = "parquet",
-              max_rows_per_file = 100000
-            )
+            intensity$object_id <- rownames(intensity)
+            write_parquet(intensity, "{save_intensity_path}")
         """)
 
         # TODO: this will run only on slurm
