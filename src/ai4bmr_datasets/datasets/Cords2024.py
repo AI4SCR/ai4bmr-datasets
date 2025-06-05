@@ -30,7 +30,6 @@ class Cords2024(BaseIMCDataset):
         self.raw_clinical_metadata = self.raw_dir / "comp_csv_files" / "cp_csv" / "clinical_data_ROI.csv"
         self.raw_acquisitions_dir = self.raw_dir / "acquisitions"
 
-        # populated by `self.load()`
         self.sample_ids = None
         self.samples = None
         self.images = None
