@@ -36,11 +36,11 @@ class BaseIMCDataset:
     def resolve_base_dir(self, base_dir: Path | None):
         import os
         if base_dir is None:
-            base_dir = os.environ.get("AI4BMR_DATASETS_BASE_DIR", None)
+            base_dir = os.environ.get("AI4BMR_DATASETS_DIR", None)
             if base_dir is None:
                 base_dir = Path.home().resolve() / '.cache' / 'ai4bmr_datasets' / self.name
             else:
-                base_dir = Path(base_dir)
+                base_dir = Path(base_dir) / self.name
         return base_dir
 
     def __len__(self):
