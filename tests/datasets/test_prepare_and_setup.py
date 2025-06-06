@@ -1,5 +1,6 @@
 import pytest
 
+@pytest.mark.skip(reason="Only run when downloading changes")
 @pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024"])
 def test_prepare_data(dataset_name):
     from pathlib import Path
