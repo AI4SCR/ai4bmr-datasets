@@ -1,5 +1,5 @@
 ---
-title: "ai4bmr-datasets: A unified interface for spatial omics data access for computer vision and machine learning"
+title: **SpatialOmicsNet**: A unified interface for spatial omics data access for computer vision and machine learning"
 tags:
   - Python
   - spatial omics
@@ -27,12 +27,12 @@ bibliography: paper.bib
 
 # Summary
 
-**ai4bmr-datasets** is an open-source Python package that provides a harmonized and standardized interface for accessing
+**SpatialOmicsNet** is an open-source Python package that provides a harmonized and standardized interface for accessing
 spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (IMC) and multiplexed ion beam
 imaging (MIBI) data. The package enables researchers to load raw spatially-resolved proteomics data from multiple
 studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
 training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
-single-cell data formats), `ai4bmr-datasets` promotes reproducible and efficient research in computational and spatial
+single-cell data formats), `SpatialOmicsNet` promotes reproducible and efficient research in computational and spatial
 biology. The library is designed to serve the broader community working on spatial proteomics by easing data access and
 integration into machine learning workflows.
 
@@ -45,7 +45,7 @@ In the context of cancer, these advancements provide unprecedented insights into
 microenvironment, and the underlying mechanisms affecting tumor initiation, progression, and response to
 treatment[@lewisSpatialOmicsMultiplexed2021].
 Imaging mass cytometry (IMC)[@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam imaging by time of flight (
-MIBI-TOF)* are among the most popular
+MIBI-TOF)[@kerenMIBITOFMultiplexedImaging2019] are among the most popular
 technologies, with dozens of high-dimensional datasets made publicly available per year. The increasing availability of
 these datasets has fueled algorithmic development in machine learning and computer vision. Numerous models that perform
 a variety of tasks, such as cell segmentation[@greenwaldWholecellSegmentationTissue2022], cell type
@@ -70,7 +70,7 @@ and can be extended to spatial proteomics, they often come with heavier dependen
 that may be unnecessarily complex for researchers focused on fast, standardized access to real-world IMC or MIBI
 datasets.
 
-`ai4bmr-datasets` is an open-source Python package that addresses these gaps by:
+`SpatialOmicsNet` is an open-source Python package that addresses these gaps by:
 Providing a lightweight, unified interface to widely-used curated spatial proteomics datasets.
 Abstracting dataset-specific structure, letting users access data components (images, masks, metadata) through a
 consistent schema.
@@ -79,8 +79,8 @@ Facilitating integration in machine learning and computer vision models by strea
 formats.
 Encouraging community contributions for expanding and maintaining harmonized dataset access.
 This unified approach allows scientists to abstract away dataset-specific idiosyncrasies and focus on biological and
-analytical questions rather than data wrangling. `ai4bmr-datasets` is intentionally minimal, tailored to machine learning and computer vision workflows (e.g., loading images, masks, and cell-level CSVs into memory
-with minimal setup) without depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask). `ai4bmr-datasets`
+analytical questions rather than data wrangling. `SpatialOmicsNet` is intentionally minimal, tailored to machine learning and computer vision workflows (e.g., loading images, masks, and cell-level CSVs into memory
+with minimal setup) without depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask). `SpatialOmicsNet`
 gives immediate access to curated datasets with ready-to-use utilities, eliminating the need to write custom loaders or
 parse inconsistent formats. As such, it is particularly friendly to the growing community of ML developers, researchers,
 and engineers entering the emerging field of spatial biology. By harmonizing data access, our package enables more
@@ -108,10 +108,10 @@ usable for downstream tasks.
 # Example Usage
 
 ```python
-from ai4bmr_datasets import Keren2018
+from ai4bmr_datasets import Jackson2020
 from pathlib import Path
 
-dataset = Keren2018(base_dir=Path("<PATH>"))
+dataset = Jackson2020(base_dir=Path("<PATH>"))
 dataset.prepare_data()
 dataset.setup(image_version="published", mask_version="published")
 
@@ -129,7 +129,7 @@ print(dataset.metadata.shape)  # cell x annotation matrix
 
 # Conclusion
 
-`ai4bmr-datasets` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
+`SpatialOmicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
 to several published datasets and processing routines. Its modular design and standardized outputs make it a practical
 tool for researchers developing computational methods in spatial biology. We welcome contributions and extensions from
 the community and envision this package as a foundation for reproducible spatial proteomics analysis.

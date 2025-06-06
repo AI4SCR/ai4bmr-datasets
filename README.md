@@ -27,7 +27,7 @@ bibliography: paper.bib
 
 # Summary
 
-**ai4bmr-datasets** is an open-source Python package that provides a harmonized and standardized interface for accessing
+**SpatialOmicsNet** is an open-source Python package that provides a harmonized and standardized interface for accessing
 spatial omics datasets, including imaging mass cytometry (IMC) and multiplexed ion beam imaging (MIBI) data. The
 package enables researchers to load raw spatially-resolved omics data from multiple studies in a unified format, apply
 and retrieve data structures ready for downstream analysis or model training. By
