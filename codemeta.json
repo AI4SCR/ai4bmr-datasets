@@ -1,0 +1,23 @@
+{
+  "@context": "https://raw.githubusercontent.com/codemeta/codemeta/master/codemeta.jsonld",
+  "@type": "Code",
+  "author": [
+    {
+      "@id": "https://orcid.org/0000-0002-9288-5103",
+      "@type": "Person",
+      "email": "adriano.martinelli@chuv.ch",
+      "name": "Adriano Martinelli",
+      "affiliation": "ETH Zurich"
+    },
+  ],
+  "identifier": "TODO",
+  "codeRepository": "https://github.com/AI4SCR/ai4bmr-datasets",
+  "datePublished": "2025-06-06",
+  "dateModified": "2025-06-06",
+  "dateCreated": "2025-06-06",
+  "description": "a lightweight Python package that provides standardized access to curated spatial proteomics datasets (IMC, MIBI) for machine learning and computer vision",
+  "keywords": "spatial omics,imaging mass cytometry,spatial proteomics",
+  "license": "MIT",
+  "title": "SpatialOmicsNet",
+  "version": "v1.0.0"
+}
