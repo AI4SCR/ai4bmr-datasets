@@ -28,15 +28,14 @@ class Keren2018(BaseIMCDataset):
         super().__init__(base_dir)
 
     def prepare_data(self):
-        logger.info('Waiting for the authors to provide the data in a more accessible format.')
-        return
+        # logger.info('Waiting for the authors to provide the data in a more accessible format.')
+        # return
         self.create_panel()
         self.create_metadata()
         self.create_images()
         self.create_masks()
         self.create_clinical_metadata()
         self.create_features_intensity()
-        self.create_filtered_masks()
 
     def download(self, force: bool = False):
         import requests

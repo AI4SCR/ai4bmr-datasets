@@ -1,11 +1,11 @@
 import pandas as pd
 
-from ai4bmr_datasets import Danenberg2022, Cords2024, Jackson2023, Keren2018
+from ai4bmr_datasets import Danenberg2022, Cords2024, Jackson2020, Keren2018
 from pathlib import Path
 
 datasets_dir = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets')
 cont = []
-for ds_cls in [Danenberg2022, Cords2024, Jackson2023, Keren2018]:
+for ds_cls in [Danenberg2022, Cords2024, Jackson2020, Keren2018]:
     base_dir = datasets_dir / ds_cls.name
     assert base_dir.exists()
 
@@ -30,3 +30,5 @@ for ds_cls in [Danenberg2022, Cords2024, Jackson2023, Keren2018]:
 
 stats = pd.DataFrame(cont)
 print(stats.to_markdown())
+
+# %%

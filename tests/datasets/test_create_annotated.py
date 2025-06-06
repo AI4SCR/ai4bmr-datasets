@@ -1,6 +1,6 @@
 def test_annotated():
     from ai4bmr_datasets import Keren2018 as Dataset
-    from ai4bmr_datasets import Jackson2023 as Dataset
+    from ai4bmr_datasets import Jackson2020 as Dataset
     from ai4bmr_datasets import Danenberg2022 as Dataset
     from pathlib import Path
 

@@ -9,9 +9,9 @@ from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import unzip_recursive
 from ai4bmr_core.utils.tidy import tidy_name
 
-class Jackson2023(BaseIMCDataset):
-    name = "Jackson2023"
-    id = "Jackson2023"
+class Jackson2020(BaseIMCDataset):
+    name = "Jackson2020"
+    id = "Jackson2020"
     doi = "10.1038/s41586-019-1876-x"
 
     def __init__(self, base_dir: Path):
