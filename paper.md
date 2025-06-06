@@ -92,7 +92,7 @@ accelerating biomedical discovery.
 The package supports the following public spatial proteomics datasets:
 
 - **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
-- **Jackson et al. 2023** – IMC of breast cancer [@jacksonSinglecellPathologyLandscape2020]
+- **Jackson et al. 2020** – IMC of breast cancer [@jacksonSinglecellPathologyLandscape2020]
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
 

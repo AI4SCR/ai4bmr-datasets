@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -16,16 +15,6 @@ class Jackson2020(BaseIMCDataset):
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
-        self.base_dir = base_dir
-
-        # populated by `self.load()`
-        self.sample_ids = None
-        self.samples = None
-        self.images = None
-        self.masks = None
-        self.panel = None
-        self.intensity = None
-        self.spatial = None
 
     def prepare_data(self):
         self.download()

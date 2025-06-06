@@ -24,19 +24,10 @@ class Cords2024(BaseIMCDataset):
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
-        self.base_dir = base_dir
 
         # raw data paths
         self.raw_clinical_metadata = self.raw_dir / "comp_csv_files" / "cp_csv" / "clinical_data_ROI.csv"
         self.raw_acquisitions_dir = self.raw_dir / "acquisitions"
-
-        self.sample_ids = None
-        self.samples = None
-        self.images = None
-        self.masks = None
-        self.panel = None
-        self.intensity = None
-        self.spatial = None
 
     def prepare_data(self):
         self.download()
