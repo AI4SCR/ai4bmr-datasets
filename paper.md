@@ -1,5 +1,5 @@
 ---
-title: "**SpatialOmicsNet** : A unified interface for spatial omics data access for computer vision and machine learning"
+title: "**SpatialProteomicsNet** : A unified interface for spatial omics data access for computer vision and machine learning"
 tags:
   - Python
   - spatial omics
@@ -29,13 +29,13 @@ bibliography: paper.bib
 
 # Summary
 
-`SpatialOmicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
+`SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
 spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
 imaging (MIBI) [@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
 proteomics data from multiple
 studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
 training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
-single-cell data formats), `SpatialOmicsNet` promotes reproducible and efficient research in computational and spatial
+single-cell data formats), `SpatialProteomicsNet` promotes reproducible and efficient research in computational and spatial
 biology. The library is designed to serve the broader community working on spatial proteomics by easing data access and
 integration into machine learning workflows.
 
@@ -72,7 +72,7 @@ and can be extended to spatial proteomics, they often come with heavier dependen
 that may be unnecessarily complex for researchers focused on fast, standardized access to real-world IMC or MIBI
 datasets.
 
-`SpatialOmicsNet` is an open-source Python package that addresses these gaps by:
+`SpatialProteomicsNet` is an open-source Python package that addresses these gaps by:
 Providing a lightweight, unified interface to widely-used curated spatial proteomics datasets.
 Abstracting dataset-specific structure, letting users access data components (images, masks, metadata) through a
 consistent schema.
@@ -81,10 +81,10 @@ Facilitating integration in machine learning and computer vision models by strea
 formats.
 Encouraging community contributions for expanding and maintaining harmonized dataset access.
 This unified approach allows scientists to abstract away dataset-specific idiosyncrasies and focus on biological and
-analytical questions rather than data wrangling. `SpatialOmicsNet` is intentionally minimal, tailored to machine
+analytical questions rather than data wrangling. `SpatialProteomicsNet` is intentionally minimal, tailored to machine
 learning and computer vision workflows (e.g., loading images, masks, and cell-level CSVs into memory
 with minimal setup) without depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask).
-`SpatialOmicsNet`
+`SpatialProteomicsNet`
 gives immediate access to curated datasets with ready-to-use utilities, eliminating the need to write custom loaders or
 parse inconsistent formats. As such, it is particularly friendly to the growing community of ML developers, researchers,
 and engineers entering the emerging field of spatial biology. By harmonizing data access, our package enables more
@@ -141,7 +141,7 @@ print(dataset.metadata.shape)  # cell x annotation matrix
 
 # Conclusion
 
-`SpatialOmicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
+`SpatialProteomicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
 to several published datasets and processing routines. Its modular design and standardized outputs make it a practical
 tool for researchers developing computational methods in spatial biology. We welcome contributions and extensions from
 the community and envision this package as a foundation for reproducible spatial proteomics analysis.
