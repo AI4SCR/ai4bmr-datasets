@@ -1,5 +1,5 @@
 ---
-title: **SpatialOmicsNet**: A unified interface for spatial omics data access for computer vision and machine learning"
+title: "**SpatialOmicsNet** : A unified interface for spatial omics data access for computer vision and machine learning"
 tags:
   - Python
   - spatial omics
@@ -27,9 +27,11 @@ bibliography: paper.bib
 
 # Summary
 
-**SpatialOmicsNet** is an open-source Python package that provides a harmonized and standardized interface for accessing
-spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (IMC) and multiplexed ion beam
-imaging (MIBI) data. The package enables researchers to load raw spatially-resolved proteomics data from multiple
+`SpatialOmicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
+spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
+IMC)[@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
+imaging (MIBI)[@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
+proteomics data from multiple
 studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
 training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
 single-cell data formats), `SpatialOmicsNet` promotes reproducible and efficient research in computational and spatial
@@ -44,8 +46,7 @@ single cells within their tissue context, revealing intricate aspects of spatial
 In the context of cancer, these advancements provide unprecedented insights into the heterogeneity of the tumor and its
 microenvironment, and the underlying mechanisms affecting tumor initiation, progression, and response to
 treatment[@lewisSpatialOmicsMultiplexed2021].
-Imaging mass cytometry (IMC)[@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam imaging by time of flight (
-MIBI-TOF)[@kerenMIBITOFMultiplexedImaging2019] are among the most popular
+IMC and MIBI-TOF [@kerenMIBITOFMultiplexedImaging2019] are among the most popular
 technologies, with dozens of high-dimensional datasets made publicly available per year. The increasing availability of
 these datasets has fueled algorithmic development in machine learning and computer vision. Numerous models that perform
 a variety of tasks, such as cell segmentation[@greenwaldWholecellSegmentationTissue2022], cell type
@@ -79,8 +80,10 @@ Facilitating integration in machine learning and computer vision models by strea
 formats.
 Encouraging community contributions for expanding and maintaining harmonized dataset access.
 This unified approach allows scientists to abstract away dataset-specific idiosyncrasies and focus on biological and
-analytical questions rather than data wrangling. `SpatialOmicsNet` is intentionally minimal, tailored to machine learning and computer vision workflows (e.g., loading images, masks, and cell-level CSVs into memory
-with minimal setup) without depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask). `SpatialOmicsNet`
+analytical questions rather than data wrangling. `SpatialOmicsNet` is intentionally minimal, tailored to machine
+learning and computer vision workflows (e.g., loading images, masks, and cell-level CSVs into memory
+with minimal setup) without depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask).
+`SpatialOmicsNet`
 gives immediate access to curated datasets with ready-to-use utilities, eliminating the need to write custom loaders or
 parse inconsistent formats. As such, it is particularly friendly to the growing community of ML developers, researchers,
 and engineers entering the emerging field of spatial biology. By harmonizing data access, our package enables more
@@ -96,18 +99,19 @@ The package supports the following public spatial proteomics datasets:
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
 
-|    | name          |   num_images |   num_masks |   num_markers |   num_annotated_cells |   num_clinical_samples |
-|---:|:--------------|-------------:|------------:|--------------:|----------------------:|-----------------------:|
-|  0 | Danenberg2022 |          794 |         794 |            39 |               1123466 |                    794 |
-|  1 | Cords2024     |         2070 |        2070 |            43 |               5984454 |                   2072 |
-|  2 | Jackson2020   |          735 |         735 |            35 |               1224411 |                    735 |
-|  3 | Keren2018     |           41 |          41 |            36 |                201656 |                     41 |
+|   | name          | num_images | num_masks | num_markers | num_annotated_cells | num_clinical_samples |
+|--:|:--------------|-----------:|----------:|------------:|--------------------:|---------------------:|
+| 0 | Danenberg2022 |        794 |       794 |          39 |             1123466 |                  794 |
+| 1 | Cords2024     |       2070 |      2070 |          43 |             5984454 |                 2072 |
+| 2 | Jackson2020   |        735 |       735 |          35 |             1224411 |                  735 |
+| 3 | Keren2018     |         41 |        41 |          36 |              201656 |                   41 |
 
 <figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
 Additionally, dummy datasets are provided to mimic real data structure for development and testing purposes.
 
-Each dataset is accessible through a standardized class interface that mimics the pytorch lightning [@falcon2019pytorchlightning]
+Each dataset is accessible through a standardized class interface that mimics the pytorch
+lightning [@falcon2019pytorchlightning]
 philosophy and includes methods for downloading, preparing, and accessing processed components (images, masks, metadata,
 and spatial coordinates). These datasets follow consistent naming conventions and data schemas, making them immediately
 usable for downstream tasks.
