@@ -22,7 +22,7 @@ class Cords2024(BaseIMCDataset):
     def doi(self):
         return "10.1016/j.ccell.2023.12.021"
 
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         super().__init__(base_dir)
 
         # raw data paths

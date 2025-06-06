@@ -13,7 +13,7 @@ class Jackson2020(BaseIMCDataset):
     id = "Jackson2020"
     doi = "10.1038/s41586-019-1876-x"
 
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         super().__init__(base_dir)
 
     def prepare_data(self):

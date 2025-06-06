@@ -15,7 +15,7 @@ class Danenberg2022(BaseIMCDataset):
     id = "Danenberg2022"
     doi = "10.1038/s41588-022-01041-y"
 
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         super().__init__(base_dir)
 
     def prepare_data(self):
