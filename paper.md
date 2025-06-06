@@ -1,4 +1,3 @@
-# pandoc paper.md --citeproc --bibliography=paper.bib -s -o paper.pdf -V geometry:margin=1.5in
 ---
 title: "**SpatialOmicsNet** : A unified interface for spatial omics data access for computer vision and machine learning"
 tags:
