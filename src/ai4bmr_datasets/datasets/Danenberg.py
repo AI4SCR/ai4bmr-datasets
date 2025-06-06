@@ -17,15 +17,6 @@ class Danenberg2022(BaseIMCDataset):
 
     def __init__(self, base_dir: Path):
         super().__init__(base_dir)
-        self.base_dir = base_dir
-
-        self.sample_ids = None
-        self.samples = None
-        self.images = None
-        self.masks = None
-        self.panel = None
-        self.intensity = None
-        self.spatial = None
 
     def prepare_data(self):
         self.download()

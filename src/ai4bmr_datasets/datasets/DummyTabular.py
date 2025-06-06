@@ -32,8 +32,11 @@ class DummyTabular:
 
         self.sample_ids = self.metadata.index.to_list()
 
-    def load(self):
-        return dict(data=self.data, metadata=self.metadata)
+    def setup(self):
+        pass
+
+    def __len__(self):
+        len(self.sample_ids)
 
     def __getitem__(self, idx):
         sample_id = self.sample_ids[idx]

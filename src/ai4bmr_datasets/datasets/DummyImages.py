@@ -89,7 +89,7 @@ class DummyImages:
         panel = pd.DataFrame({"target": range(num_channels)})
         panel.to_parquet(self.panel_path)
 
-    def load(self):
+    def setup(self):
         images = [
             Image(data_path=p, metadata_path=self.panel_path)
             for p in self.images_dir.glob("*.tiff")

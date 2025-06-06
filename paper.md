@@ -91,12 +91,19 @@ accelerating biomedical discovery.
 
 The package supports the following public spatial proteomics datasets:
 
-# TODO: add stats, number of cells, number of markers, number of images
-
 - **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
-- **Jackson et al. 2023** – IMC of breast cancer [@jacksonSinglecellPathologyLandscape2020]
+- **Jackson et al. 2020** – IMC of breast cancer [@jacksonSinglecellPathologyLandscape2020]
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
+
+|    | name          |   num_images |   num_masks |   num_markers |   num_annotated_cells |   num_clinical_samples |
+|---:|:--------------|-------------:|------------:|--------------:|----------------------:|-----------------------:|
+|  0 | Danenberg2022 |          794 |         794 |            39 |               1123466 |                    794 |
+|  1 | Cords2024     |         2070 |        2070 |            43 |               5984454 |                   2072 |
+|  2 | Jackson2020   |          735 |         735 |            35 |               1224411 |                    735 |
+|  3 | Keren2018     |           41 |          41 |            36 |                201656 |                     41 |
+
+<figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
 Additionally, dummy datasets are provided to mimic real data structure for development and testing purposes.
 

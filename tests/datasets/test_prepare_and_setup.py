@@ -1,13 +1,13 @@
 import pytest
 
-@pytest.mark.parametrize("dataset_name", ["Jackson2023", "Danenberg2022", "Cords2024"])
+@pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024"])
 def test_prepare_data(dataset_name):
     from pathlib import Path
     import shutil
 
     match dataset_name:
-        case "Jackson2023":
-            from ai4bmr_datasets import Jackson2023 as Dataset
+        case "Jackson2020":
+            from ai4bmr_datasets import Jackson2020 as Dataset
         case "Danenberg2022":
             from ai4bmr_datasets import Danenberg2022 as Dataset
         case "Cords2024":

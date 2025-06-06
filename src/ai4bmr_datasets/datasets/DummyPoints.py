@@ -78,7 +78,3 @@ class DummyPoints:
             'metadata': self.metadata.loc[sample_id].to_dict(),
         }
 
-# points = DummyPoints()
-# points.prepare_data()
-# points.setup()
-# points[0]
