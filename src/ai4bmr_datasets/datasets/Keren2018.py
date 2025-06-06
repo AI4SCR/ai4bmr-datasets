@@ -28,6 +28,8 @@ class Keren2018(BaseIMCDataset):
         super().__init__(base_dir)
 
     def prepare_data(self):
+        logger.info('Waiting for the authors to provide the data in a more accessible format.')
+        return
         self.create_panel()
         self.create_metadata()
         self.create_images()
@@ -173,95 +175,12 @@ class Keren2018(BaseIMCDataset):
 
             save_image(img, images_dir / f"{sample_id}.tiff")
 
-    def create_filtered_masks(self):
-        raise NotImplementedError()
-        # from PIL import Image
-        #
-        # logger.info("Filtering masks")
-        #
-        # masks_dir = self.masks_dir / 'filtered'
-        # masks_dir.mkdir(exist_ok=True, parents=True)
-        #
-        # raw_images_dir = self.raw_dir / 'im'
-        # raw_masks_dir = self.raw_dir / "TNBC_shareCellData"
-        # mask_paths = sorted(list(raw_masks_dir.glob(r"p*_labeledcellData.tiff")))
-        #
-        # raw_sca_path = self.raw_dir / "TNBC_shareCellData" / "cellData.csv"
-        # data = pd.read_csv(raw_sca_path)
-        # data = data.rename(
-        #     columns={"SampleID": "sample_id", "cellLabelInImage": "object_id"}
-        # )
-        # data.sample_id = data.sample_id.astype(str)
-        # data = data.set_index("sample_id")[["object_id"]]
-        #
-        # sample_ids = set(data.index.get_level_values("sample_id"))
-        #
-        # for mask_path in mask_paths:
-        #     sample_id = re.match(r"p(\d+)", mask_path.stem).groups()
-        #     assert len(sample_id) == 1
-        #     sample_id = sample_id[0]
-        #
-        #     logger.info(f"processing sample {sample_id}")
-        #
-        #     path_default = masks_default_dir / f"{sample_id}.tiff"
-        #     path_unfiltered = masks_unfiltered_dir / f"{sample_id}.tiff"
-        #
-        #     if not path_unfiltered.exists():
-        #         # load segmentation from processed data
-        #         mask_unfiltered = imread(mask_path)
-        #
-        #         # load segmentation mask from raw data
-        #         segm = Image.open(raw_images_dir
-        #             / f"TA459_multipleCores2_Run-4_Point{sample_id}"
-        #             / "segmentation_interior.png")
-        #         segm = np.array(segm)
-        #
-        #         # note: set region with no segmentation to background
-        #         mask_unfiltered[segm == 0] = 0
-        #         assert 1 not in mask_unfiltered.flat
-        #
-        #         save_mask(mask_unfiltered, path_unfiltered)
-        #     else:
-        #         mask_unfiltered = imread(path_unfiltered)
-        #
-        #     # we record all observations to filter the raw single cell annotations data
-        #     self.observations_unfiltered.update(
-        #         set((sample_id, i) for i in set(mask_unfiltered.flat))
-        #     )
-        #
-        #     # NOTE: for the default masks we only compute the masks for the samples that are in the processed data
-        #     if sample_id not in sample_ids:
-        #         continue
-        #
-        #     if not path_default.exists():
-        #         # NOTE: filter masks by objects in data
-        #         #   - 0: cell boarders
-        #         #   - 1: background
-        #         #   - 2..N: cells
-        #         #   (19, 4812) is background in the mask and removed after removing objects not in `data`
-        #         mask_default = imread(mask_path)
-        #
-        #         objs_in_data = set(data.loc[sample_id, :].object_id)
-        #         removed_objects = set(mask_default.flat) - set(objs_in_data) - {0, 1}
-        #
-        #         map = {i: 0 for i in removed_objects}
-        #         vfunc = np.vectorize(lambda x: map.get(x, x))
-        #         mask_default = vfunc(mask_default)
-        #         mask_default[mask_default == 1] = 0
-        #
-        #         assert set(mask_default.flat) - objs_in_data == {0}
-        #         assert 1 not in mask_default.flat
-        #
-        #         save_mask(mask_default, path_default)
-        #     else:
-        #         mask_default = imread(path_unfiltered)
-        #
-        #     # we record all observations to filter the raw single cell annotations data
-        #     self.observations_default.update(
-        #         set((sample_id, i) for i in set(mask_default.flat))
-        #     )
 
     def create_masks(self):
+        # NOTE: filter masks by objects in data
+        #   - 0: cell boarders
+        #   - 1: background
+        #   - 2..N: cells
         from PIL import Image
 
         save_masks_dir = self.masks_dir / 'published'
