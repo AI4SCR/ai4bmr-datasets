@@ -3,12 +3,12 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-import colorcet as ccplot
+import colorcet as cc
 from ai4bmr_core.utils.tidy import tidy_name
 from ai4bmr_datasets import Keren2018
 
 
-def reproduce_paper_figure_2E(self) -> plt.Figure:
+def reproduce_paper_figure_2E() -> plt.Figure:
     """Try to reproduce the figure from the paper."""
 
     ds = Keren2018()
