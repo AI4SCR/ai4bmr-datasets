@@ -1,11 +1,13 @@
-**SpatialOmicsNet** is an open-source Python package that provides a harmonized and standardized interface for accessing
-spatial omics datasets, including imaging mass cytometry (IMC) and multiplexed ion beam imaging (MIBI) data. The
-package enables researchers to load raw spatially-resolved omics data from multiple studies in a unified format, apply
-and retrieve data structures ready for downstream analysis or model training. By
-focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and single-cell
-data formats), `ai4bmr-datasets` promotes reproducible and efficient research in computational and spatial
-biology. The library is currently used internally within our group, but is designed to serve the broader community
-working on spatial omics by easing data access and integration into machine learning workflows.
+`SpatialOmicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
+spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
+IMC)[@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
+imaging (MIBI)[@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
+proteomics data from multiple
+studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
+training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
+single-cell data formats), `SpatialOmicsNet` promotes reproducible and efficient research in computational and spatial
+biology. The library is designed to serve the broader community working on spatial proteomics by easing data access and
+integration into machine learning workflows.
 
 # Supported Datasets
 
@@ -14,7 +16,7 @@ The package supports the following public spatial omics datasets:
 # TODO: add stats
 
 - **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
-- **Jackson et al. 2023** – IMC of breast cancer [@Jackson2020]
+- **Jackson et al. 2020** – IMC of breast cancer [@Jackson2020]
 - **Danenberg et al. 2022** – IMC of breast cancer [@Danenberg2022]
 - **Cords et al. 2024** – IMC of NSCLC [@Cords2024]
 
