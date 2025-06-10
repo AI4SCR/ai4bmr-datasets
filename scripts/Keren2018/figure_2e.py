@@ -1,14 +1,20 @@
-def reproduce_paper_figure_2E(self) -> Figure:
-    """Try to reproduce the figure from the paper. Qualitative comparison looks good if data is loaded from"""
+from matplotlib import pyplot as plt
+import pandas as pd
+import seaborn as sns
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+import colorcet as ccplot
+from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_datasets import Keren2018
 
-    import pandas as pd
-    import seaborn as sns
-    import numpy as np
-    from sklearn.preprocessing import MinMaxScaler
-    import colorcet as cc
 
-    data = self.load()
-    df = data["data"]
+def reproduce_paper_figure_2E(self) -> plt.Figure:
+    """Try to reproduce the figure from the paper."""
+
+    ds = Keren2018()
+    ds.setup(image_version='published', mask_version='published',
+             metadata_version='published', load_metadata=True,
+             feature_version='published', load_intensity=True)
 
     # %%
     cols = [
@@ -35,10 +41,11 @@ def reproduce_paper_figure_2E(self) -> Figure:
         "Keratin17",
         "Keratin6",
     ]
-    pdat = df[cols]
+    cols = [tidy_name(c) for c in cols]
+    pdat = ds.intensity[cols]
     pdat = pdat[pdat.index.get_level_values("sample_id") <= 41]
 
-    pdat, row_colors = pdat.align(data["metadata"], join="left", axis=0)
+    pdat, row_colors = pdat.align(ds.metadata, join="left", axis=0)
     pdat = pdat.assign(
         group_name=pd.Categorical(
             row_colors.group_name,
