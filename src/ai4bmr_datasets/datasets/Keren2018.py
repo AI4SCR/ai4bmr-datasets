@@ -36,6 +36,7 @@ class Keren2018(BaseIMCDataset):
         self.create_masks()
         self.create_clinical_metadata()
         self.create_features_intensity()
+        self.create_features_spatial()
 
     def download(self, force: bool = False):
         import requests
@@ -99,7 +100,6 @@ class Keren2018(BaseIMCDataset):
         panel = panel.assign(target=panel.target.replace(target_map))
 
         panel = panel.sort_values("mass_channel", ascending=True)
-        # panel = panel.assign(page=range(len(panel)))
         panel = panel.assign(
             target_original_name=panel.target, target=panel.target.map(tidy_name)
         )
@@ -202,9 +202,8 @@ class Keren2018(BaseIMCDataset):
             mask = imread(mask_path)
 
             # load segmentation mask from raw data
-            segm = Image.open(raw_images_dir
-                / f"TA459_multipleCores2_Run-4_Point{sample_id}"
-                / "segmentation_interior.png")
+            segm_path = raw_images_dir / f"TA459_multipleCores2_Run-4_Point{sample_id}" / "segmentation_interior.png"
+            segm = Image.open(segm_path)
             segm = np.array(segm)
 
             # note: set region with no segmentation to background
