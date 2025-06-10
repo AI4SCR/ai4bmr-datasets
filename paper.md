@@ -1,5 +1,5 @@
 ---
-title: "**SpatialOmicsNet** : A unified interface for spatial omics data access for computer vision and machine learning"
+title: "**SpatialOmicsNet** : A unified interface for spatial proteomics data access for computer vision and machine learning"
 tags:
   - Python
   - spatial omics
@@ -30,7 +30,7 @@ bibliography: paper.bib
 `SpatialOmicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
 spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
 IMC)[@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
-imaging (MIBI)[@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
+imaging (MIBI-TOF)[@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
 proteomics data from multiple
 studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
 training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
@@ -46,7 +46,7 @@ single cells within their tissue context, revealing intricate aspects of spatial
 In the context of cancer, these advancements provide unprecedented insights into the heterogeneity of the tumor and its
 microenvironment, and the underlying mechanisms affecting tumor initiation, progression, and response to
 treatment[@lewisSpatialOmicsMultiplexed2021].
-IMC and MIBI-TOF [@kerenMIBITOFMultiplexedImaging2019] are among the most popular
+IMC and MIBI-TOF are among the most popular
 technologies, with dozens of high-dimensional datasets made publicly available per year. The increasing availability of
 these datasets has fueled algorithmic development in machine learning and computer vision. Numerous models that perform
 a variety of tasks, such as cell segmentation[@greenwaldWholecellSegmentationTissue2022], cell type
@@ -72,13 +72,14 @@ that may be unnecessarily complex for researchers focused on fast, standardized 
 datasets.
 
 `SpatialOmicsNet` is an open-source Python package that addresses these gaps by:
-- Providing a lightweight, unified interface to widely-used curated spatial proteomics datasets.
-- Abstracting dataset-specific structure, letting users access data components (images, masks, metadata) through a
+
+  - Providing a lightweight, unified interface to widely-used curated spatial proteomics datasets.
+  - Abstracting dataset-specific structure, letting users access data components (images, masks, metadata) through a
 consistent schema.
-- Supporting reproducible preprocessing via modular, reusable interfaces for common pipeline steps.
-- Facilitating integration in machine learning and computer vision models by streamlining dataset loading into standard
+  - Supporting reproducible preprocessing via modular, reusable interfaces for common pipeline steps.
+  - Facilitating integration in machine learning and computer vision models by streamlining dataset loading into standard
 formats.
-- Encouraging community contributions for expanding and maintaining harmonized dataset access.
+  - Encouraging community contributions for expanding and maintaining harmonized dataset access.
 
 This unified approach allows scientists to abstract away dataset-specific idiosyncrasies and focus on biological and
 analytical questions rather than data wrangling. `SpatialOmicsNet` is intentionally minimal, tailored to machine
@@ -98,12 +99,12 @@ The package supports the following public spatial proteomics datasets:
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
 
-|   | name          | num_images | num_masks | num_markers | num_annotated_cells | num_clinical_samples |
-|--:|:--------------|-----------:|----------:|------------:|--------------------:|---------------------:|
-| 0 | Danenberg2022 |        794 |       794 |          39 |             1123466 |                  794 |
-| 1 | Cords2024     |       2070 |      2070 |          43 |             5984454 |                 2072 |
-| 2 | Jackson2020   |        735 |       735 |          35 |             1224411 |                  735 |
-| 3 | Keren2018     |         41 |        41 |          36 |              201656 |                   41 |
+|  | name          |  images |  masks |  markers | annotated cells | clinical samples |
+|-:|:--------------|--------:|-------:|---------:|----------------:|-----------------:|
+|  | Danenberg2022 |     794 |    794 |       39 |         1123466 |              794 |
+|  | Cords2024     |    2070 |   2070 |       43 |         5984454 |             2072 |
+|  | Jackson2020   |     735 |    735 |       35 |         1224411 |              735 |
+|  | Keren2018     |      41 |     41 |       36 |          201656 |               41 |
 
 <figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
