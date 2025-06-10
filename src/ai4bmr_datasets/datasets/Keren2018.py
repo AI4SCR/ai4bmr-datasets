@@ -5,56 +5,81 @@ import numpy as np
 import pandas as pd
 from ai4bmr_core.utils.saving import save_image, save_mask
 from ai4bmr_core.utils.tidy import tidy_name
-from matplotlib import pyplot as plt
 from tifffile import imread
 from loguru import logger
+from ai4bmr_datasets.utils.download import unzip_recursive
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
 
 class Keren2018(BaseIMCDataset):
-    """
+    name = 'Keren2018'
+    id = 'Keren2018'
+    doi = '10.1016/j.cell.2018.08.039'
+    notes = """
     Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
-    Save Ionpath file as tnbc.
+    Save Ionpath file as tnbc. We are waiting for the authors to provide the data in a more accessible format.
     The supplementary_table_1_path is downloaded as Table S1 from the paper.
+    
+    - patient_id 30 is missing due to noise
+    - we have patient ids up to 44 in `raw_sca` but only have images for patient ids up to 41
     """
 
-    # TODO: check why patient_id 30 is missing in `data` ( update: due to noise)
-    #   but we have patient ids up to 44 in `raw_sca`.
-    #   we only have images for patient ids up to 41
-
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         super().__init__(base_dir)
-        self.version_name = "published"
-
-        # raw data paths
-        self.raw_masks_dir = self.raw_dir / "TNBC_shareCellData"
-        self.raw_images_dir = self.raw_dir / "tnbc"
-        self.supplementary_table_1_path = (
-            self.raw_dir / "1-s2.0-S0092867418311000-mmc1.xlsx"
-        )  # downloaded as Table S1 from paper
-        self.raw_sca_path = self.raw_dir / "TNBC_shareCellData" / "cellData.csv"
-        self.patient_class_path = (
-            self.raw_dir / "TNBC_shareCellData" / "patient_class.csv"
-        )
-
-        # containers for processing of features
-        self.observations_default = set()
-        self.observations_unfiltered = set()
 
     def prepare_data(self):
+        # logger.info('Waiting for the authors to provide the data in a more accessible format.')
+        # return
         self.create_panel()
         self.create_metadata()
         self.create_images()
         self.create_masks()
-        self.create_features()
+        self.create_clinical_metadata()
+        self.create_features_intensity()
+        self.create_features_spatial()
+
+    def download(self, force: bool = False):
+        import requests
+        import shutil
+
+        download_dir = self.raw_dir
+        download_dir.mkdir(parents=True, exist_ok=True)
+
+        file_map = {
+            "https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc2.xlsx": download_dir / "1-s2.0-S0092867418311000-mmc1.xlsx",
+        }
+
+        # Download files
+        for url, target_path in file_map.items():
+            if not target_path.exists() or force:
+                logger.info(f"Downloading {url} → {target_path}")
+                headers = {"User-Agent": "Mozilla/5.0"}
+                with requests.get(url, headers=headers, stream=True) as r:
+                    r.raise_for_status()
+                    with open(target_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+            else:
+                logger.info(f"Skipping download of {target_path.name}, already exists.")
+
+        # Extract zip files
+        for target_path in file_map.values():
+            if target_path.suffix == '.zip':
+                unzip_recursive(target_path)
+
+        shutil.rmtree(self.raw_dir / '__MACOSX', ignore_errors=True)
+
+        logger.info("✅ Download and extraction completed.")
 
     def create_panel(self):
         logger.info("Creating panel")
 
-        panel_1 = pd.read_excel(self.supplementary_table_1_path, header=3)[:31]
+        # downloaded as Table S1 from paper
+        supplementary_table_1_path = self.raw_dir / "1-s2.0-S0092867418311000-mmc1.xlsx"
+        panel_1 = pd.read_excel(supplementary_table_1_path, header=3)[:31]
         panel_1.columns = panel_1.columns.str.strip()
         panel_1 = panel_1.rename(columns={"Antibody target": "target"})
-        panel_2 = pd.read_excel(self.supplementary_table_1_path, header=37)
+        panel_2 = pd.read_excel(supplementary_table_1_path, header=37)
         panel_2.columns = panel_2.columns.str.strip()
         panel_2 = panel_2.rename(columns={"Label": "target", "Titer": "Titer (µg/mL)"})
         panel = pd.concat([panel_1, panel_2])
@@ -75,15 +100,15 @@ class Keren2018(BaseIMCDataset):
         panel = panel.assign(target=panel.target.replace(target_map))
 
         panel = panel.sort_values("mass_channel", ascending=True)
-        # panel = panel.assign(page=range(len(panel)))
         panel = panel.assign(
             target_original_name=panel.target, target=panel.target.map(tidy_name)
         )
 
         # extract original page numbers for markers
+        raw_images_dir = self.raw_dir / "tnbc"
         img_path = sorted(
             filter(
-                lambda f: not f.name.startswith("."), self.raw_images_dir.glob("*.tiff")
+                lambda f: not f.name.startswith("."), raw_images_dir.glob("*.tiff")
             )
         )[0]
         metadata = self.get_tiff_metadata(img_path)
@@ -96,7 +121,7 @@ class Keren2018(BaseIMCDataset):
         panel.index.name = "channel_index"
         panel = panel.convert_dtypes()
 
-        panel_path = self.get_panel_path(image_version=self.version_name)
+        panel_path = self.get_panel_path(image_version='published')
         panel_path.parent.mkdir(exist_ok=True, parents=True)
         panel.to_parquet(panel_path, engine='fastparquet')
 
@@ -124,15 +149,16 @@ class Keren2018(BaseIMCDataset):
     def create_images(self):
         logger.info("Creating images")
 
-        panel_path = self.get_panel_path(image_version=self.version_name)
+        panel_path = self.get_panel_path(image_version='published')
         panel = pd.read_parquet(panel_path)
 
-        images_dir = self.get_image_version_dir(self.version_name)
+        images_dir = self.get_image_version_dir('published')
         images_dir.mkdir(exist_ok=True, parents=True)
 
+        raw_images_dir = self.raw_dir / "tnbc"
         image_paths = sorted(
             filter(
-                lambda f: not f.name.startswith("."), self.raw_images_dir.glob("*.tiff")
+                lambda f: not f.name.startswith("."), raw_images_dir.glob("*.tiff")
             )
         )
         for img_path in image_paths:
@@ -148,137 +174,20 @@ class Keren2018(BaseIMCDataset):
 
             save_image(img, images_dir / f"{sample_id}.tiff")
 
-    def create_masks_depreciated(self):
-        from PIL import Image
-
-        logger.info("Filtering masks")
-
-        masks_default_dir = self.get_mask_version_dir(mask_version=self.version_name)
-        masks_default_dir.mkdir(exist_ok=True, parents=True)
-
-        masks_unfiltered_dir = self.get_mask_version_dir(mask_version="unfiltered")
-        masks_unfiltered_dir.mkdir(exist_ok=True, parents=True)
-
-        mask_paths = sorted(list(self.raw_masks_dir.glob(r"p*_labeledcellData.tiff")))
-
-        data = pd.read_csv(self.raw_sca_path)
-        data = data.rename(
-            columns={"SampleID": "sample_id", "cellLabelInImage": "object_id"}
-        )
-        data.sample_id = data.sample_id.astype(str)
-        data = data.set_index("sample_id")[["object_id"]]
-
-        sample_ids = set(data.index.get_level_values("sample_id"))
-
-        for mask_path in mask_paths:
-            sample_id = re.match(r"p(\d+)", mask_path.stem).groups()
-            assert len(sample_id) == 1
-            sample_id = sample_id[0]
-
-            logger.info(f"processing sample {sample_id}")
-
-            path_default = masks_default_dir / f"{sample_id}.tiff"
-            path_unfiltered = masks_unfiltered_dir / f"{sample_id}.tiff"
-
-            if not path_unfiltered.exists():
-                # load segmentation from processed data
-                mask_unfiltered = imread(mask_path)
-
-                # load segmentation mask from raw data
-                segm = Image.open(self.raw_images_dir
-                    / f"TA459_multipleCores2_Run-4_Point{sample_id}"
-                    / "segmentation_interior.png")
-                segm = np.array(segm)
-
-                # note: set region with no segmentation to background
-                mask_unfiltered[segm == 0] = 0
-                assert 1 not in mask_unfiltered.flat
-
-                save_mask(mask_unfiltered, path_unfiltered)
-            else:
-                mask_unfiltered = imread(path_unfiltered)
-
-            # we record all observations to filter the raw single cell annotations data
-            self.observations_unfiltered.update(
-                set((sample_id, i) for i in set(mask_unfiltered.flat))
-            )
-
-            # NOTE: for the default masks we only compute the masks for the samples that are in the processed data
-            if sample_id not in sample_ids:
-                continue
-
-            if not path_default.exists():
-                # NOTE: filter masks by objects in data
-                #   - 0: cell boarders
-                #   - 1: background
-                #   - 2..N: cells
-                #   (19, 4812) is background in the mask and removed after removing objects not in `data`
-                mask_default = imread(mask_path)
-
-                objs_in_data = set(data.loc[sample_id, :].object_id)
-                removed_objects = set(mask_default.flat) - set(objs_in_data) - {0, 1}
-
-                map = {i: 0 for i in removed_objects}
-                vfunc = np.vectorize(lambda x: map.get(x, x))
-                mask_default = vfunc(mask_default)
-                mask_default[mask_default == 1] = 0
-
-                assert set(mask_default.flat) - objs_in_data == {0}
-                assert 1 not in mask_default.flat
-
-                save_mask(mask_default, path_default)
-            else:
-                mask_default = imread(path_unfiltered)
-
-            # we record all observations to filter the raw single cell annotations data
-            self.observations_default.update(
-                set((sample_id, i) for i in set(mask_default.flat))
-            )
-
-            if False:
-                # diagnostic plot
-                # FIXME: what do to with this?
-                # note: map objects in mask that are not present in data to 2
-                objs_in_segm = set(mask[segm == 1])
-                map = {i: 2 for i in objs_in_segm - objs_in_data}
-                assert objs_in_data - objs_in_segm == set()
-                map.update({i: 1 for i in objs_in_data.intersection(objs_in_segm)})
-                z = mask.copy()
-                z[segm != 1] = 0
-                vfunc = np.vectorize(lambda x: map.get(x, x))
-                z = vfunc(z)
-
-                fig, axs = plt.subplots(2, 2, dpi=400)
-                axs = axs.flat
-
-                axs[0].imshow(mask > 1, interpolation=None, cmap="grey")
-                axs[0].set_title("Segmentation from processed data", fontsize=8)
-
-                axs[1].imshow(mask_filtered > 0, interpolation=None, cmap="grey")
-                axs[1].set_title("Segmentation from raw data", fontsize=8)
-
-                axs[2].imshow(z, interpolation=None)
-                axs[2].set_title("Objects missing in `cellData.csv`", fontsize=8)
-
-                axs[3].imshow(mask_filtered_v2 > 0, interpolation=None, cmap="grey")
-                axs[3].set_title(
-                    "Segmentation from processed\nfiltered with `cellData.csv`",
-                    fontsize=8,
-                )
-
-                for ax in axs:
-                    ax.set_axis_off()
-                fig.tight_layout()
-                fig.savefig(self.misc / f"{sample_id}.png")
-                plt.close(fig)
 
     def create_masks(self):
+        # NOTE: filter masks by objects in data
+        #   - 0: cell boarders
+        #   - 1: background
+        #   - 2..N: cells
         from PIL import Image
 
         save_masks_dir = self.masks_dir / 'published'
         save_masks_dir.mkdir(exist_ok=True, parents=True)
 
-        mask_paths = sorted(list(self.raw_masks_dir.glob(r"p*_labeledcellData.tiff")))
+        raw_images_dir = self.raw_dir / "tnbc"
+        raw_masks_dir = self.raw_dir / "TNBC_shareCellData"
+        mask_paths = sorted(list(raw_masks_dir.glob(r"p*_labeledcellData.tiff")))
 
         for mask_path in mask_paths:
             sample_id = re.match(r"p(\d+)", mask_path.stem).group(1)
@@ -293,9 +202,8 @@ class Keren2018(BaseIMCDataset):
             mask = imread(mask_path)
 
             # load segmentation mask from raw data
-            segm = Image.open(self.raw_images_dir
-                / f"TA459_multipleCores2_Run-4_Point{sample_id}"
-                / "segmentation_interior.png")
+            segm_path = raw_images_dir / f"TA459_multipleCores2_Run-4_Point{sample_id}" / "segmentation_interior.png"
+            segm = Image.open(segm_path)
             segm = np.array(segm)
 
             # note: set region with no segmentation to background
@@ -308,9 +216,9 @@ class Keren2018(BaseIMCDataset):
 
             save_mask(mask, save_path)
 
-    def process_clinical_metadata(self):
-        logger.info("Creating metadata [samples]")
-        samples = pd.read_csv(self.patient_class_path, header=None)
+    def create_clinical_metadata(self):
+        logger.info("Creating metadata")
+        samples = pd.read_csv(self.raw_dir / "TNBC_shareCellData" / "patient_class.csv", header=None)
         samples.columns = ["patient_id", "cancer_type_id"]
         samples = samples.assign(sample_id=samples["patient_id"]).set_index("sample_id")
         samples.index = samples.index.astype(str)
@@ -324,10 +232,10 @@ class Keren2018(BaseIMCDataset):
         path.parent.mkdir(exist_ok=True, parents=True)
         samples.to_parquet(path, engine='fastparquet')
 
-    def process_annotations(self):
+    def create_metadata(self):
         logger.info("Creating metadata [annotations]")
-
-        data = pd.read_csv(self.raw_sca_path)
+        raw_sca_path = self.raw_dir / "TNBC_shareCellData" / "cellData.csv"
+        data = pd.read_csv(raw_sca_path)
 
         metadata_cols = [
             "SampleID",
@@ -393,19 +301,15 @@ class Keren2018(BaseIMCDataset):
         metadata = metadata.convert_dtypes()
 
         for grp_name, grp_data in metadata.groupby("sample_id"):
-            path = self.metadata_dir / self.version_name / f"{grp_name}.parquet"
+            path = self.metadata_dir / 'published' / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path, engine='fastparquet')
 
-    def create_metadata(self):
-        self.process_clinical_metadata()
-        self.process_annotations()
-
     def create_features_spatial(self):
-        logger.info("Creating features [spatial]")
+        logger.info("Creating spatial features")
 
         samples = pd.read_parquet(self.clinical_metadata_path)
-        spatial = pd.read_csv(self.raw_sca_path)
+        spatial = pd.read_csv(self.raw_dir / "TNBC_shareCellData" / "cellData.csv")
 
         index_columns = ["sample_id", "object_id"]
         feat_cols_names = ["cellSize"]
@@ -428,7 +332,7 @@ class Keren2018(BaseIMCDataset):
         default = default.loc[list(valid_samples)]
 
         for grp_name, grp_data in default.groupby("sample_id"):
-            dir = self.spatial_dir / self.version_name
+            dir = self.spatial_dir / 'published'
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path, engine='fastparquet')
@@ -444,18 +348,18 @@ class Keren2018(BaseIMCDataset):
         unfiltered = unfiltered.loc[list(valid_samples)]
 
         for grp_name, grp_data in unfiltered.groupby("sample_id"):
-            dir = self.intensity_dir / self.version_name
+            dir = self.intensity_dir / 'published'
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path, engine='fastparquet')
 
     def create_features_intensity(self):
-        logger.info("Creating features [intensities]")
+        logger.info("Creating intensity features")
 
         samples = pd.read_parquet(self.clinical_metadata_path)
-        panel_path = self.get_panel_path(image_version=self.version_name)
+        panel_path = self.get_panel_path(image_version='published')
         panel = pd.read_parquet(panel_path)
-        intensity = pd.read_csv(self.raw_sca_path)
+        intensity = pd.read_csv(self.raw_dir / "TNBC_shareCellData" / "cellData.csv")
 
         index_columns = ["sample_id", "object_id"]
         intensity = intensity.rename(
@@ -483,20 +387,9 @@ class Keren2018(BaseIMCDataset):
         default = default.loc[list(valid_samples)]
 
         for grp_name, grp_data in default.groupby("sample_id"):
-            dir = self.intensity_dir / self.version_name
+            dir = self.intensity_dir / 'published'
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path, engine='fastparquet')
 
-    @property
-    def name(self):
-        return "Keren2018"
-
-    @property
-    def id(self):
-        return "Keren2018"
-
-    @property
-    def doi(self):
-        return "10.1016/j.cell.2018.08.039"
 

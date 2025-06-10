@@ -4,7 +4,12 @@ import pandas as pd
 
 from ai4bmr_datasets.datamodels.Image import Image, Mask
 
+
 class BaseIMCDataset:
+    name: str = None
+    id: str = None
+    doi: str = None
+
     """
     Base class for managing Imaging Mass Cytometry (IMC) datasets,
     including loading images, masks, features (intensity, spatial), and metadata.
@@ -21,7 +26,7 @@ class BaseIMCDataset:
         self.base_dir = self.resolve_base_dir(base_dir=base_dir)
 
         self.sample_ids = None
-        self.clinical_metadata = None
+        self.clinical = None
         self.metadata = None
         self.images = None
         self.masks = None
@@ -32,11 +37,11 @@ class BaseIMCDataset:
     def resolve_base_dir(self, base_dir: Path | None):
         import os
         if base_dir is None:
-            base_dir = os.environ.get("AI4BMR_DATASETS_BASE_DIR", None)
+            base_dir = os.environ.get("AI4BMR_DATASETS_DIR", None)
             if base_dir is None:
                 base_dir = Path.home().resolve() / '.cache' / 'ai4bmr_datasets' / self.name
             else:
-                base_dir = Path(base_dir)
+                base_dir = Path(base_dir) / self.name
         return base_dir
 
     def __len__(self):
@@ -52,7 +57,7 @@ class BaseIMCDataset:
             "intensity": self.intensity.loc[sample_id],
             "spatial": self.spatial.loc[sample_id],
             "metadata": dict(
-                sample_level=self.clinical_metadata.loc[sample_id],
+                sample_level=self.clinical.loc[sample_id],
                 observation_level=self.metadata.loc[sample_id],
             ),
         }
@@ -90,9 +95,10 @@ class BaseIMCDataset:
             align (bool): Whether to align and intersect all available sample IDs.
         """
 
-
-        feature_version = feature_version or self.get_version_name(image_version=image_version, mask_version=mask_version)
-        metadata_version = metadata_version or self.get_version_name(image_version=image_version, mask_version=mask_version)
+        feature_version = feature_version or self.get_version_name(image_version=image_version,
+                                                                   mask_version=mask_version)
+        metadata_version = metadata_version or self.get_version_name(image_version=image_version,
+                                                                     mask_version=mask_version)
 
         intensity = spatial = metadata = None
         ids_from_metadata = ids_from_intensity = ids_from_spatial = set()
@@ -177,7 +183,7 @@ class BaseIMCDataset:
                             ids_from_masks,
                             ids_from_metadata,
                             ids_from_intensity,
-                            ids_from_spatial,]
+                            ids_from_spatial, ]
 
             sample_ids = reduce(lambda x, y: x.intersection(y) if y else x, list_of_sets, ids_from_clinical)
             sample_ids = list(sample_ids)
@@ -214,41 +220,39 @@ class BaseIMCDataset:
             self.spatial = spatial
             self.metadata = metadata
 
-    def process(self):
-        raise NotImplementedError("process method must be implemented")
+    def create_annotated(self, version_name: str = 'annotated', mask_version: str = "published"):
+        """
+        Masks are grayscale images where each discrete region is identified by a set of contiguous pixels associated
+        with a single integer value. These tend to be sequential from the top to the bottom of the image (this is why a
+        mask appears as a gradation of gray and white when opened in an image viewer). The processed single cell data
+        ‘ObjectNumber’ column corresponds to whole cell masks, where the integer values of each cell maps to
+        ‘ObjectNumber’, allowing for marker values and other features to be mapped to images.
+        """
 
-    def create_images(self):
-        pass
+        from skimage.io import imread, imsave
+        import numpy as np
 
-    def create_masks(self):
-        pass
+        logger.info(f'Creating new data version: `annotated`')
 
-    def create_clinical_metadata(self):
-        pass
-
-    def create_metadata(self):
-        pass
-
-    def create_features_spatial(self):
-        pass
-
-    def create_features_intensity(self):
-        pass
-
-    def create_features(self):
-        self.create_features_spatial()
-        self.create_features_intensity()
-
-    def create_panel(self):
-        pass
-
-    def create_annotated(self):
         metadata_version = 'published'
         metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
         intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
 
-        mask_version = 'published_nucleus'
+        # mask_version = 'published_cell'
         masks_dir = self.masks_dir / mask_version
+        mask_paths = list(masks_dir.glob("*.tiff"))
+
+        image_version = 'published'
+        images_dir = self.images_dir / image_version
+        image_paths = list(images_dir.glob("*.tiff"))
+
+        # collect sample ids
+        sample_ids = set(metadata.index.get_level_values('sample_id').unique()) \
+                     & set(intensity.index.get_level_values('sample_id').unique()) \
+                     & set([i.stem for i in mask_paths]) \
+                     & set([i.stem for i in image_paths])
+
+        logger.info(f"Found {len(sample_ids)} samples with metadata, intensity, masks and images")
 
         # ANNOTATED DATA
         version = 'annotated'
@@ -261,7 +265,7 @@ class BaseIMCDataset:
         save_metadata_dir = self.metadata_dir / version
         save_metadata_dir.mkdir(parents=True, exist_ok=True)
 
-        for sample_id, sample_data in metadata.groupby(level='sample_id'):
+        for sample_id in sample_ids:
             save_path = save_masks_dir / f"{sample_id}.tiff"
 
             if save_path.exists():
@@ -276,33 +280,31 @@ class BaseIMCDataset:
             logger.info(f"Saving annotated mask {save_path}")
 
             mask = imread(mask_path)
-            objs = set(sample_data.index.get_level_values('object_id').astype(int).unique())
-            mask_objs = set([int(i) for i in mask.flatten()]) - {0}
-            intx = objs.intersection(mask_objs)
-            missing_objs = objs.union(mask_objs) - intx
+            intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
+            metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
+
+            intensity_objs = set(intensity_.index.get_level_values('object_id').astype(int).unique())
+            metadata_objs = set(metadata_.index.get_level_values('object_id').astype(int).unique())
+            mask_objs = set(np.unique(mask)) - {0}
+
+            objs = metadata_objs.intersection(mask_objs).intersection(intensity_objs)
+            missing_objs = mask_objs - objs
             if missing_objs:
-                logger.warning(f'{sample_id} has {len(missing_objs)} missing objects')
+                logger.warning(
+                    f'{sample_id} has {len(objs)} common objects and {len(missing_objs)} mask objects without metadata')
 
+            objs = np.asarray(sorted(objs), dtype=mask.dtype)
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
-            imwrite(save_path, mask_filtered)
+            assert len(np.unique(mask_filtered)) == len(objs) + 1
+            imsave(save_path, mask_filtered)
 
-            anno_data = sample_data.xs(list(intx), level='object_id')
-            anno_data.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
+            idx = pd.IndexSlice[:, objs]
 
-            intensity_data = intensity.xs(sample_id, level='sample_id').xs(list(intx), level='object_id')
+            intensity_ = intensity_.loc[idx, :]
+            intensity_.to_parquet(save_intensity_dir / f"{sample_id}.parquet", engine='fastparquet')
 
-
-    @property
-    def name(self):
-        return "name"
-
-    @property
-    def id(self):
-        return "id"
-
-    @property
-    def doi(self):
-        return "doi"
+            metadata_ = metadata_.loc[idx, :]
+            metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
 
     @property
     def raw_dir(self):
@@ -366,7 +368,8 @@ class BaseIMCDataset:
         save_spatial_dir = self.spatial_dir / version_name
 
         if (save_intensity_dir.exists() or save_spatial_dir.exists()) and not force:
-            logger.error(f"Features directory {save_intensity_dir} already exists. Set force=True to overwrite to recompute.")
+            logger.error(
+                f"Features directory {save_intensity_dir} already exists. Set force=True to overwrite to recompute.")
             return
 
         save_intensity_dir.mkdir(exist_ok=True, parents=True)

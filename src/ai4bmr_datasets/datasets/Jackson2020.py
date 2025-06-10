@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -9,32 +8,13 @@ from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import unzip_recursive
 from ai4bmr_core.utils.tidy import tidy_name
 
-class Jackson2023(BaseIMCDataset):
+class Jackson2020(BaseIMCDataset):
+    name = "Jackson2020"
+    id = "Jackson2020"
+    doi = "10.1038/s41586-019-1876-x"
 
-    @property
-    def id(self):
-        return "Jackson2023"
-
-    @property
-    def name(self):
-        return "Jackson2023"
-
-    @property
-    def doi(self):
-        return "10.1038/s41586-019-1876-x"
-
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         super().__init__(base_dir)
-        self.base_dir = base_dir
-
-        # populated by `self.load()`
-        self.sample_ids = None
-        self.samples = None
-        self.images = None
-        self.masks = None
-        self.panel = None
-        self.intensity = None
-        self.spatial = None
 
     def prepare_data(self):
         self.download()

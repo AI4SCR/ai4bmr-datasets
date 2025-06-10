@@ -1,123 +1,136 @@
----
-title: "ai4bmr-datasets: A unified interface for spatial omics data access for computer vision and machine learning"
-tags:
-  - Python
-  - spatial omics
-  - imaging mass cytometry
-  - spatial transcriptomics
-  - computational pathology
-authors:
-  - name: Adriano Martinelli
-    orcid: 0000-0002-9288-5103
-    affiliation: 1
-  - name: Marianna Rapsomaniki
-    orcid: 0000-0003-3883-4871
-    affiliation: 1, 3
-affiliations:
-  - index: 1
-    name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
-  - index: 2
-    name: ETH Zürich, Zürich, Switzerland
-  - index: 3
-    name: University of Lausanne (UNIL), Lausanne, Switzerland
-date: 2025-05-28
-bibliography: paper.bib
-#csl: https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl
+# SpatialOmicsNet
+
+**SpatialOmicsNet** is an open-source Python package providing a unified interface to access, prepare, and load spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
+
+For a detailed description, motivation, and full list of supported technologies and use cases, please refer to [paper.md](./paper.md).
+
 ---
 
-# Summary
+## 📦 Supported Datasets
 
-**ai4bmr-datasets** is an open-source Python package that provides a harmonized and standardized interface for accessing
-spatial omics datasets, including imaging mass cytometry (IMC) and multiplexed ion beam imaging (MIBI) data. The
-package enables researchers to load raw spatially-resolved omics data from multiple studies in a unified format, apply
-and retrieve data structures ready for downstream analysis or model training. By
-focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and single-cell
-data formats), `ai4bmr-datasets` promotes reproducible and efficient research in computational and spatial
-biology. The library is currently used internally within our group, but is designed to serve the broader community
-working on spatial omics by easing data access and integration into machine learning workflows.
-
-# Supported Datasets
-
-The package supports the following public spatial omics datasets:
-
-# TODO: add stats
+The package supports the following public spatial proteomics datasets:
 
 - **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
-- **Jackson et al. 2023** – IMC of breast cancer [@Jackson2020]
-- **Danenberg et al. 2022** – IMC of breast cancer [@Danenberg2022]
-- **Cords et al. 2024** – IMC of NSCLC [@Cords2024]
+- **Jackson et al. 2020** – IMC of breast cancer [@jacksonSinglecellPathologyLandscape2020]
+- **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
+- **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
 
-Additionally, dummy datasets are provided to mimic real data structure for development and testing purposes.
+|  | name          |  images |  masks |  markers | annotated cells | clinical samples |
+|-:|:--------------|--------:|-------:|---------:|----------------:|-----------------:|
+|  | Danenberg2022 |     794 |    794 |       39 |         1123466 |              794 |
+|  | Cords2024     |    2070 |   2070 |       43 |         5984454 |             2072 |
+|  | Jackson2020   |     735 |    735 |       35 |         1224411 |              735 |
+|  | Keren2018     |      41 |     41 |       36 |          201656 |               41 |
 
-Each dataset is accessible through a standardized class interface that mimics the lightning philosophy and includes
-methods for downloading, preparing, and
-accessing processed components (images, masks, metadata, and spatial coordinates). These datasets follow consistent
-naming conventions and data schemas, making them immediately usable for downstream tasks.
+<figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
-## Data
+Dummy datasets are also included for development and testing purposes.
 
-**Data Model:** All datasets are represented in a **consistent format**, enabling the same code to work across different
-cancer types. Each loaded dataset is essentially a dictionary with the following keys:
+---
 
+## 🧱 Data Model
+
+All datasets are represented in a **consistent format**, enabling the same code to work across different
+datasets. After preparing and setting up the dataset instance, the following attributes are available:
+
+- `images` – Dictionary of image objects
+- `panel` – Imaging panel description (DataFrame), including a key `target`
+- `masks` – Dictionary of mask objects
 - `metadata` – Observation-level metadata (pandas DataFrame) including a key `label`
 - `clinical` – Clinical / Sample-level metadata (pandas DataFrame)
-- `images` – Dictionary of image objects
-- `masks` – Dictionary of mask objects
-- `panel` – Imaging panel description (DataFrame), including a key `target`
 - `intensity` – Object / Single-cell intensity features (DataFrame)
 - `spatial` – Object / Single-cell spatial features (DataFrame)
 
 These components are enforced and standardized across datasets.
 
+A dataset can have different versions of images, masks, features, and metadata, allowing for flexibility in data access.  
+To load the data *as published*, use `{image,mask,metadata,feature}_version="published"`. Be aware that for most 
+datasets, this means the loaded data is not harmonized. You may encounter inconsistencies such as:
+
+  - objects present in the masks that are not listed in the metadata,
+  - images without matching annotations,
+  - or cells in the metadata with no corresponding segmentation.
+
+To work with a cleaned and more consistent dataset, some datasets offer an `annotated` version. This version:
+
+  - has cleaned masks to include only objects found in both the segmentation and the metadata,
+  - only contains images that have corresponding metadata.
+
 **Efficient Data Loading:** Images and masks are **lazily loaded** from disk to avoid unnecessary memory use. Tabular
 data are stored in Parquet format for fast access.
 
-## Installation
+---
 
-You can install the package as follows:
+## ⚙️ Installation
+
+Both [python](https://www.python.org/downloads/) and [R](https://www.r-project.org) need to be installed on your system.
+The package can be installed via pip from GitHub:
 
 ```bash
-pip install git+https://github.com/AI4SCR/ai4bmr-core.git 
+pip install git+https://github.com/AI4SCR/ai4bmr-core.git
 pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 ```
 
-## Quickstart
+---
 
-1**Load the dataset:**
+## 🚀 Quickstart
+
+### 1. Load and prepare a dataset
 
 ```python
+from ai4bmr_datasets import Jackson2020
 from pathlib import Path
-from ai4bmr_datasets.datasets import Keren2018  # or another dataset class
 
-base_dir = Path("/path/to/TNBC")  # if none saved to `~/.cache/ai4bmr-datasets`
-ds = Keren2018(base_dir=base_dir)
-ds.prepare_data()  # download and prepare the dataset, only needed once
-ds.setup(image_version='published', mask_version='published')
-
-print(ds.images)  # list of images
-print(ds.masks)  # list of masks
-print(ds.intensity.shape)  # cell x marker matrix
-print(ds.metadata.shape)  # cell x annotation matrix
+dataset = Jackson2020(base_dir=Path("/path/to/storage"))
+dataset.prepare_data()  # Downloads and preprocesses data if needed
+dataset.setup(image_version="published", mask_version="published")
 ```
 
-3. **Access components:**
+### 2. Access core components
 
 ```python
-images = ds.images
-masks = ds.masks
-
-sample_id = next(iter(images.keys()))
-image_obj = images[sample_id]
-mask_obj = masks[sample_id]
-
-img_array = image_obj.data
-mask_array = mask_obj.data
-
-print("Image shape:", img_array.shape)
-print("Mask shape:", mask_array.shape)
+print(dataset.sample_ids)     # List of sample IDs
+print(dataset.images.keys()) # Dictionary of images
+print(dataset.masks.keys())  # Dictionary of masks
 ```
 
-## Contact
-Adriano Martinelli <adriano.martinelli@chuv.ch> or <adrianom@student.ethz.ch>
+### 3. Load optional cell-level features and metadata
 
+```python
+dataset.setup(
+    image_version="published",
+    mask_version="published",
+    feature_version="published", load_intensity=True,
+    metadata_version="published", load_metadata=True
+)
 
+print(dataset.intensity.shape)  # Cell x marker matrix
+print(dataset.metadata.shape)   # Cell x annotation matrix
+```
+
+### 4. Work with image and mask objects
+
+```python
+sample_id = dataset.sample_ids[0]  # get the first sample ID
+img = dataset.images[sample_id].data
+mask = dataset.masks[sample_id].data
+
+print("Image shape:", img.shape)
+print("Mask shape:", mask.shape)
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions for adding new datasets, bug fixes, or improvements. Standardized schemas and utility functions are provided to ease extension.
+
+---
+
+## 📬 Contact
+
+For questions, issues, or contributions, feel free to contact:
+
+**Adriano Martinelli**  
+📧 adriano.martinelli@chuv.ch  
+📧 adrianom@student.ethz.ch
