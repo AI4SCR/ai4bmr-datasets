@@ -58,10 +58,10 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 
 ```python
 from pathlib import Path
-from ai4bmr_datasets.datasets import Keren2018  # or another dataset class
+from ai4bmr_datasets.datasets import Jackson2020  # or another dataset class
 
-base_dir = Path("/path/to/TNBC")  # if none saved to `~/.cache/ai4bmr-datasets`
-ds = Keren2018(base_dir=base_dir)
+base_dir = Path("/path/to/root_dir") / Jackson2020.name  # if none saved to `~/.cache/ai4bmr-datasets/<DATASET_NAME>`
+ds = Jackson2020(base_dir=base_dir)
 ds.prepare_data()  # download and prepare the dataset, only needed once
 ds.setup(image_version='published', mask_version='published')
 
@@ -77,15 +77,15 @@ print(ds.metadata.shape)  # cell x annotation matrix
 images = ds.images
 masks = ds.masks
 
-sample_id = next(iter(images.keys()))
-image_obj = images[sample_id]
-mask_obj = masks[sample_id]
+sample_id = ds.sample_ids[0]  # get the first sample ID
+img = images[sample_id]
+mask = masks[sample_id]
 
-img_array = image_obj.data
-mask_array = mask_obj.data
+img_data= img.data
+mask_data = mask.data
 
-print("Image shape:", img_array.shape)
-print("Mask shape:", mask_array.shape)
+print("Image shape:", img_data.shape)
+print("Mask shape:", mask_data.shape)
 ```
 
 ## Contact
