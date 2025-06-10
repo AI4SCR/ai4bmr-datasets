@@ -1,32 +1,3 @@
----
-title: "ai4bmr-datasets: A unified interface for spatial omics data access for computer vision and machine learning"
-tags:
-  - Python
-  - spatial omics
-  - imaging mass cytometry
-  - spatial transcriptomics
-  - computational pathology
-authors:
-  - name: Adriano Martinelli
-    orcid: 0000-0002-9288-5103
-    affiliation: 1
-  - name: Marianna Rapsomaniki
-    orcid: 0000-0003-3883-4871
-    affiliation: 1, 3
-affiliations:
-  - index: 1
-    name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
-  - index: 2
-    name: ETH Zürich, Zürich, Switzerland
-  - index: 3
-    name: University of Lausanne (UNIL), Lausanne, Switzerland
-date: 2025-05-28
-bibliography: paper.bib
-#csl: https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl
----
-
-# Summary
-
 **SpatialOmicsNet** is an open-source Python package that provides a harmonized and standardized interface for accessing
 spatial omics datasets, including imaging mass cytometry (IMC) and multiplexed ion beam imaging (MIBI) data. The
 package enables researchers to load raw spatially-resolved omics data from multiple studies in a unified format, apply
