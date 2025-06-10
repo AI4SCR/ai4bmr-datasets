@@ -238,7 +238,7 @@ class BaseIMCDataset:
         metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
         intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
 
-        mask_version = 'published_nucleus'
+        # mask_version = 'published_cell'
         masks_dir = self.masks_dir / mask_version
         mask_paths = list(masks_dir.glob("*.tiff"))
 
@@ -258,9 +258,6 @@ class BaseIMCDataset:
         version = 'annotated'
         save_masks_dir = self.masks_dir / version
         save_masks_dir.mkdir(parents=True, exist_ok=True)
-
-        # save_images_dir = self.images_dir / version
-        # save_images_dir.mkdir(parents=True, exist_ok=True)
 
         save_intensity_dir = self.intensity_dir / version
         save_intensity_dir.mkdir(parents=True, exist_ok=True)
@@ -286,7 +283,6 @@ class BaseIMCDataset:
             intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
             metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
 
-            # df = pd.read_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/Danenberg2022/01_raw/mbtme_imc_public/MBTMEIMCPublic/SingleCells.csv')
             intensity_objs = set(intensity_.index.get_level_values('object_id').astype(int).unique())
             metadata_objs = set(metadata_.index.get_level_values('object_id').astype(int).unique())
             mask_objs = set(np.unique(mask)) - {0}
