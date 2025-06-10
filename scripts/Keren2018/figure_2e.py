@@ -8,7 +8,7 @@ from ai4bmr_core.utils.tidy import tidy_name
 from ai4bmr_datasets import Keren2018
 
 
-def reproduce_paper_figure_2E() -> plt.Figure:
+def figure_2e() -> plt.Figure:
     """Try to reproduce the figure from the paper."""
 
     ds = Keren2018()
@@ -43,7 +43,7 @@ def reproduce_paper_figure_2E() -> plt.Figure:
     ]
     cols = [tidy_name(c) for c in cols]
     pdat = ds.intensity[cols]
-    pdat = pdat[pdat.index.get_level_values("sample_id") <= 41]
+    pdat = pdat[pdat.index.get_level_values("sample_id").astype(int) <= 41]
 
     pdat, row_colors = pdat.align(ds.metadata, join="left", axis=0)
     pdat = pdat.assign(
@@ -103,8 +103,7 @@ def reproduce_paper_figure_2E() -> plt.Figure:
 
     # %% filter
     pdat = pdat[pdat.index.get_level_values("group_name") == "immune"]
-    pdat = pdat[
-        [
+    cols = [
             "FoxP3",
             "CD4",
             "CD3",
@@ -119,7 +118,8 @@ def reproduce_paper_figure_2E() -> plt.Figure:
             "MPO",
             "CD45",
         ]
-    ]
+    cols = [tidy_name(c) for c in cols]
+    pdat = pdat[cols]
 
     # %%
     pdat = pd.DataFrame(
@@ -135,6 +135,8 @@ def reproduce_paper_figure_2E() -> plt.Figure:
     )
     cg.ax_heatmap.set_facecolor("black")
     cg.ax_heatmap.set_yticklabels([])
-    cg.figure.tight_layout()
-    cg.figure.show()
     return cg.figure
+
+fig = figure_2e()
+fig.tight_layout()
+fig.show()
