@@ -28,6 +28,9 @@ class Danenberg2022(BaseIMCDataset):
         self.create_metadata_and_intensity()
         self.create_clinical_metadata()
 
+        self.create_annotated(mask_version='published_cell')
+        self.create_annotated(mask_version='published_nucleus')
+
     def download(self, force: bool = False):
         import requests
         import shutil
@@ -37,6 +40,7 @@ class Danenberg2022(BaseIMCDataset):
 
         file_map = {
             "https://zenodo.org/records/6036188/files/MBTMEStrIMCPublic.zip?download=1": download_dir / 'mbtme_imc_public.zip',
+            'https://zenodo.org/records/15615709/files/correctedPublicMasks.zip?download=1': download_dir / 'corrected_public_masks.zip',
         }
 
         # Download files
@@ -75,6 +79,13 @@ class Danenberg2022(BaseIMCDataset):
         import subprocess
         import textwrap
 
+        clinical_path = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet'
+        sc_path = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/SingleCells.parquet'
+
+        if sc_path.exists() and clinical_path.exists():
+            logger.info("Clinical and SingleCells data already processed. Skipping.")
+            return
+
         logger.info('Converting fts files to Parquet format')
 
         r_script = f"""
@@ -97,10 +108,10 @@ class Danenberg2022(BaseIMCDataset):
         library(arrow)
         
         df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst")
-        write_parquet(df, "{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet")
+        write_parquet(df, "{clinical_path}")
         
         df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/SingleCells.fst")
-        write_parquet(df, "{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/SingleCells.parquet")
+        write_parquet(df, "{sc_path}")
         """
         r_script = textwrap.dedent(r_script)
 
@@ -142,7 +153,7 @@ class Danenberg2022(BaseIMCDataset):
             imwrite(save_path, img)
 
     def create_masks(self):
-        images_dir = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/Images'
+        images_dir = self.raw_dir / 'corrected_public_masks' / 'correctedPublicMasks'
         img_paths = list(images_dir.rglob('*.tiff'))
         img_paths = sorted(filter(lambda x: 'Mask' in str(x), img_paths))
 

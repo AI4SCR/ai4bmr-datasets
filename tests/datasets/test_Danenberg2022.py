@@ -5,6 +5,7 @@ def test_Danenberg2022():
 
     image_version = metadata_version = feature_version = 'published'
     ds = self = Dataset(base_dir=datasets_dir / Dataset.name)
+    ds.prepare_data()
     ds.setup(image_version=image_version, mask_version='published_cell',
              metadata_version=metadata_version, load_metadata=True,
              feature_version=feature_version, load_intensity=True)
