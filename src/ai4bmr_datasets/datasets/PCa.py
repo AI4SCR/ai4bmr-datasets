@@ -1,52 +1,26 @@
 from pathlib import Path
 from loguru import logger
 from ai4bmr_core.utils.tidy import tidy_name
-
 import pandas as pd
 
-from .BaseIMCDataset import BaseIMCDataset
+from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
 
 class PCa(BaseIMCDataset):
 
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | None = None):
         super().__init__(base_dir)
 
         # raw paths
         self.raw_clinical_metadata_path = (
-                base_dir / "01_raw" / "metadata" / "ROI_matching_blockID.xlsx"
+                self.base_dir / "01_raw" / "metadata" / "ROI_matching_blockID.xlsx"
         )
         self.raw_tma_annotations_path = (
-                base_dir / "01_raw" / "metadata" / "tma-annotations-v2.xlsx"
+                self.base_dir / "01_raw" / "metadata" / "tma-annotations-v2.xlsx"
         )
 
-        self.raw_tma_tidy_path = base_dir / "01_raw" / "metadata" / "TMA_tidy.txt"
-        self.raw_annotations_path = base_dir / "01_raw" / "annotations" / "labels.parquet"
-
-        # populated by `self.load()`
-        self.sample_ids = None
-        self.samples = None
-        self.images = None
-        self.masks = None
-        self.panel = None
-        self.intensity = None
-        self.spatial = None
-
-    def __len__(self):
-        return len(self.sample_ids)
-
-    def __getitem__(self, idx):
-        # TODO: this breaks if there is no self.samples
-        sample_id = self.samples.index[idx]
-        return {
-            "sample_id": sample_id,
-            "sample": self.samples.loc[sample_id],
-            "image": self.images[sample_id],
-            "mask": self.masks[sample_id],
-            "panel": self.panel,
-            "intensity": self.intensity.loc[sample_id],
-            "spatial": self.spatial.loc[sample_id],
-        }
+        self.raw_tma_tidy_path = self.base_dir / "01_raw" / "metadata" / "TMA_tidy.txt"
+        self.raw_annotations_path = self.base_dir / "01_raw" / "annotations" / "labels.parquet"
 
     def prepare_data(self):
         self.create_clinical_metadata()
@@ -95,7 +69,6 @@ class PCa(BaseIMCDataset):
                 grp_data.to_parquet(annotations_path)
 
     def label_transfer(self):
-        import pandas as pd
 
         data_dir = self.raw_dir
         path_annotations = Path(data_dir / "clustering" / "annotations.parquet")
@@ -161,6 +134,24 @@ class PCa(BaseIMCDataset):
         assert filter_.sum() == len(memberships)
         annotations = annotations[~filter_]
         annotations = pd.concat([annotations, memberships])
+        assert len(annotations) == 2214046
+        assert annotations.index.is_unique
+
+        # annotations.loc[:, 'main_group'] = annotations.main_group.fillna('mixed')
+
+        # %% ASSIGN RECLUSTERD-V2 CELLS
+        memberships = pd.read_parquet(self.raw_dir / 'reclustering-v2/memberships.parquet')
+        label_names = pd.read_excel(self.raw_dir / 'reclustering-v2/label-names.xlsx', dtype=str)
+        membership_to_label = label_names.set_index('membership')['label'].to_dict()
+        memberships['label'] = memberships['membership'].map(membership_to_label)
+        memberships['main_group'] = memberships['label'].map(label_to_main_group)
+        assert not memberships.label.isna().any()
+
+        filter_ = annotations.index.isin(memberships.index)
+        assert filter_.sum() == len(memberships)
+        annotations = annotations[~filter_]
+        annotations = pd.concat([annotations, memberships])
+        assert len(annotations) == 2214046
         assert annotations.index.is_unique
 
         annotations.loc[:, 'main_group'] = annotations.main_group.fillna('mixed')
