@@ -169,6 +169,8 @@ class Keren2018(BaseIMCDataset):
                 logger.info(f"Image for sample {sample_id} already exists, skipping.")
                 continue
 
+            logger.info(f'Creating image for sample {sample_id}')
+
             stack = []
             for channel in panel.target_original_name:
                 img = imread(sample_dir / f"{channel}.tif")
@@ -312,7 +314,6 @@ class Keren2018(BaseIMCDataset):
     def create_features_spatial(self):
         logger.info("Creating spatial features")
 
-        samples = pd.read_parquet(self.clinical_metadata_path)
         spatial = pd.read_csv(self.raw_dir / "tnbc_processed_data" / "cellData.csv")
 
         index_columns = ["sample_id", "object_id"]
@@ -327,40 +328,18 @@ class Keren2018(BaseIMCDataset):
         spatial.columns = spatial.columns.map(tidy_name)
         spatial = spatial.convert_dtypes()
 
-        valid_obs = set(spatial.index).intersection(self.observations_default)
-        default = spatial.loc[list(valid_obs), :]
-
-        valid_samples = set(default.index.get_level_values("sample_id")).intersection(
-            samples.index
-        )
-        default = default.loc[list(valid_samples)]
-
-        for grp_name, grp_data in default.groupby("sample_id"):
+        for grp_name, grp_data in spatial.groupby("sample_id"):
             dir = self.spatial_dir / 'published'
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
             grp_data.to_parquet(path, engine='fastparquet')
 
-        del default
-
-        valid_obs = set(spatial.index).intersection(self.observations_unfiltered)
-        unfiltered = spatial.loc[list(valid_obs), :]
-
-        valid_samples = set(
-            unfiltered.index.get_level_values("sample_id")
-        ).intersection(samples.index)
-        unfiltered = unfiltered.loc[list(valid_samples)]
-
-        for grp_name, grp_data in unfiltered.groupby("sample_id"):
-            dir = self.intensity_dir / 'published'
-            path = dir / f"{grp_name}.parquet"
-            path.parent.mkdir(exist_ok=True, parents=True)
-            grp_data.to_parquet(path, engine='fastparquet')
-
     def create_features_intensity(self):
+        # NOTE: patient 30 has been excluded from the analysis due to noise
+        #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
+
         logger.info("Creating intensity features")
 
-        samples = pd.read_parquet(self.clinical_metadata_path)
         panel_path = self.get_panel_path(image_version='published')
         panel = pd.read_parquet(panel_path)
         intensity = pd.read_csv(self.raw_dir / "tnbc_processed_data" / "cellData.csv")
@@ -379,18 +358,7 @@ class Keren2018(BaseIMCDataset):
 
         intensity = intensity.convert_dtypes()
 
-        # filter for samples that are in both processed data and patient data
-        # NOTE: patient 30 has been excluded from the analysis due to noise
-        #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
-        valid_obs = set(intensity.index).intersection(self.observations_default)
-        default = intensity.loc[list(valid_obs), :]
-
-        valid_samples = set(default.index.get_level_values("sample_id")).intersection(
-            samples.index
-        )
-        default = default.loc[list(valid_samples)]
-
-        for grp_name, grp_data in default.groupby("sample_id"):
+        for grp_name, grp_data in intensity.groupby("sample_id"):
             dir = self.intensity_dir / 'published'
             path = dir / f"{grp_name}.parquet"
             path.parent.mkdir(exist_ok=True, parents=True)
