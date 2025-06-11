@@ -20,7 +20,7 @@ class BaseIMCDataset:
         Initialize the dataset with a base directory.
 
         Args:
-            base_dir (Path): Base directory for the dataset that contains 01_raw and 02_processed folders.
+            base_dir (Path, None): Base directory for the dataset that contains 01_raw and 02_processed folders.
         """
 
         self.base_dir = self.resolve_base_dir(base_dir=base_dir)
@@ -76,10 +76,10 @@ class BaseIMCDataset:
             join: str = "outer",
     ):
         """
-        Load and align data (images, masks, features, metadata) from disk.
+        Load data (images, masks, features, metadata) from disk.
         If only image_version and mask_version are provided features and metadata will be loaded from the combined
         version {image_version-mask_version}. To load specific versions of features and metadata please use the
-        corresponding keywords. This is useful when you want to load process features as published by a publication.
+        corresponding keywords. This is useful when you want to load features as `published` by a publication.
 
         Align ensures that all loaded attributes share the same samples. This is useful because often not all samples
         are present in images, masks or provided metadata.
