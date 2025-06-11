@@ -1,6 +1,6 @@
-# SpatialOmicsNet
+# SpatialProteomicsNet
 
-**SpatialOmicsNet** is an open-source Python package providing a unified interface to access, prepare, and load spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
+**SpatialProteomicsNet** is an open-source Python package providing a unified interface to access, prepare, and load spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
 
 For a detailed description, motivation, and full list of supported technologies and use cases, please refer to [paper.md](./paper.md).
 
