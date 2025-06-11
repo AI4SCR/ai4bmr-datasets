@@ -507,7 +507,7 @@ class Cords2024(BaseIMCDataset):
         self.create_features_spatial()
         self.create_features_intensity()
 
-    def process_rdata(self):
+    def process_rdata(self, force: bool = False):
         import subprocess
         import textwrap
 
@@ -517,7 +517,7 @@ class Cords2024(BaseIMCDataset):
         save_metadata_path = sce_anno_path.parent / 'cell_types.parquet'
         save_intensity_path = sce_anno_path.parent / 'intensity.parquet'
         save_spatial_path = sce_anno_path.parent / 'spatial.parquet'
-        if save_metadata_path.exists() and save_intensity_path.exists() and save_spatial_path.exists():
+        if save_metadata_path.exists() and save_intensity_path.exists() and save_spatial_path.exists() and not force:
             logger.info(f"RDS to Parquet conversion, files already exist. Skipping.")
             return
 
@@ -560,7 +560,8 @@ class Cords2024(BaseIMCDataset):
             spatial$object_id <- rownames(spatial)
             write_parquet(spatial, "{save_spatial_path}")
             
-            intensity = t(assay(data, 'counts'))
+            intensity = assay(data, "counts")
+            intensity = t(intensity)
             intensity = as.data.frame(intensity)
             intensity$object_id <- rownames(intensity)
             write_parquet(intensity, "{save_intensity_path}")
