@@ -11,10 +11,10 @@ tags:
 authors:
   - name: Adriano Martinelli
     orcid: 0000-0002-9288-5103
-    affiliation: 1, 2
+    affiliation: 1, 2, 4
   - name: Marianna Rapsomaniki
     orcid: 0000-0003-3883-4871
-    affiliation: 1, 3
+    affiliation: 1, 3, 4
 affiliations:
   - index: 1
     name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
