@@ -2,6 +2,7 @@ from pathlib import Path
 from loguru import logger
 from ai4bmr_core.utils.tidy import tidy_name
 import pandas as pd
+from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
@@ -23,10 +24,59 @@ class PCa(BaseIMCDataset):
         self.raw_annotations_path = self.base_dir / "01_raw" / "annotations" / "labels.parquet"
 
     def prepare_data(self):
+        self.process_acquisitions()
         self.create_clinical_metadata()
         self.create_tma_annotations()
         self.label_transfer()
         self.create_annotations()
+
+    def process_acquisitions(self):
+        from readimc import MCDFile
+        from tifffile import imwrite
+        import json
+
+        acquisitions_dir = self.raw_dir / 'acquisitions'
+        acquisitions_dir.mkdir(parents=True, exist_ok=True)
+
+        num_failed_reads = 0
+
+        mcd_paths = [i for i in (self.raw_dir / 'raw').rglob("*.mcd") if i.is_file()]
+        for mcd_path in mcd_paths:
+            logger.info(f"Processing {mcd_path.name}")
+            slide_date = mcd_path.stem
+
+            with MCDFile(mcd_path) as f:
+                for slide in f.slides:
+                    for acq in slide.acquisitions:
+
+                        item = dict(
+                            id=acq.id,
+                            description=acq.description,
+                            mcd_name=mcd_path.name,
+                            channel_names=acq.channel_names,
+                            channel_labels=acq.channel_labels,
+                            num_channels=acq.num_channels,
+                            metal_names=acq.channel_metals,
+                        )
+
+                        image_name = f"{slide_date}_{acq.description}_{acq.id}"
+                        metadata_path = acquisitions_dir / f"{image_name}.json"
+                        image_path = acquisitions_dir / f"{image_name}.tiff"
+
+                        if image_path.exists():
+                            logger.info(f"Skipping image {image_path}. Already exists.")
+                            continue
+
+                        try:
+                            logger.info(f"Reading acquisition of image {image_name}")
+                            img = f.read_acquisition(acq)
+                            imwrite(image_path, img)
+                            with open(metadata_path, "w") as f_json:
+                                json.dump(item, f_json)
+                        except OSError:
+                            logger.error(f"Failed to read acquisition! ")
+                            num_failed_reads += 1
+                            continue
 
     def create_masks_filtered_by_annotations(self):
         import numpy as np
@@ -210,9 +260,54 @@ class PCa(BaseIMCDataset):
         # %%
         annotations.to_parquet(self.raw_annotations_path, engine='fastparquet')
 
-
     def create_images(self):
-        pass
+        raw_acquisitions_dir = self.raw_dir / 'acquisitions'
+        save_dir = self.get_image_version_dir('raw')
+        panel = pd.read_parquet(save_dir / "panel.parquet")
+        for img_metadata_path in raw_acquisitions_dir.glob("*.tiff"):
+            save_path = save_dir / img_metadata_path.name
+
+            if save_path.exists():
+                logger.info(f"Image {img_metadata_path.name} already exists. Skipping.")
+                continue
+
+            logger.info(f"Processing {img_metadata_path.name}")
+
+            img = imread(img_metadata_path)
+            img = img[panel.page]
+            imwrite(save_path, img)
+
+    def create_filtered_images(self):
+        img_dir = self.get_image_version_dir('raw')
+        panel = pd.read_parquet(img_dir / "panel.parquet")
+
+        mcd_metadata = pd.read_parquet('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/metadata/02_processed/mcd_metadata.parquet')
+        raw = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/images/raw').glob('*.tiff')
+        raw = set([i.name for i in raw])
+        filtered = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/images/filtered').glob('*.tiff')
+        filtered = set([i.name for i in filtered])
+
+        pp = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/02_processed/images/raw').glob('*.tiff')
+        pp = set([i.name for i in pp])
+
+        len(raw)
+        len(filtered)
+        len(pp)
+
+
+        for img_metadata_path in raw_acquisitions_dir.glob("*.tiff"):
+            save_path = save_dir / img_metadata_path.name
+
+            if save_path.exists():
+                logger.info(f"Image {img_metadata_path.name} already exists. Skipping.")
+                continue
+
+            logger.info(f"Processing {img_metadata_path.name}")
+
+            img = imread(img_metadata_path)
+            img = img[panel.page]
+            imwrite(save_path, img)
+
 
     def create_masks(self):
         pass
@@ -234,7 +329,48 @@ class PCa(BaseIMCDataset):
         self.create_features_intensity()
 
     def create_panel(self):
-        pass
+        from ai4bmr_core.utils.tidy import tidy_name
+        import json
+        import pandas as pd
+        panel = None
+
+        raw_acquisitions_dir = self.raw_dir / 'acquisitions'
+        for img_metadata_path in raw_acquisitions_dir.glob("*.json"):
+            with open(img_metadata_path, "r") as f:
+                img_metadata = json.load(f)
+                df = pd.DataFrame(img_metadata)
+                df = df[["channel_names", "channel_labels", "metal_names"]]
+
+            if panel is None:
+                panel = df
+            else:
+                assert panel.equals(df)
+
+        keep = panel.channel_labels.str.len() != 0
+        panel["keep"] = keep
+
+        panel.index.name = 'page'
+        panel = panel.reset_index()
+
+        assert keep.sum() == 40
+        panel["target"] = panel.channel_labels.map(tidy_name).values
+        panel = panel.rename(columns={'channel_names': 'metal_tag',
+                                      'channel_labels': 'channel_label',
+                                      'metal_names': 'metal_name'})
+        panel = panel.convert_dtypes()
+        panel.index.name = "channel_index"
+
+        panel.to_parquet(raw_acquisitions_dir / "panel.parquet")
+
+        panel = panel[panel.keep].reset_index(drop=True)
+        panel.index.name = "channel_index"
+
+        metal_tag_to_uniprot_id = {'Pr141': 'P63267', 'Nd142': 'P07288', 'Nd143': 'P08670', 'Nd144': 'P02452', 'Nd145': 'P08247', 'Nd146': 'P13647', 'Sm147': 'P46937', 'Nd148': 'P78386', 'Sm149': 'P23141', 'Nd150': 'P18146', 'Eu151': 'P16284', 'Sm152': 'P08575', 'Eu153': 'P16070', 'Sm154': 'Q12884', 'Gd155': 'Q9BZS1', 'Gd156': 'P01730', 'Gd158': 'P12830', 'Tb159': 'P34810', 'Gd160': 'P31997', 'Dy161': 'P11836', 'Dy162': 'P01732', 'Dy163': 'P11215', 'Dy164': 'Q9H3D4', 'Ho165': 'P35222', 'Er166': 'Q86YL7', 'Er167': 'P17813', 'Er168': 'P46013', 'Tm169': 'P04637', 'Er170': 'P04234', 'Yb171': 'P11308', 'Yb172': 'P42574', 'Yb173': 'P51911', 'Yb174': 'P05783', 'Lu175': 'P43121', 'Yb176': 'P10275', 'Ir191': None, 'Ir193': None, 'Pt195': None, 'Pt196': None, 'Pt198': None}
+        panel["uniprot_id"] = panel.metal_tag.map(metal_tag_to_uniprot_id)
+
+        panel_path = self.get_panel_path("raw")
+        panel_path.parent.mkdir(parents=True, exist_ok=True)
+        panel.to_parquet(panel_path)
 
     @property
     def name(self):

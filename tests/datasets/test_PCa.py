@@ -3,6 +3,6 @@ def test_PCa():
     import pandas as pd
 
     ds = dataset = self = PCa()
-    # ds.label_transfer()
+    ds.label_transfer()
     ds.setup(image_version="filtered", mask_version="filtered", load_metadata=True)
     # ds.metadata.shape
