@@ -1,7 +1,7 @@
 import pytest
 
 @pytest.mark.skip(reason="Only run when downloading changes")
-@pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024"])
+@pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024", "Keren2018"])
 def test_prepare_data(dataset_name):
     from pathlib import Path
     import shutil
@@ -12,6 +12,8 @@ def test_prepare_data(dataset_name):
         case "Danenberg2022":
             from ai4bmr_datasets import Danenberg2022 as Dataset
         case "Cords2024":
+            from ai4bmr_datasets import Cords2024 as Dataset
+        case "Keren2018":
             from ai4bmr_datasets import Cords2024 as Dataset
         case _:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
