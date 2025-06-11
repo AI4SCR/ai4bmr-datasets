@@ -1,6 +1,6 @@
-# SpatialOmicsNet
+# SpatialProteomicsNet
 
-**SpatialOmicsNet** is an open-source Python package providing a unified interface to access, prepare, and load spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
+**SpatialProteomicsNet** is an open-source Python package providing a unified interface to access, prepare, and load spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
 
 For a detailed description, motivation, and full list of supported technologies and use cases, please refer to [paper.md](./paper.md).
 
@@ -67,7 +67,6 @@ Both [python](https://www.python.org/downloads/) and [R](https://www.r-project.o
 The package can be installed via pip from GitHub:
 
 ```bash
-pip install git+https://github.com/AI4SCR/ai4bmr-core.git
 pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 ```
 
@@ -81,8 +80,9 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 from ai4bmr_datasets import Jackson2020
 from pathlib import Path
 
-dataset = Jackson2020(base_dir=Path("/path/to/storage"))
-dataset.prepare_data()  # Downloads and preprocesses data if needed
+base_dir = Path("/path/to/storage")  # can be None, resolves to ~/.cache/ai4bmr_datasets by default
+dataset = Jackson2020(base_dir=None)
+dataset.prepare_data()  # Downloads and preprocesses data if needed, only needs to be run once
 dataset.setup(image_version="published", mask_version="published")
 ```
 
@@ -123,7 +123,40 @@ print("Mask shape:", mask.shape)
 
 ## 🤝 Contributing
 
-We welcome contributions for adding new datasets, bug fixes, or improvements. Standardized schemas and utility functions are provided to ease extension.
+We welcome contributions to improve the project, including:
+
+- Adding new datasets  
+- Fixing bugs  
+- Improving performance or usability
+
+### 📌 Contribution Guidelines
+
+If you'd like to contribute:
+
+1. **Fork the repository** and create a feature branch.   
+2. Add or update relevant tests if applicable.  
+3. Submit a **pull request** with a clear description of your changes.
+
+Please open a discussion or issue before implementing large features to ensure alignment with project goals.
+
+### 🐛 Reporting Issues
+
+If you encounter bugs, incorrect behavior, or missing functionality:
+
+- [Open an issue](https://github.com/AI4SCR/ai4bmr-datasets/issues) with a clear title and minimal reproducible example.  
+- Include relevant error messages and version information if possible.
+
+We monitor issues regularly and appreciate detailed, constructive reports.
+
+### 💬 Seeking Support
+
+If you need help using the software:
+
+- Check the existing [issues](https://github.com/AI4SCR/ai4bmr-datasets/issues) and [discussions](https://github.com/AI4SCR/ai4bmr-datasets/discussions) first.  
+- For general questions or usage advice, feel free to open a [discussion topic](https://github.com/AI4SCR/ai4bmr-datasets/discussions/new).  
+- For dataset-specific problems, include dataset identifiers and loading code if applicable.
+
+We aim to foster a welcoming and respectful community. Please be kind and collaborative in your interactions.
 
 ---
 

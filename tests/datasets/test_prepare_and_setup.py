@@ -1,7 +1,7 @@
 import pytest
 
 @pytest.mark.skip(reason="Only run when downloading changes")
-@pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024"])
+@pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024", "Keren2018"])
 def test_prepare_data(dataset_name):
     from pathlib import Path
     import shutil
@@ -12,6 +12,8 @@ def test_prepare_data(dataset_name):
         case "Danenberg2022":
             from ai4bmr_datasets import Danenberg2022 as Dataset
         case "Cords2024":
+            from ai4bmr_datasets import Cords2024 as Dataset
+        case "Keren2018":
             from ai4bmr_datasets import Cords2024 as Dataset
         case _:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
@@ -28,6 +30,13 @@ def test_prepare_data(dataset_name):
                  mask_version=mask_version,
                  metadata_version=metadata_version, load_metadata=True,
                  feature_version=feature_version, load_intensity=True)
+
+        assert isinstance(ds.images, dict)
+        assert isinstance(ds.masks, dict)
+        import pandas as pd
+        assert isinstance(ds.metadata, pd.DataFrame)
+        assert isinstance(ds.intensity, pd.DataFrame)
+
     except Exception as e:
         print(f"Error preparing dataset {dataset_name}: {e}")
     finally:

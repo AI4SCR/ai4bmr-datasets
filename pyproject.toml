@@ -24,6 +24,9 @@ dependencies = [
     "pyarrow",
     "fastparquet",
     "geopandas",
+    "loguru",
+    "requests",
+    "ai4bmr-core @ git+https://github.com/AI4SCR/ai4bmr-core.git"
 ]
 dynamic = ["version"]
 classifiers = [
@@ -49,7 +52,6 @@ dev = [
     "setuptools_scm[toml]",
     "tabulate",
 ]
-#    "python-semantic-release",  # rely on setuptools_scm for versioning
 
 [tool.black]
 line-length = 120

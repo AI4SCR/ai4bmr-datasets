@@ -9,3 +9,9 @@ def test_Danenberg2022():
     ds.setup(image_version=image_version, mask_version='published_cell',
              metadata_version=metadata_version, load_metadata=True,
              feature_version=feature_version, load_intensity=True)
+
+    assert isinstance(ds.images, dict)
+    assert isinstance(ds.masks, dict)
+    import pandas as pd
+    assert isinstance(ds.metadata, pd.DataFrame)
+    assert isinstance(ds.intensity, pd.DataFrame)

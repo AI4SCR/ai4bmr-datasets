@@ -21,7 +21,7 @@ for sample_id in ds_published.sample_ids:
     if sample_id not in ds_published.masks:
         continue
 
-    mask_raw_path = ds_published.raw_dir / f'TNBC_shareCellData/p{sample_id}_labeledcellData.tiff'
+    mask_raw_path = ds_published.raw_dir / f'tnbc_processed_data/p{sample_id}_labeledcellData.tiff'
     mask_raw = imread(mask_raw_path)
     mask_published = ds_published.masks[sample_id].data
     mask_annotated = ds_annotated.masks[sample_id].data

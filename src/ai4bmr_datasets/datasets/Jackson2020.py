@@ -26,6 +26,8 @@ class Jackson2020(BaseIMCDataset):
         self.create_masks()
         self.create_features()
 
+        self.create_annotated()
+
     def download(self, force: bool = False):
         import requests
         import shutil
