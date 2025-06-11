@@ -16,8 +16,6 @@ class Keren2018(BaseIMCDataset):
     id = 'Keren2018'
     doi = '10.1016/j.cell.2018.08.039'
     notes = """
-    Download data from https://www.angelolab.com/mibi-data, unzip and place in `base_dir/01_raw`.
-    Save Ionpath file as tnbc. We are waiting for the authors to provide the data in a more accessible format.
     The supplementary_table_1_path is downloaded as Table S1 from the paper.
     
     - patient_id 30 is missing due to noise
@@ -28,8 +26,7 @@ class Keren2018(BaseIMCDataset):
         super().__init__(base_dir)
 
     def prepare_data(self):
-        # logger.info('Waiting for the authors to provide the data in a more accessible format.')
-        # return
+        self.download()
         self.create_panel()
         self.create_metadata()
         self.create_images()
@@ -37,6 +34,8 @@ class Keren2018(BaseIMCDataset):
         self.create_clinical_metadata()
         self.create_features_intensity()
         self.create_features_spatial()
+
+        self.create_annotated()
 
     def download(self, force: bool = False):
         import requests
@@ -46,7 +45,10 @@ class Keren2018(BaseIMCDataset):
         download_dir.mkdir(parents=True, exist_ok=True)
 
         file_map = {
-            "https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc2.xlsx": download_dir / "1-s2.0-S0092867418311000-mmc1.xlsx",
+            "https://www.dropbox.com/scl/fo/wgytss4wnubn05hnp69jg/ADMhoNHgJTpxAbEE9PQn1zY?rlkey=g79sa4b50hkx2nyjksgmqzrhl&e=1&st=nsaw5cbr&dl=1": download_dir / "tnbc.zip",
+            "https://www.angelolab.com/_files/archives/302cbc_72cbeda2c99342c0a1b3940d6bac144f.zip?dn=TNBC_shareCellData.zip": download_dir / "tnbc_processed_data.zip",
+            "https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc1.xlsx": download_dir / "1-s2.0-S0092867418311000-mmc1.xlsx",
+            "https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc2.xlsx": download_dir / "1-s2.0-S0092867418311000-mmc2.xlsx",
         }
 
         # Download files
@@ -105,18 +107,18 @@ class Keren2018(BaseIMCDataset):
         )
 
         # extract original page numbers for markers
-        raw_images_dir = self.raw_dir / "tnbc"
-        img_path = sorted(
-            filter(
-                lambda f: not f.name.startswith("."), raw_images_dir.glob("*.tiff")
-            )
-        )[0]
-        metadata = self.get_tiff_metadata(img_path)
-        metadata = metadata.rename(columns={"target": "target_from_tiff"}).reset_index()
+        # raw_images_dir = self.raw_dir / "tnbc"
+        # img_path = sorted(
+        #     filter(
+        #         lambda f: not f.name.startswith("."), raw_images_dir.glob("*.tiff")
+        #     )
+        # )[0]
+        # metadata = self.get_tiff_metadata(img_path)
+        # metadata = metadata.rename(columns={"target": "target_from_tiff"}).reset_index()
 
-        panel = panel.merge(metadata, on="mass_channel", how="left")
-        assert panel.isna().any().any() == False
-        panel = panel.sort_values("page").reset_index(drop=True)
+        # panel = panel.merge(metadata, on="mass_channel", how="left")
+        # assert panel.isna().any().any() == False
+        # panel = panel.sort_values("page").reset_index(drop=True)
 
         panel.index.name = "channel_index"
         panel = panel.convert_dtypes()
@@ -155,24 +157,27 @@ class Keren2018(BaseIMCDataset):
         images_dir = self.get_image_version_dir('published')
         images_dir.mkdir(exist_ok=True, parents=True)
 
-        raw_images_dir = self.raw_dir / "tnbc"
-        image_paths = sorted(
-            filter(
-                lambda f: not f.name.startswith("."), raw_images_dir.glob("*.tiff")
-            )
-        )
-        for img_path in image_paths:
-            logger.debug(f"processing image {img_path.stem}")
-            sample_id = re.search(r"Point(\d+).tiff", img_path.name).groups()[0]
+        raw_images_dir = self.raw_dir / "tnbc" / 'TNBCShareData'
+        assert raw_images_dir.exists()
 
-            if (images_dir / f"{sample_id}.tiff").exists():
+        sample_dirs = sorted([i for i in raw_images_dir.iterdir() if i.is_dir()])
+        for sample_dir in sample_dirs:
+            sample_id = re.search(r"Point(\d+)", sample_dir.name).group(1)
+            save_path = images_dir / f"{sample_id}.tiff"
+
+            if save_path.exists():
+                logger.info(f"Image for sample {sample_id} already exists, skipping.")
                 continue
 
-            img = imread(img_path)
-            img = img[panel.page.values]  # extract only the layers of the panel
-            assert len(img) == len(panel)
+            stack = []
+            for channel in panel.target_original_name:
+                img = imread(sample_dir / f"{channel}.tif")
+                stack.append(img)
 
-            save_image(img, images_dir / f"{sample_id}.tiff")
+            stack = np.stack(stack, axis=0)
+            assert len(stack) == 36
+
+            save_image(stack, save_path)
 
 
     def create_masks(self):
@@ -185,8 +190,8 @@ class Keren2018(BaseIMCDataset):
         save_masks_dir = self.masks_dir / 'published'
         save_masks_dir.mkdir(exist_ok=True, parents=True)
 
-        raw_images_dir = self.raw_dir / "tnbc"
-        raw_masks_dir = self.raw_dir / "TNBC_shareCellData"
+        raw_images_dir = self.raw_dir / "tnbc/TNBCShareData"
+        raw_masks_dir = self.raw_dir / "tnbc_processed_data"
         mask_paths = sorted(list(raw_masks_dir.glob(r"p*_labeledcellData.tiff")))
 
         for mask_path in mask_paths:
@@ -202,9 +207,8 @@ class Keren2018(BaseIMCDataset):
             mask = imread(mask_path)
 
             # load segmentation mask from raw data
-            segm_path = raw_images_dir / f"TA459_multipleCores2_Run-4_Point{sample_id}" / "segmentation_interior.png"
-            segm = Image.open(segm_path)
-            segm = np.array(segm)
+            segm_path = raw_images_dir / f"Point{sample_id}" / "SegmentationInterior.tif"
+            segm = imread(segm_path)
 
             # note: set region with no segmentation to background
             # filter masks by objects in data
@@ -218,7 +222,7 @@ class Keren2018(BaseIMCDataset):
 
     def create_clinical_metadata(self):
         logger.info("Creating metadata")
-        samples = pd.read_csv(self.raw_dir / "TNBC_shareCellData" / "patient_class.csv", header=None)
+        samples = pd.read_csv(self.raw_dir / "tnbc_processed_data" / "patient_class.csv", header=None)
         samples.columns = ["patient_id", "cancer_type_id"]
         samples = samples.assign(sample_id=samples["patient_id"]).set_index("sample_id")
         samples.index = samples.index.astype(str)
@@ -234,7 +238,7 @@ class Keren2018(BaseIMCDataset):
 
     def create_metadata(self):
         logger.info("Creating metadata [annotations]")
-        raw_sca_path = self.raw_dir / "TNBC_shareCellData" / "cellData.csv"
+        raw_sca_path = self.raw_dir / "tnbc_processed_data" / "cellData.csv"
         data = pd.read_csv(raw_sca_path)
 
         metadata_cols = [
@@ -309,7 +313,7 @@ class Keren2018(BaseIMCDataset):
         logger.info("Creating spatial features")
 
         samples = pd.read_parquet(self.clinical_metadata_path)
-        spatial = pd.read_csv(self.raw_dir / "TNBC_shareCellData" / "cellData.csv")
+        spatial = pd.read_csv(self.raw_dir / "tnbc_processed_data" / "cellData.csv")
 
         index_columns = ["sample_id", "object_id"]
         feat_cols_names = ["cellSize"]
@@ -359,7 +363,7 @@ class Keren2018(BaseIMCDataset):
         samples = pd.read_parquet(self.clinical_metadata_path)
         panel_path = self.get_panel_path(image_version='published')
         panel = pd.read_parquet(panel_path)
-        intensity = pd.read_csv(self.raw_dir / "TNBC_shareCellData" / "cellData.csv")
+        intensity = pd.read_csv(self.raw_dir / "tnbc_processed_data" / "cellData.csv")
 
         index_columns = ["sample_id", "object_id"]
         intensity = intensity.rename(
