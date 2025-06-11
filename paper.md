@@ -31,13 +31,17 @@ bibliography: paper.bib
 
 # Summary
 
-`SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
-spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
-imaging time-of-flight (MIBI-TOF) [@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
+`SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for
+accessing
+spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
+IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
+imaging time-of-flight (MIBI-TOF) [@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load
+raw spatially-resolved
 proteomics data from multiple
 studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
 training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
-single-cell data formats), `SpatialProteomicsNet` promotes reproducible and efficient research in computational and spatial
+single-cell data formats), `SpatialProteomicsNet` promotes reproducible and efficient research in computational and
+spatial
 biology. The library is designed to serve the broader community working on spatial proteomics by easing data access and
 integration into machine learning workflows.
 
@@ -76,18 +80,20 @@ datasets.
 
 `SpatialProteomicsNet` is an open-source Python package that addresses these gaps by:
 
-  - Providing a lightweight, unified interface to widely-used curated spatial proteomics datasets.
-  - Abstracting dataset-specific structure, letting users access data components (images, masks, metadata) through a
-consistent schema.
-  - Supporting reproducible preprocessing via modular, reusable interfaces for common pipeline steps.
-  - Facilitating integration in machine learning and computer vision models by streamlining dataset loading into standard
-formats.
-  - Encouraging community contributions for expanding and maintaining harmonized dataset access.
+- Providing a lightweight, unified interface to widely-used curated spatial proteomics datasets.
+- Abstracting dataset-specific structure, letting users access data components (images, masks, metadata) through a
+  consistent schema.
+- Supporting reproducible preprocessing via modular, reusable interfaces for common pipeline steps.
+- Facilitating integration in machine learning and computer vision models by streamlining dataset loading into standard
+  formats.
+- Encouraging community contributions for expanding and maintaining harmonized dataset access.
 
 This unified approach allows scientists to abstract away dataset-specific idiosyncrasies and focus on biological and
 analytical questions rather than data wrangling. `SpatialProteomicsNet` is intentionally minimal, tailored to machine
-learning and computer vision workflows (e.g., loading images, masks, and cell-level metadata with minimal setup) without depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask).
-`SpatialProteomicsNet` gives immediate access to curated datasets with ready-to-use utilities, eliminating the need to write custom loaders or
+learning and computer vision workflows (e.g., loading images, masks, and cell-level metadata with minimal setup) without
+depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask).
+`SpatialProteomicsNet` gives immediate access to curated datasets with ready-to-use utilities, eliminating the need to
+write custom loaders or
 parse inconsistent formats. As such, it is particularly friendly to the growing community of ML developers, researchers,
 and engineers entering the emerging field of spatial biology. By harmonizing data access, our package enables more
 straightforward integration of spatial proteomics data into machine learning and modeling frameworks, ultimately
@@ -102,12 +108,12 @@ The package supports the following public spatial proteomics datasets:
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
 
-| name          |  images |  masks |  markers | annotated cells | clinical samples |
-|:--------------|--------:|-------:|---------:|----------------:|-----------------:|
-| Danenberg2022 |     794 |    794 |       39 |         1123466 |              794 |
-| Cords2024     |    2070 |   2070 |       43 |         5984454 |             2072 |
-| Jackson2020   |     735 |    735 |       35 |         1224411 |              735 |
-| Keren2018     |      41 |     41 |       36 |          201656 |               41 |
+| name          | images | masks | markers | annotated cells | clinical samples |
+|:--------------|-------:|------:|--------:|----------------:|-----------------:|
+| Danenberg2022 |    794 |   794 |      39 |         1123466 |              794 |
+| Cords2024     |   2070 |  2070 |      43 |         5984454 |             2072 |
+| Jackson2020   |    735 |   735 |      35 |         1224411 |              735 |
+| Keren2018     |     41 |    41 |      36 |          201656 |               41 |
 
 <figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
@@ -115,15 +121,23 @@ Additionally, dummy datasets are provided to mimic real data structure for devel
 
 Each dataset is accessible through a standardized class interface that mimics the pytorch
 lightning [@falcon2019pytorchlightning]
-philosophy and includes methods for downloading, preparing, and accessing processed components (images, masks, features and metadata). These datasets follow consistent naming conventions and data schemas, making them immediately
+philosophy and includes methods for downloading, preparing, and accessing processed components (images, masks, features
+and metadata). These datasets follow consistent naming conventions and data schemas, making them immediately
 usable for downstream tasks.
 
 # Conclusion
 
-`SpatialProteomicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
+`SpatialProteomicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open
+access
 to several published datasets and processing routines. Its modular design and standardized outputs make it a practical
 tool for researchers developing computational methods in spatial biology. We welcome contributions and extensions from
 the community and envision this package as a foundation for reproducible spatial proteomics analysis.
+
+## Acknowledgements
+
+We thank Prof. Raza Ali for his support in clarifying details about the Danenberg2022 dataset.  
+We are grateful to Prof. Leeat Keren and Prof. Michael Angelo for facilitating access to the updated MIBI-TOF datasets,
+and we thank Dr. Lena Cords for providing detailed information about the Cords2024 dataset.
 
 # References
 
