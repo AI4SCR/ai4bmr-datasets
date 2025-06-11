@@ -135,9 +135,10 @@ the community and envision this package as a foundation for reproducible spatial
 
 ## Acknowledgements
 
-We thank Prof. Raza Ali for his support in clarifying details about the Danenberg2022 dataset.  
-We are grateful to Prof. Leeat Keren and Prof. Michael Angelo for facilitating access to the updated MIBI-TOF datasets,
-and we thank Dr. Lena Cords for providing detailed information about the Cords2024 dataset.
+## 🙏 Acknowledgements
+
+We thank Drs. Raza Ali, Dr. Lena Cords, Prof. Leeat Keren, and Prof. Michael Angelo for providing detailed information
+and facilitating access to the corresponding datasets.
 
 # References
 
