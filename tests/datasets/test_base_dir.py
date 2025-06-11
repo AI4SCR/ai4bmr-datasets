@@ -4,7 +4,7 @@ def test_base_dir_resolve_default():
 
     ds = Cords2024(base_dir=None)
     default_dir = Path.home() / '.cache' / 'ai4bmr_datasets' / Cords2024.name
-    assert ds.base_dir == default_dir, f"Expected base_dir to be {default_dir}, but got {ds.base_dir}"
+    assert ds.base_dir.resolve() == default_dir.resolve(), f"Expected base_dir to be {default_dir.resolve()}, but got {ds.base_dir.resolve()}"
 
 def test_base_dir_resolve_from_env_var():
     from pathlib import Path
