@@ -25,6 +25,7 @@ dependencies = [
     "fastparquet",
     "geopandas",
     "loguru",
+    "requests",
     "ai4bmr-core @ git+https://github.com/AI4SCR/ai4bmr-core.git"
 ]
 dynamic = ["version"]

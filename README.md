@@ -80,8 +80,9 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 from ai4bmr_datasets import Jackson2020
 from pathlib import Path
 
-dataset = Jackson2020(base_dir=Path("/path/to/storage"))
-dataset.prepare_data()  # Downloads and preprocesses data if needed
+base_dir = Path("/path/to/storage")  # can be None, resolves to ~/.cache/ai4bmr_datasets by default
+dataset = Jackson2020(base_dir=None)
+dataset.prepare_data()  # Downloads and preprocesses data if needed, only needs to be run once
 dataset.setup(image_version="published", mask_version="published")
 ```
 
