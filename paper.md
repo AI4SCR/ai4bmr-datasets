@@ -32,9 +32,8 @@ bibliography: paper.bib
 # Summary
 
 `SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
-spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
-IMC)[@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
-imaging time-of-flight (MIBI-TOF)[@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
+spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
+imaging time-of-flight (MIBI-TOF) [@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
 proteomics data from multiple
 studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
 training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
@@ -44,24 +43,24 @@ integration into machine learning workflows.
 
 # Statement of Need
 
-Spatially-resolved proteomics, recently named Nature Method of the Year 2024[@MethodYear20242024], enable the
+Spatially-resolved proteomics, recently named Nature Method of the Year 2024 [@MethodYear20242024], enable the
 quantification of proteins in
 single cells within their tissue context, revealing intricate aspects of spatial cellular arrangement and communication.
 In the context of cancer, these advancements provide unprecedented insights into the heterogeneity of the tumor and its
 microenvironment, and the underlying mechanisms affecting tumor initiation, progression, and response to
-treatment[@lewisSpatialOmicsMultiplexed2021].
+treatment [@lewisSpatialOmicsMultiplexed2021].
 IMC and MIBI-TOF are among the most popular
 technologies, with dozens of high-dimensional datasets made publicly available per year. The increasing availability of
 these datasets has fueled algorithmic development in machine learning and computer vision. Numerous models that perform
-a variety of tasks, such as cell segmentation[@greenwaldWholecellSegmentationTissue2022], cell type
-annotation[@geuenichAutomatedAssignmentCell2021], representation learning[@wencksternAIpoweredVirtualTissues2025a] or
+a variety of tasks, such as cell segmentation [@greenwaldWholecellSegmentationTissue2022], cell type
+annotation [@geuenichAutomatedAssignmentCell2021], representation learning [@wencksternAIpoweredVirtualTissues2025a] or
 heterogeneity
-analysis[@martinelliATHENAAnalysisTumor2022a] tailored to spatial proteomics data have been recently developed, with
+analysis [@martinelliATHENAAnalysisTumor2022a] tailored to spatial proteomics data have been recently developed, with
 corresponding widely used packages.
 
 However, a critical gap hindering model development, reproducibility and cross-study analyses is the lack of unified
 frameworks to access and process the data. Spatial proteomics datasets, often deposited in public repositories such as
-Zenodo[@https://doi.org/10.25495/7gxk-rd71] or Figshare[@FigshareCreditAll], typically contain a collection of
+Zenodo[@https://doi.org/10.25495/7gxk-rd71] or Figshare [@FigshareCreditAll], typically contain a collection of
 components, such as raw and preprocessed images, segmentation
 masks, extracted single-cell intensities, panel descriptions and associated clinical metadata, uploaded in disparate,
 non-standardized formats (e.g., mixed .tiff, .csv, custom JSONs), with varying metadata structures and inconsistent
@@ -69,7 +68,7 @@ preprocessing that vary greatly between studies and labs. Working with these fra
 time investment for researchers to locate and download the data, and write custom scripts to handle their specific data
 structure, creating barriers to entry, complicating usage and hindering robust benchmarking. While existing data
 frameworks developed by the spatial transcriptomics community such as
-SpatialData[@marconatoSpatialDataOpenUniversal2025] and Pysodb[@yuanSODBFacilitatesComprehensive2023] are gaining
+SpatialData [@marconatoSpatialDataOpenUniversal2025] and Pysodb [@yuanSODBFacilitatesComprehensive2023] are gaining
 popularity
 and can be extended to spatial proteomics, they often come with heavier dependencies and general-purpose abstractions
 that may be unnecessarily complex for researchers focused on fast, standardized access to real-world IMC or MIBI-TOF
