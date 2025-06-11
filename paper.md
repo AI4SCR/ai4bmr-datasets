@@ -118,27 +118,6 @@ lightning [@falcon2019pytorchlightning]
 philosophy and includes methods for downloading, preparing, and accessing processed components (images, masks, features and metadata). These datasets follow consistent naming conventions and data schemas, making them immediately
 usable for downstream tasks.
 
-# Example Usage
-
-```python
-from ai4bmr_datasets import Jackson2020
-
-dataset = Jackson2020()
-dataset.prepare_data()
-dataset.setup(image_version="published", mask_version="published")
-
-print(dataset.sample_ids)  # list of sample IDs
-print(dataset.images)  # list of images
-print(dataset.masks)  # list of masks
-
-dataset.setup(image_version="published", mask_version="published",
-              feature_version='published', load_intensity=True,
-              metadata_version='published', load_metadata=True,
-              )
-print(dataset.intensity.shape)  # cell x marker matrix
-print(dataset.metadata.shape)  # cell x annotation matrix
-```
-
 # Conclusion
 
 `SpatialProteomicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
