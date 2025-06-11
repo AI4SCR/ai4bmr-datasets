@@ -102,12 +102,12 @@ The package supports the following public spatial proteomics datasets:
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
 
-|  | name          |  images |  masks |  markers | annotated cells | clinical samples |
-|-:|:--------------|--------:|-------:|---------:|----------------:|-----------------:|
-|  | Danenberg2022 |     794 |    794 |       39 |         1123466 |              794 |
-|  | Cords2024     |    2070 |   2070 |       43 |         5984454 |             2072 |
-|  | Jackson2020   |     735 |    735 |       35 |         1224411 |              735 |
-|  | Keren2018     |      41 |     41 |       36 |          201656 |               41 |
+| name          |  images |  masks |  markers | annotated cells | clinical samples |
+|:--------------|--------:|-------:|---------:|----------------:|-----------------:|
+| Danenberg2022 |     794 |    794 |       39 |         1123466 |              794 |
+| Cords2024     |    2070 |   2070 |       43 |         5984454 |             2072 |
+| Jackson2020   |     735 |    735 |       35 |         1224411 |              735 |
+| Keren2018     |      41 |     41 |       36 |          201656 |               41 |
 
 <figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
