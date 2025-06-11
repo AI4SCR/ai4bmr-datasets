@@ -1,15 +1,17 @@
 ---
-title: "**SpatialOmicsNet** : A unified interface for spatial proteomics data access for computer vision and machine learning"
+title: "**SpatialProteomicsNet** : A unified interface for spatial proteomics data access for computer vision and machine learning"
 tags:
   - Python
-  - spatial omics
+  - spatial proteomics
   - imaging mass cytometry
-  - spatial transcriptomics
+  - multiplexed ion beam imaging
   - computational pathology
+  - machine learning
+  - computer vision
 authors:
   - name: Adriano Martinelli
     orcid: 0000-0002-9288-5103
-    affiliation: 1
+    affiliation: 1, 2
   - name: Marianna Rapsomaniki
     orcid: 0000-0003-3883-4871
     affiliation: 1, 3
@@ -17,24 +19,26 @@ affiliations:
   - index: 1
     name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
   - index: 2
-    name: ETH Zürich, Zürich, Switzerland
+    name: ETH Zurich, Zurich, Switzerland
   - index: 3
     name: University of Lausanne (UNIL), Lausanne, Switzerland
-date: 2025-05-28
+  - index: 4
+    name: Swiss Institute of Bioinformatics (SIB), Lausanne, Switzerland
+date: 2025-06-11
 bibliography: paper.bib
 #csl: https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl
 ---
 
 # Summary
 
-`SpatialOmicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
+`SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for accessing
 spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
 IMC)[@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
-imaging (MIBI-TOF)[@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
+imaging time-of-flight (MIBI-TOF)[@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load raw spatially-resolved
 proteomics data from multiple
 studies in a unified format, apply and retrieve data structures ready for downstream machine learning analysis or model
 training. By focusing on open-source raw data processing and enforcing common data schemas (e.g., standardized image and
-single-cell data formats), `SpatialOmicsNet` promotes reproducible and efficient research in computational and spatial
+single-cell data formats), `SpatialProteomicsNet` promotes reproducible and efficient research in computational and spatial
 biology. The library is designed to serve the broader community working on spatial proteomics by easing data access and
 integration into machine learning workflows.
 
@@ -68,10 +72,10 @@ frameworks developed by the spatial transcriptomics community such as
 SpatialData[@marconatoSpatialDataOpenUniversal2025] and Pysodb[@yuanSODBFacilitatesComprehensive2023] are gaining
 popularity
 and can be extended to spatial proteomics, they often come with heavier dependencies and general-purpose abstractions
-that may be unnecessarily complex for researchers focused on fast, standardized access to real-world IMC or MIBI
+that may be unnecessarily complex for researchers focused on fast, standardized access to real-world IMC or MIBI-TOF
 datasets.
 
-`SpatialOmicsNet` is an open-source Python package that addresses these gaps by:
+`SpatialProteomicsNet` is an open-source Python package that addresses these gaps by:
 
   - Providing a lightweight, unified interface to widely-used curated spatial proteomics datasets.
   - Abstracting dataset-specific structure, letting users access data components (images, masks, metadata) through a
@@ -82,9 +86,9 @@ formats.
   - Encouraging community contributions for expanding and maintaining harmonized dataset access.
 
 This unified approach allows scientists to abstract away dataset-specific idiosyncrasies and focus on biological and
-analytical questions rather than data wrangling. `SpatialOmicsNet` is intentionally minimal, tailored to machine
+analytical questions rather than data wrangling. `SpatialProteomicsNet` is intentionally minimal, tailored to machine
 learning and computer vision workflows (e.g., loading images, masks, and cell-level metadata with minimal setup) without depending on larger ecosystem packages (e.g., anndata, xarray, zarr, dask).
-`SpatialOmicsNet` gives immediate access to curated datasets with ready-to-use utilities, eliminating the need to write custom loaders or
+`SpatialProteomicsNet` gives immediate access to curated datasets with ready-to-use utilities, eliminating the need to write custom loaders or
 parse inconsistent formats. As such, it is particularly friendly to the growing community of ML developers, researchers,
 and engineers entering the emerging field of spatial biology. By harmonizing data access, our package enables more
 straightforward integration of spatial proteomics data into machine learning and modeling frameworks, ultimately
@@ -94,7 +98,7 @@ accelerating biomedical discovery.
 
 The package supports the following public spatial proteomics datasets:
 
-- **Keren et al. 2018** – IMC of triple-negative breast cancer [@Keren2018]
+- **Keren et al. 2018** – MIBI-TOF of triple-negative breast cancer [@Keren2018]
 - **Jackson et al. 2020** – IMC of breast cancer [@jacksonSinglecellPathologyLandscape2020]
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
@@ -119,9 +123,8 @@ usable for downstream tasks.
 
 ```python
 from ai4bmr_datasets import Jackson2020
-from pathlib import Path
 
-dataset = Jackson2020(base_dir=Path("<PATH>"))
+dataset = Jackson2020()
 dataset.prepare_data()
 dataset.setup(image_version="published", mask_version="published")
 
@@ -139,7 +142,7 @@ print(dataset.metadata.shape)  # cell x annotation matrix
 
 # Conclusion
 
-`SpatialOmicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
+`SpatialProteomicsNet` lowers the technical barrier to working with spatial proteomics data by providing unified, open access
 to several published datasets and processing routines. Its modular design and standardized outputs make it a practical
 tool for researchers developing computational methods in spatial biology. We welcome contributions and extensions from
 the community and envision this package as a foundation for reproducible spatial proteomics analysis.

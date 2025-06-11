@@ -49,7 +49,6 @@ dev = [
     "setuptools_scm[toml]",
     "tabulate",
 ]
-#    "python-semantic-release",  # rely on setuptools_scm for versioning
 
 [tool.black]
 line-length = 120
