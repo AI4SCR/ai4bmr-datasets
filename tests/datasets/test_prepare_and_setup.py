@@ -30,6 +30,13 @@ def test_prepare_data(dataset_name):
                  mask_version=mask_version,
                  metadata_version=metadata_version, load_metadata=True,
                  feature_version=feature_version, load_intensity=True)
+
+        assert isinstance(ds.images, dict)
+        assert isinstance(ds.masks, dict)
+        import pandas as pd
+        assert isinstance(ds.metadata, pd.DataFrame)
+        assert isinstance(ds.intensity, pd.DataFrame)
+
     except Exception as e:
         print(f"Error preparing dataset {dataset_name}: {e}")
     finally:
