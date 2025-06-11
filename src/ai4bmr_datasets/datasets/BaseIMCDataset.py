@@ -221,14 +221,6 @@ class BaseIMCDataset:
             self.metadata = metadata
 
     def create_annotated(self, version_name: str = 'annotated', mask_version: str = "published"):
-        """
-        Masks are grayscale images where each discrete region is identified by a set of contiguous pixels associated
-        with a single integer value. These tend to be sequential from the top to the bottom of the image (this is why a
-        mask appears as a gradation of gray and white when opened in an image viewer). The processed single cell data
-        ‘ObjectNumber’ column corresponds to whole cell masks, where the integer values of each cell maps to
-        ‘ObjectNumber’, allowing for marker values and other features to be mapped to images.
-        """
-
         from skimage.io import imread, imsave
         import numpy as np
 
