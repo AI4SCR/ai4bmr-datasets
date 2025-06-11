@@ -67,7 +67,6 @@ Both [python](https://www.python.org/downloads/) and [R](https://www.r-project.o
 The package can be installed via pip from GitHub:
 
 ```bash
-pip install git+https://github.com/AI4SCR/ai4bmr-core.git
 pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 ```
 
