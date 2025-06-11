@@ -39,9 +39,9 @@ class Cords2024(BaseIMCDataset):
         self.create_panel()
         self.create_images()
         self.create_masks()
-
         self.create_metadata()
-        self.create_annotated_masks()
+
+        self.create_annotated()
 
     def download(self, force: bool = False):
         import requests
@@ -123,17 +123,17 @@ class Cords2024(BaseIMCDataset):
 
     def process_acquisitions(self):
         """
-            Failed reading acquisitions for:
-            # have masks
-            - 88_A_10
-            - 88_A_9
-            - 88_B_110
-            - 86_B_1
-            - 176_B_47
-            - 175_B_90
+        Failed reading acquisitions for:
+        # have masks
+        - 88_A_10
+        - 88_A_9
+        - 88_B_110
+        - 86_B_1
+        - 176_B_47
+        - 175_B_90
 
-            - 176_C_2
-            - 87_A_49
+        - 176_C_2
+        - 87_A_49
         """
 
         from readimc import MCDFile
@@ -338,40 +338,6 @@ class Cords2024(BaseIMCDataset):
                 shutil.copy2(mask_path, save_path)
             else:
                 logger.info(f'Skipping mask {mask_path}. No corresponding image found.')
-
-    def create_annotated_masks(self):
-        version = 'published'
-        metadata = pd.read_parquet(self.metadata_dir / version, engine='fastparquet')
-
-        masks_dir = self.masks_dir / version
-        save_dir = self.masks_dir / 'annotated'
-        save_dir.mkdir(parents=True, exist_ok=True)
-
-        # remove core 178 as the object ids in the annotated data are no longer aligned with the masks as they
-        # had to regenerate the masks
-        filter_ = metadata.index.get_level_values('sample_id').str.startswith('178_B')
-        metadata = metadata[~filter_]
-
-        for sample_id, sample_data in metadata.groupby(level='sample_id'):
-            save_path = save_dir / f"{sample_id}.tiff"
-
-            if save_path.exists():
-                logger.info(f"Skipping annotated mask {save_path}. Already exists.")
-                continue
-
-            mask_path = masks_dir / f"{sample_id}.tiff"
-            if not mask_path.exists():
-                logger.warning(f'No corresponding mask found for {mask_path}. Skipping.')
-                continue
-
-            logger.info(f"Saving annotated mask {save_path}")
-            mask = imread(mask_path)
-            objs = sample_data.index.get_level_values('object_id').astype(int).unique()
-            missing_objs = set(mask.flatten()) - set(objs) - {0}
-            if missing_objs:
-                logger.info(f'Missing objects in mask {sample_id}: {missing_objs}')
-            mask_filtered = np.where(np.isin(mask, objs), mask, 0)
-            imwrite(save_path, mask_filtered)
 
     def create_clinical_metadata(self):
         from ai4bmr_core.utils.tidy import tidy_name
@@ -608,3 +574,87 @@ class Cords2024(BaseIMCDataset):
             Rscript -e '{r_script.strip()}'
         """)
         subprocess.run(shell_command, shell=True, check=True)
+
+    def create_annotated(self, version_name: str = 'annotated', mask_version: str = "published"):
+        from skimage.io import imread, imsave
+        import numpy as np
+
+        logger.info(f'Creating new data version: `annotated`')
+
+        metadata_version = 'published'
+        metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
+        intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
+
+        # mask_version = 'published_cell'
+        masks_dir = self.masks_dir / mask_version
+        mask_paths = list(masks_dir.glob("*.tiff"))
+
+        image_version = 'published'
+        images_dir = self.images_dir / image_version
+        image_paths = list(images_dir.glob("*.tiff"))
+
+        # collect sample ids
+        sample_ids = set(metadata.index.get_level_values('sample_id').unique()) \
+                     & set(intensity.index.get_level_values('sample_id').unique()) \
+                     & set([i.stem for i in mask_paths]) \
+                     & set([i.stem for i in image_paths])
+
+        logger.info(f"Found {len(sample_ids)} samples with metadata, intensity, masks and images")
+
+        # ANNOTATED DATA
+        version = 'annotated'
+        save_masks_dir = self.masks_dir / version
+        save_masks_dir.mkdir(parents=True, exist_ok=True)
+
+        save_intensity_dir = self.intensity_dir / version
+        save_intensity_dir.mkdir(parents=True, exist_ok=True)
+
+        save_metadata_dir = self.metadata_dir / version
+        save_metadata_dir.mkdir(parents=True, exist_ok=True)
+
+        for sample_id in sample_ids:
+
+            # NOTE: remove core 178 as the object ids in the annotated data are no longer aligned with the masks as they
+            #   had to regenerate the masks and they no longer align with the metadata
+            if sample_id.startswith('178_B'):
+                continue
+
+            save_path = save_masks_dir / f"{sample_id}.tiff"
+
+            if save_path.exists():
+                logger.info(f"Skipping annotated mask {save_path}. Already exists.")
+                continue
+
+            mask_path = masks_dir / f"{sample_id}.tiff"
+            if not mask_path.exists():
+                logger.warning(f'No corresponding mask found for {sample_id}. Skipping.')
+                continue
+
+            logger.info(f"Saving annotated mask {save_path}")
+
+            mask = imread(mask_path)
+            intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
+            metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
+
+            intensity_objs = set(intensity_.index.get_level_values('object_id').astype(int).unique())
+            metadata_objs = set(metadata_.index.get_level_values('object_id').astype(int).unique())
+            mask_objs = set(np.unique(mask)) - {0}
+
+            objs = metadata_objs.intersection(mask_objs).intersection(intensity_objs)
+            missing_objs = mask_objs - objs
+            if missing_objs:
+                logger.warning(
+                    f'{sample_id} has {len(objs)} common objects and {len(missing_objs)} mask objects without metadata')
+
+            objs = np.asarray(sorted(objs), dtype=mask.dtype)
+            mask_filtered = np.where(np.isin(mask, objs), mask, 0)
+            assert len(np.unique(mask_filtered)) == len(objs) + 1
+            imsave(save_path, mask_filtered)
+
+            idx = pd.IndexSlice[:, objs]
+
+            intensity_ = intensity_.loc[idx, :]
+            intensity_.to_parquet(save_intensity_dir / f"{sample_id}.parquet", engine='fastparquet')
+
+            metadata_ = metadata_.loc[idx, :]
+            metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
