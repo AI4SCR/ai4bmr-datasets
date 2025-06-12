@@ -444,7 +444,6 @@ class PCa(BaseIMCDataset):
 
         return mapping
 
-
     def create_masks(self):
         import shutil
 
@@ -477,8 +476,6 @@ class PCa(BaseIMCDataset):
                 continue
 
             shutil.copy2(mask_path, save_path)
-
-
 
     def create_graphs(self):
         pass
@@ -581,7 +578,11 @@ class PCa(BaseIMCDataset):
             roi_match_blockId["description"].str.split("_").str[2].str.strip()
         )
 
+        mapping = self.get_napari_file_name_to_sample_id_mapping()
+        sample_ids = roi_match_blockId.file_name_napari.map(mapping).to_list()
+
         roi_match_blockId = roi_match_blockId.assign(
+            sample_id=sample_ids,
             tma_sample_id=tma_sample_ids,
             slide_code=slide_code,
             tma_coordinates=tma_coordinates,
@@ -604,6 +605,8 @@ class PCa(BaseIMCDataset):
         assert not roi_match_blockId.slide_code.isna().any()
         assert not roi_match_blockId.tma_coordinates.isna().any()
         assert not roi_match_blockId.tma_sample_id.isna().any()
+        # NOTE: this is the corrupted acquisition, IIIBL_X3Y15_150  240210_001.tiff
+        assert roi_match_blockId.sample_id.isna().sum() == 1
 
         tma_id = roi_match_blockId.slide_code + "_" + roi_match_blockId.tma_coordinates
         roi_match_blockId["tma_id"] = tma_id
@@ -622,7 +625,7 @@ class PCa(BaseIMCDataset):
 
         # NOTE: all patients in the roi_match_block are present in the metadata
         assert metadata.PAT_ID.isna().sum() == 0
-        # NOTE: 3 ROIs from 2 patients have no meta data
+        # NOTE: 3 ROIs from 2 patients have no metadata
         assert metadata.DONOR_BLOCK_ID.isna().sum() == 3
         assert metadata[metadata.DONOR_BLOCK_ID.isna()].PAT_ID.nunique() == 2
 
@@ -632,31 +635,31 @@ class PCa(BaseIMCDataset):
 
         # verify
         # TODO: remove after verification by collaborators
-        for i in range(metadata.shape[0]):
-            id_ = metadata["tma_sample_id"].values[i]
-            ids_ = metadata[
-                [
-                    "UNIQUE_TMA_SAMPLE_ID_1",
-                    "UNIQUE_TMA_SAMPLE_ID_2",
-                    "UNIQUE_TMA_SAMPLE_ID_3",
-                    "UNIQUE_TMA_SAMPLE_ID_4",
-                ]
-            ].iloc[i]
-            ids_ = set(ids_)
-            if id_ not in ids_:
-                pass
-                print(id_, metadata.PAT_ID.iloc[i])
-
-        filter_ = metadata["Original block number"] == metadata["DONOR_BLOCK_ID"]
-        # NOTE: these mismatches are only because we have high and low gleason for the same patient
-        mismatches = metadata[
-            [
-                "PAT_ID",
-                "Gleason pattern (TMA core)",
-                "Original block number",
-                "DONOR_BLOCK_ID",
-            ]
-        ][~filter_]
+        # for i in range(metadata.shape[0]):
+        #     id_ = metadata["tma_sample_id"].values[i]
+        #     ids_ = metadata[
+        #         [
+        #             "UNIQUE_TMA_SAMPLE_ID_1",
+        #             "UNIQUE_TMA_SAMPLE_ID_2",
+        #             "UNIQUE_TMA_SAMPLE_ID_3",
+        #             "UNIQUE_TMA_SAMPLE_ID_4",
+        #         ]
+        #     ].iloc[i]
+        #     ids_ = set(ids_)
+        #     if id_ not in ids_:
+        #         pass
+        #         print(id_, metadata.PAT_ID.iloc[i])
+        #
+        # filter_ = metadata["Original block number"] == metadata["DONOR_BLOCK_ID"]
+        # # NOTE: these mismatches are only because we have high and low gleason for the same patient
+        # mismatches = metadata[
+        #     [
+        #         "PAT_ID",
+        #         "Gleason pattern (TMA core)",
+        #         "Original block number",
+        #         "DONOR_BLOCK_ID",
+        #     ]
+        # ][~filter_]
 
         # %% tidy
         metadata = metadata.astype(str)
@@ -757,8 +760,6 @@ class PCa(BaseIMCDataset):
         )
         metadata = metadata.drop("d_amico", axis=1)
 
-        metadata = metadata.convert_dtypes()
-
         # %%
         # vals = metadata.cause_of_death.astype(int).values
         # cats = sorted(set(vals))
@@ -766,8 +767,7 @@ class PCa(BaseIMCDataset):
         # assert metadata.cause_of_death.isna().sum() == 0
 
         # %%
-        sample_names = [Path(i).stem for i in metadata.file_name_napari]
-        metadata = metadata.assign(sample_id=sample_names)
+        metadata = metadata.convert_dtypes()
         metadata = metadata.set_index("sample_id")
 
         # %%
@@ -928,17 +928,27 @@ class PCa(BaseIMCDataset):
         assert df.gs_pat_1.isna().sum() == 0
 
         df = df.convert_dtypes()
-        df = df.rename(columns={"sample_name": "sample_id"}).set_index("sample_id")
+
+        mapping = self.get_napari_file_name_to_sample_id_mapping()
+        mapping = {k.replace('.tiff', ''): v for k, v in mapping.items()}
+
+        df.loc[:, "sample_id"] = df.sample_name.map(mapping)
+        assert not df.sample_id.isna().any()
+
+        df = df.rename(columns={"sample_name": "napari_sample_id"}).set_index("sample_id")
 
         # note: fix tma sample id for split sample 150
-        df.loc[df.tma_sample_id == "150_1", "tma_sample_id"] = "150"
+        # df.loc[df.tma_sample_id == "150_1", "tma_sample_id"] = "150"
 
         # NOTE: check that the data in samples and the data in the tma annotations are the same
         shared_sample_ids = list(set(df.index).intersection(set(samples.index)))
         for i in ["tma_coordinates", "tma_sample_id"]:
             s1 = set(samples.loc[shared_sample_ids][i].astype(str).to_dict().items())
             s2 = set(df.loc[shared_sample_ids][i].astype(str).to_dict().items())
-            assert s1 == s2
+            if i == 'tma_coordinates':
+                assert s1 == s2
+            elif i == 'tma_sample_id':
+                assert s1 - s2 == {('240210_iiibl_x3y15_150_split_8', '150')}
 
         set(samples).intersection(set(df))
         shared_cols = ["description", "tma_sample_id", "tma_coordinates"]
@@ -1000,7 +1010,6 @@ class PCa(BaseIMCDataset):
         ]
 
         df = df.astype({k: "category" for k in cat_cols})
-        # df.to_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/projects/ai4bmr-datasets/tests/tma_annotations.csv')
         samples = pd.concat([samples, df], axis=1)
         samples = samples.convert_dtypes()
         samples.to_parquet(self.clinical_metadata_path, engine="fastparquet")
