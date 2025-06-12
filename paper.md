@@ -133,9 +133,7 @@ to several published datasets and processing routines. Its modular design and st
 tool for researchers developing computational methods in spatial biology. We welcome contributions and extensions from
 the community and envision this package as a foundation for reproducible spatial proteomics analysis.
 
-## Acknowledgements
-
-## 🙏 Acknowledgements
+# Acknowledgements
 
 We thank Drs. Raza Ali, Dr. Lena Cords, Prof. Leeat Keren, and Prof. Michael Angelo for providing detailed information
 and facilitating access to the corresponding datasets. This project has been made possible in part by grant number
