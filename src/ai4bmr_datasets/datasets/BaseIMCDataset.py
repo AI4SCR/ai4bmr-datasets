@@ -204,7 +204,8 @@ class BaseIMCDataset:
                 intensity, metadata = intensity.align(metadata, join="outer", axis=0)
 
             if metadata is not None and spatial is not None:
-                assert set(metadata.index) == set(intensity.index)
+                if intensity is not None:
+                    assert set(metadata.index) == set(intensity.index)
                 spatial, metadata = spatial.align(metadata, join="outer", axis=0)
 
             self.intensity = intensity.loc[sample_ids] if intensity is not None else None

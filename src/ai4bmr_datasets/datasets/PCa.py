@@ -219,14 +219,13 @@ class PCa(BaseIMCDataset):
 
         assert annotations.isna().any().any() == False
         annotations.index.names = ['sample_id', 'object_id']
-        label_to_main_group = annotations.set_index('label')['main_group'].to_dict()
+        # label_to_main_group = annotations.set_index('label')['main_group'].to_dict()
 
         # %% ASSIGN RECLUSTERD CELLS
         memberships = pd.read_parquet(self.raw_dir / 'reclustering/memberships.parquet')
         label_names = pd.read_excel(self.raw_dir / 'reclustering/label-names.xlsx', dtype=str)
         membership_to_label = label_names.set_index('membership')['label'].to_dict()
         memberships['label'] = memberships['membership'].map(membership_to_label)
-        memberships['main_group'] = memberships['label'].map(label_to_main_group)
         assert not memberships.label.isna().any()
 
         filter_ = annotations.index.isin(memberships.index)
@@ -243,7 +242,6 @@ class PCa(BaseIMCDataset):
         label_names = pd.read_excel(self.raw_dir / 'reclustering-v2/label-names.xlsx', dtype=str)
         membership_to_label = label_names.set_index('membership')['label'].to_dict()
         memberships['label'] = memberships['membership'].map(membership_to_label)
-        memberships['main_group'] = memberships['label'].map(label_to_main_group)
         assert not memberships.label.isna().any()
 
         filter_ = annotations.index.isin(memberships.index)
@@ -253,7 +251,48 @@ class PCa(BaseIMCDataset):
         assert len(annotations) == 2214046
         assert annotations.index.is_unique
 
-        annotations.loc[:, 'main_group'] = annotations.main_group.fillna('mixed')
+        # %% fill main_group
+        annotations['label'] = annotations.label.map(
+            lambda x: {'epithelial-luminal(p53+ERG+)': 'epithelial-luminal(ERG+p53+)'}.get(x, x)
+        )
+        label_to_main_group = {'undefined': 'undefined',
+                               'mix-vessels-PMN-MDSCs': 'undefined',
+                               'epithelial-basal': 'epithelial',
+                               'epithelial-(ERG+CD44+)': 'epithelial',
+                               'epithelial-neuroendocrine': 'epithelial',
+                               'epithelial-luminal': 'epithelial',
+                               'epithelial-luminal(Ki67+)': 'epithelial',
+                               'epithelial-luminal(ERG+)': 'epithelial',
+                               'epithelial-luminal(ERG+p53+)': 'epithelial',
+                               'epithelial-luminal(p53+)': 'epithelial',
+                               'epithelial-luminal(p53+ERG+)': 'epithelial',
+                               'epithelial-transient': 'epithelial',
+                               'endothelial-blood-vessel(ERG-)': 'endothelial',
+                               'endothelial-blood-vessel(ERG+)': 'endothelial',
+                               'endothelial-lymphatic': 'endothelial',
+                               'stromal-CAF1(CD105-)': 'stromal',
+                               'stromal-CAF2(AR+CES1+)': 'stromal',
+                               'stromal-CAF1(CD105+)': 'stromal',
+                               'stromal-CAF2(AR+)': 'stromal',
+                               'stromal-(Ki67+)': 'stromal',
+                               'stromal-mesenchymal-neuroendocrine': 'stromal',
+                               'stromal-CAF2(AR-)': 'stromal',
+                               'stromal-CAF2(AR+EGR1+)': 'stromal',
+                               'stromal-pericytes': 'stromal',
+                               'stromal-CAF1(CD105-EGR1+)': 'stromal',
+                               'immune-BM-derived-fibrocytes': 'immune',
+                               'immune-macrophages(CD68+)': 'immune',
+                               'immune-B-cells(CD20+)': 'immune',
+                               'immune-T-cells_regulatory(CD3+CD4+FoxP3+)': 'immune',
+                               'immune-T-cells_cytotoxic(CD3+CD8a+)': 'immune',
+                               'immune-T-cells_helper(CD3+CD4+)': 'immune',
+                               'immune-T-helper-B-cells': 'immune',
+                               'immune-T-helper-macrophages': 'immune',
+                               'immune-T-cells(CD3+)': 'immune',
+                               'immune-T-helper-T-cytotoxic': 'immune',
+                               'immune-PMN-MDSCs(CD11b+CD66b+)': 'immune',
+                               }
+        annotations.loc[:, 'main_group'] = annotations.label.map(label_to_main_group)
 
         # %% create ids
         main_group_id_dict = sorted(annotations.main_group.unique())
