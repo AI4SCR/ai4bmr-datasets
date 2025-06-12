@@ -1,9 +1,8 @@
-from pathlib import Path
 from loguru import logger
 from ai4bmr_core.utils.tidy import tidy_name
-import pandas as pd
 from tifffile import imread, imwrite
-
+from pathlib import Path
+import pandas as pd
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
 
@@ -25,13 +24,28 @@ class PCa(BaseIMCDataset):
 
     def prepare_data(self):
         self.process_acquisitions()
+        self.create_panel()
+
+        self.create_images()
+        self.create_filtered_images()
+
+        self.create_masks()
+        self.create_filtered_masks()
+
         self.create_clinical_metadata()
         self.create_tma_annotations()
+
         self.label_transfer()
-        self.create_annotations()
+        self.create_metadata()
+
+        self.create_annotated()
 
     def process_acquisitions(self):
-        from readimc import MCDFile
+        """
+        Failed to read acquisitions:
+          - 240210_IIIBL_X3Y15_150_1
+        """
+        from readimc import MCDFile, TXTFile
         from tifffile import imwrite
         import json
 
@@ -59,7 +73,8 @@ class PCa(BaseIMCDataset):
                             metal_names=acq.channel_metals,
                         )
 
-                        image_name = f"{slide_date}_{acq.description}_{acq.id}"
+                        image_name = f"{slide_date}_{acq.description}_{acq.id}".lower()
+                        image_name = tidy_name(image_name)
                         metadata_path = acquisitions_dir / f"{image_name}.json"
                         image_path = acquisitions_dir / f"{image_name}.tiff"
 
@@ -74,11 +89,23 @@ class PCa(BaseIMCDataset):
                             with open(metadata_path, "w") as f_json:
                                 json.dump(item, f_json)
                         except OSError:
-                            logger.error(f"Failed to read acquisition! ")
-                            num_failed_reads += 1
+                            logger.warning(f"Failed to read acquisition from mcd file, reading from txt file.")
+
+                            try:
+                                image_name = f"{slide_date}_{acq.description}_{acq.id}".lower()
+                                txt_path = mcd_path.parent / f'{image_name}.txt'
+                                with TXTFile(txt_path) as txt_file:
+                                    img = txt_file.read_acquisition()
+                                    imwrite(image_path, img)
+                                    with open(metadata_path, "w") as f_json:
+                                        json.dump(item, f_json)
+                            except OSError:
+                                logger.error(f"Failed to read acquisition!")
+                                num_failed_reads += 1
+
                             continue
 
-    def create_masks_filtered_by_annotations(self):
+    def create_annotated_masks(self):
         import numpy as np
         from tifffile import imread
         from ai4bmr_core.utils.saving import save_mask
@@ -102,8 +129,7 @@ class PCa(BaseIMCDataset):
             mask = filter_mask(mask, object_ids)
             save_mask(mask=mask, save_path=new_mask_dir / f"{sample_id}.tiff")
 
-
-    def create_annotations(self):
+    def create_metadata(self):
         version_name = self.get_version_name(image_version="filtered", mask_version="filtered")
         metadata_dir = self.metadata_dir / version_name
         if metadata_dir.exists():
@@ -264,56 +290,195 @@ class PCa(BaseIMCDataset):
         raw_acquisitions_dir = self.raw_dir / 'acquisitions'
         save_dir = self.get_image_version_dir('raw')
         panel = pd.read_parquet(save_dir / "panel.parquet")
-        for img_metadata_path in raw_acquisitions_dir.glob("*.tiff"):
-            save_path = save_dir / img_metadata_path.name
+
+        for img_path in raw_acquisitions_dir.glob("*.tiff"):
+            save_path = save_dir / img_path.name
 
             if save_path.exists():
-                logger.info(f"Image {img_metadata_path.name} already exists. Skipping.")
+                logger.info(f"Image {img_path.name} already exists. Skipping.")
                 continue
 
-            logger.info(f"Processing {img_metadata_path.name}")
+            logger.info(f"Processing {img_path.name}")
 
-            img = imread(img_metadata_path)
+            img = imread(img_path)
             img = img[panel.page]
             imwrite(save_path, img)
 
-    def create_filtered_images(self):
-        img_dir = self.get_image_version_dir('raw')
-        panel = pd.read_parquet(img_dir / "panel.parquet")
+    def analyse_differences_between_raw_and_filtered_images(self):
 
-        mcd_metadata = pd.read_parquet('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/metadata/02_processed/mcd_metadata.parquet')
+        mcd_metadata = pd.read_parquet(
+            '/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/metadata/02_processed/mcd_metadata.parquet')
+
         raw = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/images/raw').glob('*.tiff')
         raw = set([i.name for i in raw])
+
         filtered = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/images/filtered').glob('*.tiff')
         filtered = set([i.name for i in filtered])
 
-        pp = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/02_processed/images/raw').glob('*.tiff')
-        pp = set([i.name for i in pp])
+        acq = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/acquisitions').glob('*.tiff')
+        acq = set([i.name for i in acq])
+        acq = set(['_'.join(i.split('_')[:-1]) + '.tiff' for i in acq])
 
         len(raw)
+        len(acq)
         len(filtered)
-        len(pp)
 
+        annotations = pd.read_parquet(
+            '/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa/01_raw/clustering/annotations.parquet')
+        anno = set([f'{i}.tiff' for i in annotations.index.get_level_values('sample_name').unique()])
 
-        for img_metadata_path in raw_acquisitions_dir.glob("*.tiff"):
-            save_path = save_dir / img_metadata_path.name
+        diff1 = raw - filtered
+        diff2 = raw - anno
+        diff = diff1.union(diff2)
 
-            if save_path.exists():
-                logger.info(f"Image {img_metadata_path.name} already exists. Skipping.")
+        # list of removed images with justification
+        diff.update([
+            "240219_004.tiff",  # remove after inspection of v2 clustering
+            '231207_006.tiff',  # low cell count and staining issues
+            "240223_012.tiff",  # unspecific staining
+            '240119_015.tiff',  # undefined-high fraction
+            '240119_016.tiff',  # undefined-high fraction
+            '231204_010.tiff',  # undefined-high fraction
+            '231204_003.tiff',  # undefined-high fraction
+            '231206_007.tiff',  # undefined-high fraction
+            '231210_002.tiff',  # undefined-high fraction
+            '231204_003.tiff',  # undefined-high fraction
+            '240119_017.tiff',  # undefined-high fraction
+        ])
+        # mcd_metadata[mcd_metadata.file_name_napari.isin(diff)].file_name.to_list()
+
+        exclude_rois = mcd_metadata[mcd_metadata.file_name_napari.isin(diff)][['file_name', 'file_name_napari']]
+        # original mapping
+        # [
+        #     {'file_name': '240119_IIBL_X7Y4_34.tiff', 'file_name_napari': '240119_016.tiff'},
+        #     {'file_name': '240119_IIBL_X8Y4_35.tiff', 'file_name_napari': '240119_017.tiff'},
+        #     {'file_name': '240219_IVB_X5Y2_8.tiff', 'file_name_napari': '240219_004.tiff'},
+        #     {'file_name': '240219_IVB_X7Y2_10.tiff', 'file_name_napari': '240219_005.tiff'},
+        #     {'file_name': '240223_IVB_X7Y10_82.tiff', 'file_name_napari': '240223_012.tiff'},
+        #     {'file_name': '231210_IBL_X2Y20_209.tiff', 'file_name_napari': '231210_002.tiff'},
+        #     {'file_name': '231210_IBL_X7Y21_226.tiff', 'file_name_napari': '231210_012.tiff'},
+        #     {'file_name': '231210_IBL_X8Y21_227.tiff', 'file_name_napari': '231210_013.tiff'},
+        #     {'file_name': '231204_IBL_X5Y2_8.tiff', 'file_name_napari': '231204_003.tiff'},
+        #     {'file_name': '231204_IBL_X1Y4_28.tiff', 'file_name_napari': '231204_010.tiff'},
+        #     {'file_name': '231204_LP1.tiff', 'file_name_napari': '231204_017.tiff'},
+        #     {'file_name': '231204_LP2.tiff', 'file_name_napari': '231204_018.tiff'},
+        #     {'file_name': '231204_LP3.tiff', 'file_name_napari': '231204_019.tiff'},
+        #     {'file_name': '231204_LP4.tiff', 'file_name_napari': '231204_020.tiff'},
+        #     {'file_name': '231206_IBL_X4Y9_91.tiff', 'file_name_napari': '231206_007.tiff'}
+        # ]
+
+    def get_excluded_rois(self) -> list[str]:
+        exclude_rois = [
+            '240119_iibl_x7y4_34_16.tiff',
+            '240119_iibl_x8y4_35_17.tiff',
+            '240219_ivb_x5y2_8_4.tiff',
+            '240219_ivb_x7y2_10_5.tiff',
+            '240223_ivb_x7y10_82_12.tiff',
+            '231210_ibl_x2y20_209_2.tiff',
+            '231210_ibl_x7y21_226_12.tiff',
+            '231210_ibl_x8y21_227_13.tiff',
+            '231204_ibl_x5y2_8_3.tiff',
+            '231204_ibl_x1y4_28_10.tiff',
+            '231206_ibl_x4y9_91_7.tiff',
+            '231204_lp1_17.tiff',
+            '231204_lp2_18.tiff',
+            '231204_lp3_19.tiff',
+            '231204_lp4_20.tiff'
+        ]
+        return exclude_rois
+
+    def create_filtered_images(self):
+
+        raw_acquisitions_dir = self.raw_dir / 'acquisitions'
+        panel = pd.read_parquet(self.get_panel_path('raw'))
+
+        panel_save_path = self.get_panel_path('filtered')
+        panel_save_path.parent.mkdir(parents=True, exist_ok=True)
+        panel.to_parquet(panel_save_path, engine='fastparquet')
+
+        excl_rois = self.get_excluded_rois()
+
+        save_dir = self.get_image_version_dir('filtered')
+        save_dir.mkdir(parents=True, exist_ok=True)
+        for img_path in raw_acquisitions_dir.glob("*.tiff"):
+
+            if img_path.name in excl_rois:
+                logger.info(f'Filtering out {img_path.name}')
                 continue
 
-            logger.info(f"Processing {img_metadata_path.name}")
+            save_path = save_dir / img_path.name
 
-            img = imread(img_metadata_path)
+            if save_path.exists():
+                logger.info(f"Image {img_path.name} already exists. Skipping.")
+                continue
+
+            logger.info(f"Processing {img_path.name}")
+
+            img = imread(img_path)
             img = img[panel.page]
             imwrite(save_path, img)
 
+    def get_identifiers_table(self):
+        import re
+
+        mcd_metadata = pd.read_parquet(self.raw_dir / 'metadata/02_processed/mcd_metadata.parquet')
+        mapping = mcd_metadata[['file_name_napari', 'file_name']]
+        mapping.loc[:, 'file_name_tidy'] = mapping.file_name.map(lambda x: f'{tidy_name(Path(x).stem)}.tiff')
+
+        # NOTE: this is the acquisition that is corrupted
+        filter_ = mapping.file_name_tidy == '240210_iiibl_x3y15_150.tiff'
+        mapping = mapping[~filter_]
+
+        sample_ids = set([i.stem for i in (self.raw_dir / 'acquisitions').glob('*.tiff')])
+        file_name_to_sample_id = {f"{re.sub(r'_\d+$', '', i)}.tiff": i for i in sample_ids}
+        assert len(file_name_to_sample_id) == len(sample_ids)
+        assert set(mapping.file_name_tidy) == set(file_name_to_sample_id.keys())
+
+        mapping.loc[:, 'sample_id'] = mapping.file_name_tidy.map(file_name_to_sample_id)
+        return mapping
+
+    def get_napari_file_name_to_sample_id_mapping(self):
+        mapping = self.get_identifiers_table()
+        mapping = mapping.set_index('file_name_napari')['sample_id'].to_dict()
+        assert len(mapping) == 549
+
+        return mapping
+
 
     def create_masks(self):
-        pass
+        import shutil
 
-    def create_metadata(self):
-        pass
+        save_dir = self.get_mask_version_dir('deepcell')
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        mapping = self.get_napari_file_name_to_sample_id_mapping()
+
+        mask_paths = (self.raw_dir / 'masks' / 'deepcell').glob('*.tiff')
+        for mask_path in mask_paths:
+            sample_id = mapping[mask_path.name]
+            save_path = save_dir / f"{sample_id}.tiff"
+            shutil.copy2(mask_path, save_path)
+
+    def create_filtered_masks(self):
+        import shutil
+
+        save_dir = self.get_mask_version_dir('filtered')
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        mapping = self.get_napari_file_name_to_sample_id_mapping()
+        excl_rois = self.get_excluded_rois()
+
+        mask_paths = (self.raw_dir / 'masks' / 'deepcell').glob('*.tiff')
+        for mask_path in mask_paths:
+            sample_id = mapping[mask_path.name]
+            save_path = save_dir / f"{sample_id}.tiff"
+
+            if save_path.name in excl_rois:
+                continue
+
+            shutil.copy2(mask_path, save_path)
+
+
 
     def create_graphs(self):
         pass
@@ -335,8 +500,8 @@ class PCa(BaseIMCDataset):
         panel = None
 
         raw_acquisitions_dir = self.raw_dir / 'acquisitions'
-        for img_metadata_path in raw_acquisitions_dir.glob("*.json"):
-            with open(img_metadata_path, "r") as f:
+        for img_path in raw_acquisitions_dir.glob("*.json"):
+            with open(img_path, "r") as f:
                 img_metadata = json.load(f)
                 df = pd.DataFrame(img_metadata)
                 df = df[["channel_names", "channel_labels", "metal_names"]]
@@ -365,7 +530,16 @@ class PCa(BaseIMCDataset):
         panel = panel[panel.keep].reset_index(drop=True)
         panel.index.name = "channel_index"
 
-        metal_tag_to_uniprot_id = {'Pr141': 'P63267', 'Nd142': 'P07288', 'Nd143': 'P08670', 'Nd144': 'P02452', 'Nd145': 'P08247', 'Nd146': 'P13647', 'Sm147': 'P46937', 'Nd148': 'P78386', 'Sm149': 'P23141', 'Nd150': 'P18146', 'Eu151': 'P16284', 'Sm152': 'P08575', 'Eu153': 'P16070', 'Sm154': 'Q12884', 'Gd155': 'Q9BZS1', 'Gd156': 'P01730', 'Gd158': 'P12830', 'Tb159': 'P34810', 'Gd160': 'P31997', 'Dy161': 'P11836', 'Dy162': 'P01732', 'Dy163': 'P11215', 'Dy164': 'Q9H3D4', 'Ho165': 'P35222', 'Er166': 'Q86YL7', 'Er167': 'P17813', 'Er168': 'P46013', 'Tm169': 'P04637', 'Er170': 'P04234', 'Yb171': 'P11308', 'Yb172': 'P42574', 'Yb173': 'P51911', 'Yb174': 'P05783', 'Lu175': 'P43121', 'Yb176': 'P10275', 'Ir191': None, 'Ir193': None, 'Pt195': None, 'Pt196': None, 'Pt198': None}
+        metal_tag_to_uniprot_id = {'Pr141': 'P63267', 'Nd142': 'P07288', 'Nd143': 'P08670', 'Nd144': 'P02452',
+                                   'Nd145': 'P08247', 'Nd146': 'P13647', 'Sm147': 'P46937', 'Nd148': 'P78386',
+                                   'Sm149': 'P23141', 'Nd150': 'P18146', 'Eu151': 'P16284', 'Sm152': 'P08575',
+                                   'Eu153': 'P16070', 'Sm154': 'Q12884', 'Gd155': 'Q9BZS1', 'Gd156': 'P01730',
+                                   'Gd158': 'P12830', 'Tb159': 'P34810', 'Gd160': 'P31997', 'Dy161': 'P11836',
+                                   'Dy162': 'P01732', 'Dy163': 'P11215', 'Dy164': 'Q9H3D4', 'Ho165': 'P35222',
+                                   'Er166': 'Q86YL7', 'Er167': 'P17813', 'Er168': 'P46013', 'Tm169': 'P04637',
+                                   'Er170': 'P04234', 'Yb171': 'P11308', 'Yb172': 'P42574', 'Yb173': 'P51911',
+                                   'Yb174': 'P05783', 'Lu175': 'P43121', 'Yb176': 'P10275', 'Ir191': None,
+                                   'Ir193': None, 'Pt195': None, 'Pt196': None, 'Pt198': None}
         panel["uniprot_id"] = panel.metal_tag.map(metal_tag_to_uniprot_id)
 
         panel_path = self.get_panel_path("raw")
