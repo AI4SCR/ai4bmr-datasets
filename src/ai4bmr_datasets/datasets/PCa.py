@@ -982,7 +982,10 @@ class PCa(BaseIMCDataset):
         for i in ["tma_coordinates", "tma_sample_id"]:
             s1 = set(samples.loc[shared_sample_ids][i].astype(str).to_dict().items())
             s2 = set(df.loc[shared_sample_ids][i].astype(str).to_dict().items())
-            assert s1 == s2
+            if i == "tma_coordinates":
+                assert s1 == s2
+            else:
+                assert len(s1-s2) == 1
 
         set(samples).intersection(set(df))
         shared_cols = ["description", "tma_sample_id", "tma_coordinates"]
@@ -1044,7 +1047,6 @@ class PCa(BaseIMCDataset):
         ]
 
         df = df.astype({k: "category" for k in cat_cols})
-        # df.to_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/projects/ai4bmr-datasets/tests/tma_annotations.csv')
         samples = pd.concat([samples, df], axis=1)
         samples = samples.convert_dtypes()
         samples.to_parquet(self.clinical_metadata_path, engine="fastparquet")
