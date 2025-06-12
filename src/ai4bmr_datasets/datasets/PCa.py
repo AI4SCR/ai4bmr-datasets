@@ -7,6 +7,9 @@ from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
 
 class PCa(BaseIMCDataset):
+    name = "PCa"
+    id = "PCa"
+    doi = "unpublished"
 
     def __init__(self, base_dir: Path | None = None):
         super().__init__(base_dir)
@@ -36,9 +39,8 @@ class PCa(BaseIMCDataset):
         self.create_tma_annotations()
 
         self.label_transfer()
-        self.create_metadata()
-
         self.create_annotated()
+        self.compute_features(image_version="filtered", mask_version="annotated")
 
     def process_acquisitions(self):
         """
@@ -105,44 +107,65 @@ class PCa(BaseIMCDataset):
 
                             continue
 
-    def create_annotated_masks(self):
+    def create_annotated(self, *args, **kwargs):
+        from skimage.io import imread, imsave
         import numpy as np
-        from tifffile import imread
-        from ai4bmr_core.utils.saving import save_mask
-        import pandas as pd
 
-        def filter_mask(mask: np.ndarray, object_ids: set[int]):
-            mapping = lambda x: x if x in object_ids else 0
-            return np.vectorize(mapping)(mask)
+        logger.info(f'Creating new data version: `annotated`')
 
-        mask_dir = self.get_mask_version_dir(mask_version="cleaned")
-        annotations = pd.read_parquet(self.raw_annotations_path)
+        metadata = pd.read_parquet(self.raw_annotations_path, engine='fastparquet')
+        metadata = metadata.reset_index()
+        metadata = metadata.rename(columns={'sample_id': 'napari_sample_id'})
+        mapping = self.get_napari_file_name_to_sample_id_mapping()
+        mapping = {k.replace('.tiff', ''): v for k, v in mapping.items()}
+        metadata['sample_id'] = metadata['napari_sample_id'].map(mapping)
+        metadata = metadata.drop(columns=['napari_sample_id']).set_index(['sample_id', 'object_id'])
 
-        new_mask_dir = self.get_mask_version_dir(mask_version="filtered")
-        new_mask_dir.mkdir(parents=True, exist_ok=True)
+        masks_dir = self.masks_dir / 'filtered'
+        mask_paths = list(masks_dir.glob("*.tiff"))
 
-        sample_ids = set(annotations.index.get_level_values("sample_name"))
-        for i, sample_id in enumerate(sample_ids):
-            logger.info(f"[{i + 1}/{len(sample_ids)}] Processing sample {sample_id}")
-            object_ids = set(annotations.loc[sample_id].index)
-            mask = imread(mask_dir / f"{sample_id}.tiff")
-            mask = filter_mask(mask, object_ids)
-            save_mask(mask=mask, save_path=new_mask_dir / f"{sample_id}.tiff")
+        # collect sample ids
+        sample_ids = set(metadata.index.get_level_values('sample_id').unique()) \
+                     & set([i.stem for i in mask_paths])
 
-    def create_metadata(self):
-        version_name = self.get_version_name(image_version="filtered", mask_version="filtered")
-        metadata_dir = self.metadata_dir / version_name
-        if metadata_dir.exists():
-            return
-        else:
-            metadata_dir.mkdir(parents=True, exist_ok=True)
-            labels = pd.read_parquet(self.raw_annotations_path)
+        logger.info(f"Found {len(sample_ids)} samples with metadata and masks")
 
-            for grp_name, grp_data in labels.groupby("sample_id"):
-                grp_data = grp_data.convert_dtypes()
-                grp_data = grp_data.astype("category")
-                annotations_path = metadata_dir / f"{grp_name}.parquet"
-                grp_data.to_parquet(annotations_path)
+        # ANNOTATED DATA
+        save_masks_dir = self.masks_dir / 'annotated'
+        save_masks_dir.mkdir(parents=True, exist_ok=True)
+
+        save_metadata_dir = self.metadata_dir / 'filtered-annotated'
+        save_metadata_dir.mkdir(parents=True, exist_ok=True)
+
+        for sample_id in sample_ids:
+            save_path = save_masks_dir / f"{sample_id}.tiff"
+
+            if save_path.exists():
+                logger.info(f"Skipping annotated mask {save_path}. Already exists.")
+                continue
+
+            mask_path = masks_dir / f"{sample_id}.tiff"
+
+            logger.info(f"Saving annotated mask {save_path}")
+
+            mask = imread(mask_path)
+            metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
+
+            metadata_objs = set(metadata_.index.get_level_values('object_id').astype(int).unique())
+            mask_objs = set(np.unique(mask)) - {0}
+            assert metadata_objs <= mask_objs
+            metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
+
+            objs = metadata_objs.intersection(mask_objs)
+            missing_objs = mask_objs - objs
+            if missing_objs:
+                logger.warning(
+                    f'{sample_id} has {len(objs)} common objects and {len(missing_objs)} mask objects without metadata')
+
+            objs = np.asarray(sorted(objs), dtype=mask.dtype)
+            mask_filtered = np.where(np.isin(mask, objs), mask, 0)
+            assert len(np.unique(mask_filtered)) == len(objs) + 1
+            imsave(save_path, mask_filtered)
 
     def label_transfer(self):
 
@@ -477,19 +500,6 @@ class PCa(BaseIMCDataset):
 
             shutil.copy2(mask_path, save_path)
 
-    def create_graphs(self):
-        pass
-
-    def create_features_spatial(self):
-        pass
-
-    def create_features_intensity(self):
-        pass
-
-    def create_features(self):
-        self.create_features_spatial()
-        self.create_features_intensity()
-
     def create_panel(self):
         from ai4bmr_core.utils.tidy import tidy_name
         import json
@@ -542,18 +552,6 @@ class PCa(BaseIMCDataset):
         panel_path = self.get_panel_path("raw")
         panel_path.parent.mkdir(parents=True, exist_ok=True)
         panel.to_parquet(panel_path)
-
-    @property
-    def name(self):
-        return "PCa"
-
-    @property
-    def id(self):
-        return "PCa"
-
-    @property
-    def doi(self):
-        return "unpublished"
 
     def create_clinical_metadata(self):
         """
@@ -945,10 +943,7 @@ class PCa(BaseIMCDataset):
         for i in ["tma_coordinates", "tma_sample_id"]:
             s1 = set(samples.loc[shared_sample_ids][i].astype(str).to_dict().items())
             s2 = set(df.loc[shared_sample_ids][i].astype(str).to_dict().items())
-            if i == 'tma_coordinates':
-                assert s1 == s2
-            elif i == 'tma_sample_id':
-                assert s1 - s2 == {('240210_iiibl_x3y15_150_split_8', '150')}
+            assert s1 == s2
 
         set(samples).intersection(set(df))
         shared_cols = ["description", "tma_sample_id", "tma_coordinates"]
@@ -1010,6 +1005,7 @@ class PCa(BaseIMCDataset):
         ]
 
         df = df.astype({k: "category" for k in cat_cols})
+        # df.to_csv('/work/FAC/FBM/DBC/mrapsoma/prometex/projects/ai4bmr-datasets/tests/tma_annotations.csv')
         samples = pd.concat([samples, df], axis=1)
         samples = samples.convert_dtypes()
         samples.to_parquet(self.clinical_metadata_path, engine="fastparquet")
