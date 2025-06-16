@@ -10,11 +10,9 @@ class BEAT:
         self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat')
         self.raw_dir = self.base_dir / '01_raw'
         self.processed_dir = self.base_dir / '02_processed'
+        self.datasets_dir = self.processed_dir / 'datasets'
         self.tools_dir = self.base_dir / '03_tools'
         self.log_dir = self.base_dir / '04_logs'
-
-        self.images_dir = self.processed_dir / 'images'
-        self.images_dir.mkdir(parents=True, exist_ok=True)
 
     def prepare_tools(self):
         bfconvert = self.tools_dir / "bftools" /"bfconvert"
@@ -30,7 +28,7 @@ class BEAT:
 
         install_cmd = f"""
         wget https://downloads.openmicroscopy.org/bio-formats/8.2.0/artifacts/bftools.zip -O {self.tools_dir}/bftools.zip
-        unzip {self.tools_dir}/bftools.zip
+        unzip {self.tools_dir}/bftools.zip -d {self.tools_dir}
         {self.tools_dir / "bftools" /"bfconvert"} -version || exit
         """
 
@@ -101,7 +99,7 @@ class BEAT:
 
         metadata = pd.DataFrame.from_records(records)
         metadata = metadata.merge(clinical)
-        metadata['sample_id'] = metadata['sample_barcode'] + '.' + metadata.groupby('sample_barcode').cumcount().astype(str)
+        metadata['sample_id'] = metadata['sample_barcode'].str.strip() + '.' + metadata.groupby('sample_barcode').cumcount().astype(str)
         metadata = metadata.convert_dtypes().astype({'wsi_path': str})
         metadata = metadata.set_index('sample_id')
 
@@ -109,14 +107,15 @@ class BEAT:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(save_path, engine='fastparquet')
 
-    def prepare_data(self, force: bool = False):
+    def prepare_wsi(self, force: bool = False):
         import textwrap
         import subprocess
-        from ai4bmr_core.utils.tidy import tidy_name
 
         self.prepare_tools()
-        self.images_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        dataset_dir = self.datasets_dir / 'beat'
+        dataset_dir.mkdir(parents=True, exist_ok=True)
 
         clinical = pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
         bfconvert = self.tools_dir / "bftools" / "bfconvert"
@@ -125,7 +124,8 @@ class BEAT:
         for wsi_path in wsi_paths:
 
             save_name = clinical[clinical.wsi_path == str(wsi_path)].index.item()
-            save_path = self.images_dir / f'{save_name}.ome.tiff'
+            save_path = dataset_dir / save_name / 'wsi.ome.tiff'
+            save_path.parent.mkdir(parents=True, exist_ok=True)
 
             if save_path.exists() and not force:
                 logger.info(f"File {save_path} already exists. Skipping conversion.")
@@ -154,6 +154,23 @@ class BEAT:
             sbatch_command = textwrap.dedent(sbatch_command).strip()
 
             subprocess.run(sbatch_command, shell=True, check=True)
+
+    def segment(self, model_name: str = 'grandqc', target_mpp: float = 4.0):
+        from ai4bmr_learn.utils.slides import segment_slide, get_seg_model
+        from openslide import OpenSlide
+
+        seg_model = get_seg_model(model_name=model_name)  # hest, grandqc, grandqc_artifact
+        sample_dirs = [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
+        for sample_dir in sample_dirs:
+
+            save_coords_path = sample_dir / 'coords' / f'segment-mpp={target_mpp}-model_name={model_name}.parquet'
+            save_contours_path = sample_dir / 'contours' / f'segment-mpp={target_mpp}-model_name={model_name}.parquet'
+            img_path = sample_dir / 'wsi.ome.tiff'
+
+            segment_slide(slide,
+                          seg_model=seg_model,
+                          target_mpp=target_mpp,
+                          save_contours_path=save_contours_path, save_coords_path=save_coords_path)
 
     def setup(self):
         pass
