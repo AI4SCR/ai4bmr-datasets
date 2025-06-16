@@ -1,5 +1,5 @@
 ---
-title: "**SpatialProteomicsNet** : A unified interface for spatial proteomics data access for computer vision and machine learning"
+title: "**SpatialProteomicsNet**: A unified interface for spatial proteomics data access for computer vision and machine learning"
 tags:
   - Python
   - spatial proteomics
