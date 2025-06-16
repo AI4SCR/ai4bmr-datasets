@@ -11,10 +11,10 @@ tags:
 author:
   - name: Adriano Martinelli
     mail: adriano.martinelli@chuv.ch
-    affiliation: [1, 2, 4]
+    affiliation: [ 1, 2, 4 ]
   - name: Marianna Rapsomaniki
     mail: marianna.rapsomaniki@chuv.ch
-    affiliation: [1, 3, 4]
+    affiliation: [ 1, 3, 4 ]
 affiliations:
   - index: 1
     name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
@@ -31,7 +31,9 @@ bibliography: paper.bib
 
 # Summary
 
-`SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for
+`SpatialProteomicsNet` is an open-source Python
+package ([https://github.com/AI4SCR/ai4bmr-datasets](https://github.com/AI4SCR/ai4bmr-datasets)) that provides a
+harmonized and standardized interface for
 accessing
 spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
 IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
