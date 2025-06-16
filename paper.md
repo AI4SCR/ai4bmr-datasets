@@ -26,7 +26,6 @@ affiliations:
     name: Swiss Institute of Bioinformatics (SIB), Lausanne, Switzerland
 date: 2025-06-11
 bibliography: paper.bib
-#csl: https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl
 ---
 
 # Summary
