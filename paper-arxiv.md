@@ -11,7 +11,7 @@ tags:
 author:
   - name: Adriano Martinelli
     mail: adriano.martinelli@chuv.ch
-    affiliation: [ 1, 2, 4 ]
+    affiliation: [ 1, 2, 4, '*' ]
   - name: Marianna Rapsomaniki
     mail: marianna.rapsomaniki@chuv.ch
     affiliation: [ 1, 3, 4 ]
