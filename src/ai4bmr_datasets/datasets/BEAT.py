@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 from loguru import logger
 
+
 class BEAT:
 
     def __init__(self, base_dir: Path | None = None):
@@ -15,7 +16,7 @@ class BEAT:
         self.log_dir = self.base_dir / '04_logs'
 
     def prepare_tools(self):
-        bfconvert = self.tools_dir / "bftools" /"bfconvert"
+        bfconvert = self.tools_dir / "bftools" / "bfconvert"
 
         if bfconvert.exists():
             logger.info(f"bfconvert found at {bfconvert}. Skipping installation.")
@@ -29,7 +30,7 @@ class BEAT:
         install_cmd = f"""
         wget https://downloads.openmicroscopy.org/bio-formats/8.2.0/artifacts/bftools.zip -O {self.tools_dir}/bftools.zip
         unzip {self.tools_dir}/bftools.zip -d {self.tools_dir}
-        {self.tools_dir / "bftools" /"bfconvert"} -version || exit
+        {self.tools_dir / "bftools" / "bfconvert"} -version || exit
         """
 
         install_cmd = textwrap.dedent(install_cmd).strip()
@@ -99,7 +100,8 @@ class BEAT:
 
         metadata = pd.DataFrame.from_records(records)
         metadata = metadata.merge(clinical)
-        metadata['sample_id'] = metadata['sample_barcode'].str.strip() + '.' + metadata.groupby('sample_barcode').cumcount().astype(str)
+        metadata['sample_id'] = metadata['sample_barcode'].str.strip() + '.' + metadata.groupby(
+            'sample_barcode').cumcount().astype(str)
         metadata = metadata.convert_dtypes().astype({'wsi_path': str})
         metadata = metadata.set_index('sample_id')
 
@@ -108,6 +110,16 @@ class BEAT:
         metadata.to_parquet(save_path, engine='fastparquet')
 
     def prepare_wsi(self, force: bool = False):
+        """
+        53214082    R    wsi2tiff-1G3U.06.0       cpu      12:00:00   11:46:40       13:20       1  12    128G  2025-06-18T02:19:23  dna059
+            53214085    R    wsi2tiff-1G4X.06.0       cpu      12:00:00   11:45:31       14:29       1  12    128G  2025-06-18T02:20:32  dna063
+            53214107    R    wsi2tiff-1GTL.06.0       cpu      12:00:00   11:41:25       18:35       1  12    128G  2025-06-18T02:24:38  dna061
+            53214115    R    wsi2tiff-1GEP.06.0       cpu      12:00:00   11:39:18       20:42       1  12    128G  2025-06-18T02:26:45  dna010
+            53214121    R    wsi2tiff-1GEG.0G.0       cpu      12:00:00   11:38:40       21:20       1  12    128G  2025-06-18T02:27:23  dna053
+            53214143    R    wsi2tiff-1H1Q.0F.0       cpu      12:00:00   11:34:33       25:27       1  12    128G  2025-06-18T02:31:30  dna004
+            53214158    R    wsi2tiff-1GXI.0N.0       cpu      12:00:00   11:25:49       34:11       1  12    128G  2025-06-18T02:40:14  dna004
+        """
+
         import textwrap
         import subprocess
 
@@ -124,8 +136,8 @@ class BEAT:
         for wsi_path in wsi_paths:
 
             save_name = clinical[clinical.wsi_path == str(wsi_path)].index.item()
-            save_path = dataset_dir / save_name / 'wsi.ome.tiff'
-            save_path.parent.mkdir(parents=True, exist_ok=True)
+            intermediate_path = dataset_dir / save_name / 'intermediate.tiff'
+            save_path = dataset_dir / save_name / 'wsi.tiff'
 
             if save_path.exists() and not force:
                 logger.info(f"File {save_path} already exists. Skipping conversion.")
@@ -136,43 +148,70 @@ class BEAT:
             sbatch_command = f"""
             sbatch \\
             --job-name={job_name} \\
-            --output=/users/amarti51/logs/{job_name}-%A-%a.log \\
-            --error=/users/amarti51/logs/{job_name}-%A-%a.err \\
-            --time=08:00:00 \\
+            --output=/users/amarti51/logs/{job_name}-%A.log \\
+            --error=/users/amarti51/logs/{job_name}-%A.err \\
+            --time=12:00:00 \\
             --mem=128G \\
             --cpus-per-task=12 \\
             <<'EOF'
             #!/bin/bash
-
+            
+            source /users/amarti51/miniconda3/bin/activate
+            conda activate beat
+            
             INPUT="{wsi_path}"
+            INTERMEDIATE="{intermediate_path}"
             OUTPUT="{save_path}"
             BFCONVERT="{bfconvert}"
+            
+            mkdir -p "$(dirname "{save_path}")"
 
-            /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 "$INPUT" "$OUTPUT"
+            # Convert NDPI/other WSI to intermediate TIFF
+            /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 -series 0 -pyramid-resolutions 4 -pyramid-scale 2 "$INPUT" "$INTERMEDIATE"
+
+            # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
+            /usr/bin/time -v vips tiffsave "$INTERMEDIATE" "$OUTPUT" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw
+            
+            rm "$INTERMEDIATE"
+            
             EOF
             """
             sbatch_command = textwrap.dedent(sbatch_command).strip()
 
             subprocess.run(sbatch_command, shell=True, check=True)
 
-    def segment(self, model_name: str = 'grandqc', target_mpp: float = 4.0):
-        from ai4bmr_learn.utils.slides import segment_slide, get_seg_model
+    def segment(self, model_name: str = 'grandqc', target_mpp: float = 4.0, source_mpp: float = None):
+        from ai4bmr_learn.utils.slides import segment_slide, get_seg_model, get_mpp_and_resolution
         from openslide import OpenSlide
 
         seg_model = get_seg_model(model_name=model_name)  # hest, grandqc, grandqc_artifact
         sample_dirs = [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
-        for sample_dir in sample_dirs:
+        for i, sample_dir in enumerate(sample_dirs, start=1):
 
-            save_coords_path = sample_dir / 'coords' / f'segment-mpp={target_mpp}-model_name={model_name}.parquet'
-            save_contours_path = sample_dir / 'contours' / f'segment-mpp={target_mpp}-model_name={model_name}.parquet'
-            img_path = sample_dir / 'wsi.ome.tiff'
+            img_path = sample_dir / 'wsi.tiff'
+            if not img_path.exists():
+                continue
+
+            version_name = f'segment-mpp={target_mpp}-model_name={model_name}' + (f'-src_mpp={source_mpp}' if source_mpp else '')
+            save_coords_path = sample_dir / 'coords' / f'{version_name}.parquet'
+            save_contours_path = sample_dir / 'contours' / f'{version_name}.parquet'
+
+            if save_contours_path.exists() and save_contours_path.exists():
+                logger.info(f'[{i}/{len(sample_dirs)}] {sample_dir} is already segmented')
+                continue
+
+            logger.info(f'[{i}/{len(sample_dirs)}] 🧩 segmenting {sample_dir}')
+
+            slide = OpenSlide(img_path)
+            mpp = get_mpp_and_resolution(slide)[0]
+            logger.info(f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
 
             segment_slide(slide,
                           seg_model=seg_model,
                           target_mpp=target_mpp,
-                          save_contours_path=save_contours_path, save_coords_path=save_coords_path)
+                          source_mpp=source_mpp,
+                          save_contours_path=save_contours_path,
+                          save_coords_path=save_coords_path)
 
     def setup(self):
         pass
-
-# self = BEAT()
