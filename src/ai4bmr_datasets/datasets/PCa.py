@@ -492,7 +492,7 @@ class PCa(BaseIMCDataset):
         mapping = mapping[~filter_]
 
         sample_ids = set([i.stem for i in (self.raw_dir / 'acquisitions').glob('*.tiff')])
-        file_name_to_sample_id = {f"{re.sub(r'_\d+$', '', i)}.tiff": i for i in sample_ids}
+        file_name_to_sample_id = {re.sub(r'\d+$', '', i) + ".tiff": i for i in sample_ids}
         assert len(file_name_to_sample_id) == len(sample_ids)
         assert set(mapping.file_name_tidy) == set(file_name_to_sample_id.keys())
 
