@@ -361,7 +361,7 @@ class BaseIMCDataset:
         save_spatial_dir = self.spatial_dir / version_name
 
         if (save_intensity_dir.exists() or save_spatial_dir.exists()) and not force:
-            logger.error(
+            logger.warning(
                 f"Features directory {save_intensity_dir} already exists. Set force=True to overwrite to recompute.")
             return
 

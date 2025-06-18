@@ -597,8 +597,6 @@ class PCa(BaseIMCDataset):
         This computes the metadata for each object in the dataset. The results can still contain objects that have been
         removed after the clustering, i.e. all elements that where used in the clustering are included in the metadata.
         """
-        if self.clinical_metadata_path.exists():
-            return
 
         # %% read metadata
         roi_match_blockId = pd.read_excel(self.raw_clinical_metadata_path, dtype=str)
