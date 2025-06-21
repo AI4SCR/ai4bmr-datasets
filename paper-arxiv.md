@@ -137,9 +137,9 @@ the community and envision this package as a foundation for reproducible spatial
 
 # Acknowledgements
 
-We thank Drs. Raza Ali, Dr. Lena Cords, Prof. Leeat Keren, and Prof. Michael Angelo for providing detailed information
+We thank Prof. Raza Ali, Prof. Leeat Keren, Prof. Michael Angelo and Dr. Lena Cords for providing detailed information
 and facilitating access to the corresponding datasets. This project has been made possible in part by grant number
-2024-345909 from the Chan-Zuckerberg Initiative DAF, an advised fund of Silicon Valley Community Foundation
+2024-345909 from the Chan-Zuckerberg Initiative DAF, an advised fund of Silicon Valley Community Foundation.
 
 # References
 
