@@ -19,15 +19,6 @@ class BLCa(BaseIMCDataset):
         self.raw_metadata_path = self.base_dir / '01_raw' / 'metadata' / '02_processed' / 'labels.parquet'
         self.mcd_metadata_path = self.base_dir / "metadata" / "02_processed" / "mcd_metadata.parquet"
 
-        # populated by `self.load()`
-        self.sample_ids = None
-        self.samples = None
-        self.images = None
-        self.masks = None
-        self.panel = None
-        self.intensity = None
-        self.spatial = None
-
     def prepare_data(self):
         # self.process_acquisitions()
         self.create_panel()
@@ -339,8 +330,6 @@ class BLCa(BaseIMCDataset):
             tifffile.imwrite(save_dir / f'{sample_id}.tiff', mask)
 
     def create_metadata(self):
-        # object_labels = pd.read_parquet(
-        #     self.raw_dir / 'clustering/2024-07-17_13-56/object-labels.parquet')
         logger.info("Creating metadata for clustered cells")
 
         cluster_ids = pd.read_parquet(
@@ -349,15 +338,12 @@ class BLCa(BaseIMCDataset):
         with open(self.raw_dir / 'clustering/2024-07-17_13-56/cluster-annotations.yaml') as f:
             cluster_annos = yaml.safe_load(f)
 
-        cols = [i for i in cluster_ids if i.startswith('subcluster')]
-        data = cluster_ids.set_index('id')[cols]
+        data = cluster_ids.set_index('id') 
         records = []
         for (idx, row) in data.iterrows():
             ids = list(filter(lambda x: x != None, row))
-            if len(ids) == 0:
-                id = '-1'
-            else:
-                id = ids[-1]
+            assert len(ids) > 0
+            id = ids[-1]
             records.append({'index': idx, 'cluster_id': id})
 
         records = pd.DataFrame(records)
@@ -365,8 +351,9 @@ class BLCa(BaseIMCDataset):
         cluster_annos = pd.DataFrame(cluster_annos)
         cluster_annos = cluster_annos.rename(columns={'id': 'cluster_id'})
         records = pd.merge(records, cluster_annos, on='cluster_id', how='left')
+        assert not records.name.isna().any()
 
-        records.loc[:, 'exclude'] = [False if pd.isna(i) else True for i in records['exclude']]
+        records.loc[:, 'exclude'] = [False if pd.isna(i) else i for i in records['exclude']]
 
         object_ids = records['index'].str.split('_').str[-1:].str.join('_')
         sample_ids = records['index'].str.split('_').str[:-1].str.join('_')

@@ -3,7 +3,7 @@ def test_BLCa():
     from ai4bmr_datasets.datasets.BLCa import BLCa
     from pathlib import Path
 
-    base_dir = Path("/users/amarti51/prometex/data/datasets/BLCa")
+    base_dir = Path("/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/BLCa")
     ds = self = BLCa(base_dir=base_dir)
     # ds.prepare_data()
 
