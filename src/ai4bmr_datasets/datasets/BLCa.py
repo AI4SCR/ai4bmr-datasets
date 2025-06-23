@@ -338,7 +338,7 @@ class BLCa(BaseIMCDataset):
         with open(self.raw_dir / 'clustering/2024-07-17_13-56/cluster-annotations.yaml') as f:
             cluster_annos = yaml.safe_load(f)
 
-        data = cluster_ids.set_index('id') 
+        data = cluster_ids.set_index('id')
         records = []
         for (idx, row) in data.iterrows():
             ids = list(filter(lambda x: x != None, row))
