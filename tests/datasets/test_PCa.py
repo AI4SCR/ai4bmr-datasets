@@ -2,7 +2,7 @@ def test_PCa():
     from ai4bmr_datasets import PCa
 
     ds = dataset = self = PCa()
-    ds.prepare_data()
+    # ds.prepare_data()
     ds.setup(image_version="filtered", mask_version="annotated",
              load_metadata=True, load_intensity=True, align=True)
 
@@ -11,3 +11,5 @@ def test_PCa():
     image = ds.images[sample_id]
     ds.metadata.shape
     ds.intensity.shape
+
+    list(filter(lambda x: '240208_IIIBL_X4Y6_55'.lower() in x, ds.sample_ids))
