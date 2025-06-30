@@ -109,16 +109,6 @@ class BEAT:
         metadata.to_parquet(save_path, engine='fastparquet')
 
     def prepare_wsi(self, force: bool = False):
-        """
-        53214082    R    wsi2tiff-1G3U.06.0       cpu      12:00:00   11:46:40       13:20       1  12    128G  2025-06-18T02:19:23  dna059
-            53214085    R    wsi2tiff-1G4X.06.0       cpu      12:00:00   11:45:31       14:29       1  12    128G  2025-06-18T02:20:32  dna063
-            53214107    R    wsi2tiff-1GTL.06.0       cpu      12:00:00   11:41:25       18:35       1  12    128G  2025-06-18T02:24:38  dna061
-            53214115    R    wsi2tiff-1GEP.06.0       cpu      12:00:00   11:39:18       20:42       1  12    128G  2025-06-18T02:26:45  dna010
-            53214121    R    wsi2tiff-1GEG.0G.0       cpu      12:00:00   11:38:40       21:20       1  12    128G  2025-06-18T02:27:23  dna053
-            53214143    R    wsi2tiff-1H1Q.0F.0       cpu      12:00:00   11:34:33       25:27       1  12    128G  2025-06-18T02:31:30  dna004
-            53214158    R    wsi2tiff-1GXI.0N.0       cpu      12:00:00   11:25:49       34:11       1  12    128G  2025-06-18T02:40:14  dna004
-        """
-
         import textwrap
         import subprocess
 
