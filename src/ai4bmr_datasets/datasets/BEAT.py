@@ -13,7 +13,6 @@ class BEAT:
         self.processed_dir = self.base_dir / '02_processed'
         self.datasets_dir = self.processed_dir / 'datasets'
         self.tools_dir = self.base_dir / '03_tools'
-        self.log_dir = self.base_dir / '04_logs'
 
     def prepare_tools(self):
         bfconvert = self.tools_dir / "bftools" / "bfconvert"
@@ -124,7 +123,6 @@ class BEAT:
         import subprocess
 
         self.prepare_tools()
-        self.log_dir.mkdir(parents=True, exist_ok=True)
 
         dataset_dir = self.datasets_dir / 'beat'
         dataset_dir.mkdir(parents=True, exist_ok=True)
@@ -142,17 +140,18 @@ class BEAT:
             if save_path.exists() and not force:
                 logger.info(f"File {save_path} already exists. Skipping conversion.")
 
-            job_name = f"wsi2tiff-{save_name}"
+            job_name = f"proj=beat-task=wsi2tiff-{save_name}"
             logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
+            num_cpus = 16
 
             sbatch_command = f"""
             sbatch \\
             --job-name={job_name} \\
-            --output=/users/amarti51/logs/{job_name}-%A.log \\
-            --error=/users/amarti51/logs/{job_name}-%A.err \\
-            --time=12:00:00 \\
+            --output=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.log \\
+            --error=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.err \\
+            --time=24:00:00 \\
             --mem=128G \\
-            --cpus-per-task=12 \\
+            --cpus-per-task={num_cpus} \\
             <<'EOF'
             #!/bin/bash
             
@@ -167,9 +166,13 @@ class BEAT:
             mkdir -p "$(dirname "{save_path}")"
 
             # Convert NDPI/other WSI to intermediate TIFF
-            /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 -series 0 -pyramid-resolutions 4 -pyramid-scale 2 "$INPUT" "$INTERMEDIATE"
+            # /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 -series 0 -pyramid-resolutions 4 -pyramid-scale 2 "$INPUT" "$INTERMEDIATE"
+            echo "* Exporting full-res TIFF..."
+            /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -series 0 "$INPUT" "$INTERMEDIATE"
 
             # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
+            echo "* Building OpenSlide-compatible pyramid TIFF..."
+            export VIPS_CONCURRENCY={num_cpus - 1}
             /usr/bin/time -v vips tiffsave "$INTERMEDIATE" "$OUTPUT" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw
             
             rm "$INTERMEDIATE"
@@ -179,6 +182,17 @@ class BEAT:
             sbatch_command = textwrap.dedent(sbatch_command).strip()
 
             subprocess.run(sbatch_command, shell=True, check=True)
+
+    def post_process_tiff_flags(self):
+        # # set XResolution (tag 282) to 22611
+        # tiffset -s 282 22611 "$OUTPUT"
+        #
+        # # set YResolution (tag 283) to 22611
+        # tiffset -s 283 22611 "$OUTPUT"
+        #
+        # # set ResolutionUnit (tag 296) to 3 (centimeter)
+        # tiffset -s 296 3 "$OUTPUT"
+        pass
 
     def segment(self, model_name: str = 'grandqc', target_mpp: float = 4.0, source_mpp: float = None):
         from ai4bmr_learn.utils.slides import segment_slide, get_seg_model, get_mpp_and_resolution
@@ -192,7 +206,8 @@ class BEAT:
             if not img_path.exists():
                 continue
 
-            version_name = f'segment-mpp={target_mpp}-model_name={model_name}' + (f'-src_mpp={source_mpp}' if source_mpp else '')
+            version_name = f'segment-mpp={target_mpp}-model_name={model_name}' + (
+                f'-src_mpp={source_mpp}' if source_mpp else '')
             save_coords_path = sample_dir / 'coords' / f'{version_name}.parquet'
             save_contours_path = sample_dir / 'contours' / f'{version_name}.parquet'
 
@@ -204,7 +219,8 @@ class BEAT:
 
             slide = OpenSlide(img_path)
             mpp = get_mpp_and_resolution(slide)[0]
-            logger.info(f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
+            logger.info(
+                f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
 
             segment_slide(slide,
                           seg_model=seg_model,
@@ -212,6 +228,12 @@ class BEAT:
                           source_mpp=source_mpp,
                           save_contours_path=save_contours_path,
                           save_coords_path=save_coords_path)
+
+    def prepare_data(self, force: bool = False):
+        self.prepare_tools()
+        self.prepare_clinical()
+        self.prepare_wsi(force=force)
+        self.segment()
 
     def setup(self):
         pass
