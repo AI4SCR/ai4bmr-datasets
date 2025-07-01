@@ -274,14 +274,19 @@ class BEAT:
     def prepare_data(self, force: bool = False):
         self.prepare_tools()
         self.prepare_clinical()
+
         self.prepare_wsi(force=force)
         self.post_process_tiff_flags()
-        self.segment()
+
+        self.segment(model_name='hest', target_mpp=4)
+        self.segment(model_name='grandqc', target_mpp=4)
+
+        self.create_patch_embeddings()
 
     def setup(self):
         pass
 
-    def create_patch_embeddings(self, model_name: str = 'uni_v1'):
+    def create_patch_embeddings(self, model_name: str = 'uni_v1', batch_size: int = 64, num_workers: int = 12):
         from trident.patch_encoder_models import encoder_factory
         from ai4bmr_learn.utils.slides import get_coordinates_dict, get_slide_patcher_params, get_mpp
         from ai4bmr_learn.utils.images import filter_coords
@@ -342,8 +347,7 @@ class BEAT:
             std = transform.transforms[-1].std
             transform = v2.Compose([v2.ToDtype(torch.float32, scale=True), v2.Normalize(mean=mean, std=std)])
             ds = Patches(coords=coords, transform=transform)
-            # TODO: configure batch_size and num_workers to make faster
-            dl = DataLoader(ds, batch_size=32, shuffle=False, num_workers=0)
+            dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
             model = model.to('cuda').to(precision)
 
             save_embeddings_dir = wsi_path.parent / 'embeddings' / coords_version
