@@ -1,4 +1,5 @@
 import shutil
+from openslide import OpenSlide
 from pathlib import Path
 
 import pandas as pd
@@ -223,7 +224,7 @@ class BEAT:
 
             version_name = f'segment-mpp={target_mpp}-model_name={model_name}' + (
                 f'-src_mpp={source_mpp}' if source_mpp else '')
-            save_coords_path = sample_dir / 'coords' / f'{version_name}.parquet'
+            save_coords_path = sample_dir / 'coords' / f'{version_name}.json'
             save_contours_path = sample_dir / 'contours' / f'{version_name}.parquet'
 
             if save_contours_path.exists() and save_contours_path.exists():
@@ -279,3 +280,81 @@ class BEAT:
 
     def setup(self):
         pass
+
+    def create_patch_embeddings(self, model_name: str = 'uni_v1'):
+        from trident.patch_encoder_models import encoder_factory
+        from ai4bmr_learn.utils.slides import get_coordinates_dict, get_slide_patcher_params, get_mpp
+        from ai4bmr_learn.utils.images import filter_coords
+        from ai4bmr_learn.data_models.Coordinate import SlideCoordinate
+        from ai4bmr_learn.datasets.Patches import Patches, get_patch
+        from ai4bmr_learn.plotting.patches import visualize_coords
+        from openslide import OpenSlide
+        import geopandas as gpd
+        from dataclasses import asdict
+        import json
+        from skimage.io import imsave
+        import numpy as np
+        from torchvision.transforms import v2
+        import torch
+        from torch.utils.data import DataLoader
+        from ai4bmr_learn.utils.device import batch_to_device
+        from tqdm import tqdm
+
+        factory = encoder_factory(model_name)
+        model = factory.model
+        transform = factory.eval_transforms  # TODO: check how to convert to v2
+        precision = factory.precision
+
+        wsi_paths = sorted(self.datasets_dir.rglob('*wsi.tiff'))
+        for wsi_path in wsi_paths:
+            logger.info(f'Computing patch embeddings for {wsi_path.parent.name}...')
+
+            slide = OpenSlide(str(wsi_path))
+            contours_path = wsi_path.parent / 'contours' / "segment-mpp=4-model_name=hest.parquet"
+            contours = gpd.read_parquet(contours_path)
+
+            patch_size = patch_stride = 224
+            target_mpp = 0.8624999831542972  # TODO: check this value for the used model
+            overlap = 0.25
+            params = get_slide_patcher_params(slide=slide, patch_size=patch_size, patch_stride=patch_stride, target_mpp=target_mpp)
+            coords = get_coordinates_dict(**params)
+            coords = [SlideCoordinate(**i) for i in coords]
+            coords = filter_coords(coords=coords, contours=contours, overlap=overlap)
+
+            coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+            save_coords_path = wsi_path.parent / 'coords' / f'{coords_version}.json'
+            save_coords_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(save_coords_path, 'w') as f:
+                    coords_dict = [asdict(i) for i in coords]
+                    json.dump(coords_dict, f)
+                
+            img = visualize_coords(coords=coords,slide=slide)
+            imsave(save_coords_path.with_suffix('.png'), img)
+
+            save_patches_dir = wsi_path.parent / 'patches' / coords_version
+            save_patches_dir.mkdir(parents=True, exist_ok=True)
+            for i in np.random.choice(range(len(coords)), size=100, replace=False):
+                img = get_patch(coord=coords[i], as_tensor=False)
+                save_path = save_patches_dir / f'id={coords[i].id}-uuid={coords[i].uuid}.png'
+                imsave(save_path, np.array(img))
+
+            mean = transform.transforms[-1].mean
+            std = transform.transforms[-1].std
+            transform = v2.Compose([v2.ToDtype(torch.float32, scale=True), v2.Normalize(mean=mean, std=std)])
+            ds = Patches(coords=coords, transform=transform)
+            # TODO: configure batch_size and num_workers to make faster
+            dl = DataLoader(ds, batch_size=32, shuffle=False, num_workers=0)
+            model = model.to('cuda').to(precision)
+
+            save_embeddings_dir = wsi_path.parent / 'embeddings' / coords_version
+            save_embeddings_dir.mkdir(parents=True, exist_ok=True)
+            with torch.no_grad():
+                for batch_idx, batch in tqdm(enumerate(dl), total=len(dl)):
+                    images = batch.pop('image')
+                    images = images.to('cuda').to(precision)
+                    x = model(images)
+                    
+                    batch['embedding'] = x.cpu()
+                    save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
+                    torch.save(x, save_path)
+            break
