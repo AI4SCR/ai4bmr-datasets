@@ -124,6 +124,12 @@ class BEAT:
         for wsi_path in wsi_paths:
 
             save_name = clinical[clinical.wsi_path == str(wsi_path)].index.item()
+            if save_name in [
+                '1GUG.0M.2',  # barcode
+                '1GVQ.06.2',  # barcode
+            ]:
+                continue
+            
             intermediate_path = dataset_dir / save_name / 'intermediate.tiff'
             save_path = dataset_dir / save_name / 'wsi.tiff'
 
@@ -174,22 +180,41 @@ class BEAT:
             subprocess.run(sbatch_command, shell=True, check=True)
 
     def post_process_tiff_flags(self):
-        # # set XResolution (tag 282) to 22611
-        # tiffset -s 282 22611 "$OUTPUT"
-        #
-        # # set YResolution (tag 283) to 22611
-        # tiffset -s 283 22611 "$OUTPUT"
-        #
-        # # set ResolutionUnit (tag 296) to 3 (centimeter)
-        # tiffset -s 296 3 "$OUTPUT"
-        pass
+        from ai4bmr_learn.utils.slides import get_mpp
+        import openslide
+        import textwrap
+        import subprocess
 
-    def segment(self, model_name: str = 'grandqc', target_mpp: float = 4.0, source_mpp: float = None):
+        wsi_paths = list(self.datasets_dir.rglob('*wsi.tiff'))
+        for wsi_path in wsi_paths:
+            slide = openslide.OpenSlide(wsi_path)
+            
+            try:
+                mpp = get_mpp(slide)
+            except AssertionError:
+                logger.error(f'Error retriving slide mpp for {wsi_path}')
+                continue
+
+            if str(mpp).startswith('4.422'):
+                cmd = f"""
+                # set XResolution (tag 282) to 22611
+                tiffset -s 282 22611 "{wsi_path}"
+                
+                # set YResolution (tag 283) to 22611
+                tiffset -s 283 22611 "{wsi_path}"
+                
+                # set ResolutionUnit (tag 296) to 3 (centimeter)
+                tiffset -s 296 3 "{wsi_path}"
+                """
+                cmd = textwrap.dedent(cmd).strip()
+                subprocess.run(cmd, shell=True, check=True)
+
+    def segment(self, sample_dirs: list[Path] | None = None, model_name: str = 'grandqc', target_mpp: float = 4.0, source_mpp: float = None):
         from ai4bmr_learn.utils.slides import segment_slide, get_seg_model, get_mpp_and_resolution
         from openslide import OpenSlide
 
         seg_model = get_seg_model(model_name=model_name)  # hest, grandqc, grandqc_artifact
-        sample_dirs = [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
+        sample_dirs = sample_dirs or [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
         for i, sample_dir in enumerate(sample_dirs, start=1):
 
             img_path = sample_dir / 'wsi.tiff'
@@ -208,7 +233,13 @@ class BEAT:
             logger.info(f'[{i}/{len(sample_dirs)}] 🧩 segmenting {sample_dir}')
 
             slide = OpenSlide(img_path)
-            mpp = get_mpp_and_resolution(slide)[0]
+
+            try:
+                mpp = get_mpp_and_resolution(slide)[0]
+            except AssertionError:
+                logger.error(f'Error retriving slide mpp for {img_path}')
+                continue
+
             logger.info(
                 f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
 
@@ -219,10 +250,31 @@ class BEAT:
                           save_contours_path=save_contours_path,
                           save_coords_path=save_coords_path)
 
+    def create_thumbnail(self):
+        from skimage.io import imsave
+        from ai4bmr_learn.utils.slides import get_thumbnail
+        from openslide import OpenSlide
+
+        sample_dirs = [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
+        for i, sample_dir in enumerate(sample_dirs, start=1):
+
+            img_path = sample_dir / 'wsi.tiff'
+            if not img_path.exists():
+                continue
+
+            logger.info(f'Create thumbnail for {sample_dir.name}')
+
+            slide = OpenSlide(img_path)
+            thumbnail, _ = get_thumbnail(slide=slide)
+
+            save_path = img_path.parent / 'thumbnail.png'
+            imsave(str(save_path), thumbnail)
+
     def prepare_data(self, force: bool = False):
         self.prepare_tools()
         self.prepare_clinical()
         self.prepare_wsi(force=force)
+        self.post_process_tiff_flags()
         self.segment()
 
     def setup(self):
