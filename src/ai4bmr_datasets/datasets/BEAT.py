@@ -244,6 +244,9 @@ class BEAT:
             logger.info(
                 f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
 
+            if save_contours_path.exists():
+                continue
+
             segment_slide(slide,
                           seg_model=seg_model,
                           target_mpp=target_mpp,
@@ -293,6 +296,7 @@ class BEAT:
         from ai4bmr_learn.data_models.Coordinate import SlideCoordinate
         from ai4bmr_learn.datasets.Patches import Patches, get_patch
         from ai4bmr_learn.plotting.patches import visualize_coords
+        from ai4bmr_learn.plotting.contours import visualize_contours
         from openslide import OpenSlide
         import geopandas as gpd
         from dataclasses import asdict
@@ -311,19 +315,27 @@ class BEAT:
         precision = factory.precision
 
         wsi_paths = sorted(self.datasets_dir.rglob('*wsi.tiff'))
-        for wsi_path in wsi_paths:
-            logger.info(f'Computing patch embeddings for {wsi_path.parent.name}...')
+        for i, wsi_path in enumerate(wsi_paths):
+            logger.info(f'[{i}/{len(wsi_paths)}] Computing patch embeddings for {wsi_path.parent.name}...')
 
             slide = OpenSlide(str(wsi_path))
             contours_path = wsi_path.parent / 'contours' / "segment-mpp=4-model_name=hest.parquet"
             contours = gpd.read_parquet(contours_path)
+
+            q = np.quantile(contours.geometry.area, 0.5)
+            filter_ = contours.geometry.area > q
+            import matplotlib.pyplot as plt
+            plt.imshow(visualize_contours(contours=contours[filter_], slide=slide)).figure.show()
 
             patch_size = patch_stride = 224
             target_mpp = 0.8624999831542972  # TODO: check this value for the used model
             overlap = 0.25
             params = get_slide_patcher_params(slide=slide, patch_size=patch_size, patch_stride=patch_stride, target_mpp=target_mpp)
             coords = get_coordinates_dict(**params)
+            logger.info(f'{len(coords)} coordinates before filtering')
             coords = [SlideCoordinate(**i) for i in coords]
+
+            logger.info('Filtering coordinates...')
             coords = filter_coords(coords=coords, contours=contours, overlap=overlap)
 
             coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
@@ -336,6 +348,7 @@ class BEAT:
             img = visualize_coords(coords=coords,slide=slide)
             imsave(save_coords_path.with_suffix('.png'), img)
 
+            logger.info('Visualizing patches...')
             save_patches_dir = wsi_path.parent / 'patches' / coords_version
             save_patches_dir.mkdir(parents=True, exist_ok=True)
             for i in np.random.choice(range(len(coords)), size=100, replace=False):
@@ -350,7 +363,8 @@ class BEAT:
             dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
             model = model.to('cuda').to(precision)
 
-            save_embeddings_dir = wsi_path.parent / 'embeddings' / coords_version
+            logger.info('Computing embeddings...')
+            save_embeddings_dir = wsi_path.parent / 'embeddings' / f'model={model_name}' / coords_version
             save_embeddings_dir.mkdir(parents=True, exist_ok=True)
             with torch.no_grad():
                 for batch_idx, batch in tqdm(enumerate(dl), total=len(dl)):
@@ -361,4 +375,3 @@ class BEAT:
                     batch['embedding'] = x.cpu()
                     save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
                     torch.save(x, save_path)
-            break
