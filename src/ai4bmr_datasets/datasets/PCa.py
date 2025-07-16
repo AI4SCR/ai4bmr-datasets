@@ -5,7 +5,6 @@ from pathlib import Path
 import pandas as pd
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
-
 class PCa(BaseIMCDataset):
     name = "PCa"
     id = "PCa"
