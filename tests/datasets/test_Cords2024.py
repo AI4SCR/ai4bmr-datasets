@@ -15,6 +15,7 @@ def test_Cords2024():
 
     image_version = mask_version = metadata_version = feature_version = 'published'
     ds = self = Dataset()
+    # ds.create_annotated()
     ds.setup(image_version=image_version, mask_version=mask_version,
              metadata_version=metadata_version, load_metadata=True,
              feature_version=feature_version, load_intensity=True, load_spatial=True)
