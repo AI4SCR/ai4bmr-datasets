@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -613,7 +613,7 @@ class Cords2024(BaseIMCDataset):
         save_metadata_dir = self.metadata_dir / version
         save_metadata_dir.mkdir(parents=True, exist_ok=True)
 
-        for sample_id in sample_ids:
+        for sample_id in tqdm(sample_ids):
 
             # NOTE: remove core 178 as the object ids in the annotated data are no longer aligned with the masks as they
             #   had to regenerate the masks and they no longer align with the metadata
@@ -631,7 +631,7 @@ class Cords2024(BaseIMCDataset):
                 logger.warning(f'No corresponding mask found for {sample_id}. Skipping.')
                 continue
 
-            logger.info(f"Saving annotated mask {save_path}")
+            # logger.info(f"Saving annotated mask {save_path}")
 
             mask = imread(mask_path)
             intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
@@ -652,7 +652,7 @@ class Cords2024(BaseIMCDataset):
             assert len(np.unique(mask_filtered)) == len(objs) + 1
             imsave(save_path, mask_filtered)
 
-            idx = pd.IndexSlice[:, objs]
+            idx = pd.IndexSlice[:, objs.astype(str)]
 
             intensity_ = intensity_.loc[idx, :]
             intensity_.to_parquet(save_intensity_dir / f"{sample_id}.parquet", engine='fastparquet')
