@@ -7,6 +7,6 @@ from .PCa import PCa
 
 from .BEAT import BEAT
 
-from .DummyPoints import DummyPoints
-from .DummyImages import DummyImages
-from .DummyTabular import DummyTabular
+# from .DummyPoints import DummyPoints
+# from .DummyImages import DummyImages
+# from .DummyTabular import DummyTabular
