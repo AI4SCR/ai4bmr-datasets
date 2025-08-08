@@ -23,9 +23,12 @@ class Keren2018(BaseIMCDataset):
     - we have patient ids up to 44 in `raw_sca` but only have images for patient ids up to 41
     """
 
-    
-
     def prepare_data(self):
+        """
+        Prepares the Keren2018 dataset by downloading, creating panel, metadata,
+        images, masks, clinical metadata, and intensity and spatial features.
+        Finally, it creates annotated data.
+        """
         self.download()
         self.create_panel()
         self.create_metadata()
@@ -38,6 +41,12 @@ class Keren2018(BaseIMCDataset):
         self.create_annotated()
 
     def download(self, force: bool = False):
+        """
+        Downloads the raw data files for the Keren2018 dataset from various sources.
+
+        Args:
+            force (bool): If True, forces re-download even if files already exist.
+        """
         import requests
         import shutil
 
@@ -74,6 +83,12 @@ class Keren2018(BaseIMCDataset):
         logger.info("✅ Download and extraction completed.")
 
     def create_panel(self):
+        """
+        Creates and saves the panel (antibody panel) for the Keren2018 dataset.
+
+        This method reads supplementary tables, processes them to extract and align
+        channel and target information, and saves the consolidated panel as a Parquet file.
+        """
         logger.info("Creating panel")
 
         # downloaded as Table S1 from paper
@@ -128,7 +143,16 @@ class Keren2018(BaseIMCDataset):
         panel.to_parquet(panel_path, engine='fastparquet')
 
     @staticmethod
-    def get_tiff_metadata(path):
+    def get_tiff_metadata(path: Path) -> pd.DataFrame:
+        """
+        Extracts TIFF metadata, specifically page names and mass channels, from a TIFF file.
+
+        Args:
+            path (Path): The path to the TIFF file.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing 'target' and 'mass_channel' extracted from page names.
+        """
         import tifffile
 
         tag_name = "PageName"
@@ -149,6 +173,12 @@ class Keren2018(BaseIMCDataset):
         return metadata
 
     def create_images(self):
+        """
+        Creates and saves processed image files for the Keren2018 dataset.
+
+        This method reads raw TIFF images, stacks them by channel, and saves the
+        processed images as TIFF files.
+        """
         logger.info("Creating images")
 
         panel_path = self.get_panel_path(image_version='published')
@@ -183,6 +213,12 @@ class Keren2018(BaseIMCDataset):
 
 
     def create_masks(self):
+        """
+        Creates and saves processed mask files for the Keren2018 dataset.
+
+        This method reads raw mask files and segmentation interior files, combines them,
+        and saves the processed masks as TIFF files.
+        """
         # NOTE: filter masks by objects in data
         #   - 0: cell boarders
         #   - 1: background
@@ -223,6 +259,12 @@ class Keren2018(BaseIMCDataset):
             save_mask(mask, save_path)
 
     def create_clinical_metadata(self):
+        """
+        Creates and saves the clinical metadata for the Keren2018 dataset.
+
+        This method reads raw patient class data, processes it to extract cancer types,
+        and saves the consolidated clinical metadata as a Parquet file.
+        """
         logger.info("Creating metadata")
         samples = pd.read_csv(self.raw_dir / "tnbc_processed_data" / "patient_class.csv", header=None)
         samples.columns = ["patient_id", "cancer_type_id"]
@@ -239,6 +281,13 @@ class Keren2018(BaseIMCDataset):
         samples.to_parquet(path, engine='fastparquet')
 
     def create_metadata(self):
+        """
+        Creates and saves processed metadata (annotations) for the Keren2018 dataset.
+
+        This method reads raw single-cell data, extracts relevant metadata columns,
+        applies tidy naming conventions, and saves the processed metadata as Parquet files,
+        grouped by sample ID.
+        """
         logger.info("Creating metadata [annotations]")
         raw_sca_path = self.raw_dir / "tnbc_processed_data" / "cellData.csv"
         data = pd.read_csv(raw_sca_path)
@@ -312,6 +361,13 @@ class Keren2018(BaseIMCDataset):
             grp_data.to_parquet(path, engine='fastparquet')
 
     def create_features_spatial(self):
+        """
+        Creates and saves spatial features for the Keren2018 dataset.
+
+        This method reads raw single-cell data, extracts spatial features,
+        applies tidy naming conventions, and saves the processed spatial features
+        as Parquet files, grouped by sample ID.
+        """
         logger.info("Creating spatial features")
 
         spatial = pd.read_csv(self.raw_dir / "tnbc_processed_data" / "cellData.csv")
@@ -335,6 +391,13 @@ class Keren2018(BaseIMCDataset):
             grp_data.to_parquet(path, engine='fastparquet')
 
     def create_features_intensity(self):
+        """
+        Creates and saves intensity features for the Keren2018 dataset.
+
+        This method reads raw single-cell data, extracts intensity features,
+        aligns them with the panel targets, and saves the processed intensity features
+        as Parquet files, grouped by sample ID.
+        """
         # NOTE: patient 30 has been excluded from the analysis due to noise
         #   and there are patients 42,43,44 in the processed single cell data but we do not have images for them
 
