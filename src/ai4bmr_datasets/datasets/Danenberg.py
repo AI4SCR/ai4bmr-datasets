@@ -15,10 +15,35 @@ class Danenberg2022(BaseIMCDataset):
     id = "Danenberg2022"
     doi = "10.1038/s41588-022-01041-y"
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    def __init__(self, 
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
+
+        super().__init__(base_dir=base_dir,
+                         image_version=image_version,
+                         mask_version=mask_version,
+                         feature_version=feature_version,
+                         metadata_version=metadata_version,
+                         load_intensity=load_intensity,
+                         load_spatial=load_spatial,
+                         load_metadata=load_metadata,
+                         align=align,
+                         join=join)
 
     def prepare_data(self):
+        """
+        Prepares the Danenberg2022 dataset by downloading, processing R data,
+        and creating various data components (panel, images, masks, metadata, intensity, clinical metadata).
+        """
         self.download()
         self.process_rdata()
 
@@ -32,6 +57,13 @@ class Danenberg2022(BaseIMCDataset):
         self.create_annotated(mask_version='published_nucleus')
 
     def download(self, force: bool = False):
+        """
+        Downloads the raw data files for the Danenberg2022 dataset from Zenodo.
+
+        Args:
+            force (bool): If True, forces re-download even if files already exist.
+        """
+        import requests
         import shutil
         from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
@@ -53,18 +85,49 @@ class Danenberg2022(BaseIMCDataset):
 
         logger.info("✅ Download and extraction completed.")
 
-    def get_metabric_id(self, path: str):
+    def get_metabric_id(self, path: str) -> str:
+        """
+        Extracts the METABRIC ID from a given file path.
+
+        Args:
+            path (str): The file path.
+
+        Returns:
+            str: The extracted METABRIC ID.
+        """
         return re.search(r'MB\d+', path).group(0)
 
-    def get_sample_id(self, path: str):
+    def get_sample_id(self, path: str) -> str:
+        """
+        Extracts the sample ID from a given file path.
+
+        Args:
+            path (str): The file path.
+
+        Returns:
+            str: The extracted sample ID in the format 'MB_X_Y'.
+        """
         match = re.search(r'MB(\d+)_(\d+)', path)
         return f'MB_{match.group(1)}_{match.group(2)}'
 
-    def get_mask_version(self, path):
+    def get_mask_version(self, path: str) -> str:
+        """
+        Extracts the mask version from a given file path.
+
+        Args:
+            path (str): The file path.
+
+        Returns:
+            str: The extracted mask version.
+        """
         match = re.search(r'MB(\d+)_(\d+)_(\w+)Mask\.tiff', path)
         return match.group(3)
 
     def process_rdata(self):
+        """
+        Processes R data files (FST) to extract and convert clinical and single-cell data
+        into Parquet format.
+        """
         import subprocess
         import textwrap
 
@@ -116,6 +179,12 @@ class Danenberg2022(BaseIMCDataset):
         subprocess.run(["bash", "-c", shell_command], check=True)
 
     def create_images(self):
+        """
+        Creates and saves processed image files for the Danenberg2022 dataset.
+
+        This method reads raw image files, filters for 'FullStack' images,
+        and saves them as TIFF files.
+        """
         images_dir = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/Images'
         img_paths = list(images_dir.rglob('*.tiff'))
         img_paths = sorted(filter(lambda x: 'FullStack' in str(x), img_paths))
@@ -142,6 +211,12 @@ class Danenberg2022(BaseIMCDataset):
             imwrite(save_path, img)
 
     def create_masks(self):
+        """
+        Creates and saves processed mask files for the Danenberg2022 dataset.
+
+        This method reads raw mask files, extracts sample and mask version information,
+        and saves the processed masks as TIFF files.
+        """
         images_dir = self.raw_dir / 'corrected_public_masks' / 'correctedPublicMasks'
         img_paths = list(images_dir.rglob('*.tiff'))
         img_paths = sorted(filter(lambda x: 'Mask' in str(x), img_paths))
@@ -167,6 +242,13 @@ class Danenberg2022(BaseIMCDataset):
             imwrite(save_path, img)
 
     def create_metadata_and_intensity(self):
+        """
+        Creates and saves processed metadata and intensity features for the Danenberg2022 dataset.
+
+        This method reads raw single-cell data, processes it to extract sample and object IDs,
+        renames intensity columns, and saves the processed intensity and metadata
+        as Parquet files, grouped by sample ID.
+        """
         logger.info('Creating `published` metadata and intensity')
 
         panel = pd.read_parquet(self.get_panel_path('published'))
@@ -248,6 +330,13 @@ class Danenberg2022(BaseIMCDataset):
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_clinical_metadata(self):
+        """
+        Creates and saves the clinical metadata for the Danenberg2022 dataset.
+
+        This method reads raw clinical data, processes it to align with sample IDs,
+        applies tidy naming conventions, and saves the consolidated clinical metadata
+        as a Parquet file.
+        """
 
         metadata = pd.read_parquet(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet')
         metadata.columns = metadata.columns.map(tidy_name)
@@ -271,6 +360,12 @@ class Danenberg2022(BaseIMCDataset):
         metadata.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
     def create_panel(self):
+        """
+        Creates and saves the panel (antibody panel) for the Danenberg2022 dataset.
+
+        This method reads raw antibody panel data, processes it to align with target names,
+        and saves the consolidated panel as a Parquet file.
+        """
         panel = pd.read_csv(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/AbPanel.csv')
         order = pd.read_csv(self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/markerStackOrder.csv')
         assert (panel.metaltag == order.Isotope).all()

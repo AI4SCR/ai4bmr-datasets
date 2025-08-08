@@ -4,11 +4,12 @@ def test_Danenberg2022():
     datasets_dir = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/')
 
     image_version = metadata_version = feature_version = 'published'
-    ds = self = Dataset(base_dir=datasets_dir / Dataset.name)
+    ds = self = Dataset(base_dir=datasets_dir / Dataset.name,
+                         image_version=image_version, mask_version='published_cell',
+                         metadata_version=metadata_version, load_metadata=True,
+                         feature_version=feature_version, load_intensity=True)
     ds.prepare_data()
-    ds.setup(image_version=image_version, mask_version='published_cell',
-             metadata_version=metadata_version, load_metadata=True,
-             feature_version=feature_version, load_intensity=True)
+    ds.setup()
 
     assert isinstance(ds.images, dict)
     assert isinstance(ds.masks, dict)

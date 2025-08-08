@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -16,20 +16,66 @@ class Cords2024(BaseIMCDataset):
 
     @property
     def id(self):
+        """
+        Returns the unique identifier for the Cords2024 dataset.
+        """
         return "Cords2024"
 
     @property
     def doi(self):
+        """
+        Returns the DOI for the Cords2024 dataset publication.
+        """
         return "10.1016/j.ccell.2023.12.021"
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    def __init__(self,
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
+        """
+        Initializes the Cords2024 dataset.
+
+        Args:
+            base_dir (Path | None): Base directory for the dataset.
+            image_version (str | None): Version of the images to load.
+            mask_version (str | None): Version of the masks to load.
+            feature_version (str | None): Version of the features to load.
+            metadata_version (str | None): Version of the metadata to load.
+            load_intensity (bool): Whether to load intensity features.
+            load_spatial (bool): Whether to load spatial features.
+            load_metadata (bool): Whether to load metadata.
+            align (bool): Whether to align sample IDs across modalities.
+            join (str): Type of join for alignment (e.g., 'outer').
+        """
+
+        super().__init__(base_dir=base_dir,
+                         image_version=image_version,
+                         mask_version=mask_version,
+                         feature_version=feature_version,
+                         metadata_version=metadata_version,
+                         load_intensity=load_intensity,
+                         load_spatial=load_spatial,
+                         load_metadata=load_metadata,
+                         align=align,
+                         join=join)
 
         # raw data paths
         self.raw_clinical_metadata = self.raw_dir / "comp_csv_files" / "cp_csv" / "clinical_data_ROI.csv"
         self.raw_acquisitions_dir = self.raw_dir / "acquisitions"
 
     def prepare_data(self):
+        """
+        Prepares the Cords2024 dataset by downloading, processing, and creating
+        various data components (clinical metadata, panel, images, masks, metadata).
+        """
         self.download()
         self.process_rdata()
         self.process_acquisitions()
@@ -44,6 +90,13 @@ class Cords2024(BaseIMCDataset):
         self.create_annotated()
 
     def download(self, force: bool = False):
+        """
+        Downloads the raw data files for the Cords2024 dataset from Zenodo and Google Drive.
+
+        Args:
+            force (bool): If True, forces re-download even if files already exist.
+        """
+        import requests
         import shutil
         from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
@@ -106,23 +159,25 @@ class Cords2024(BaseIMCDataset):
         logger.info("✅ Download and extraction completed.")
 
     def get_sample_id_from_path(self, path):
+        """
+        Extracts the sample ID from a given file path.
+
+        Args:
+            path (str): The file path.
+
+        Returns:
+            str: The extracted sample ID.
+        """
         path = str(path)
         search = re.search(r"TMA_(\d+)_(\w+)_s0_a(\d+)", (path))
         return '_'.join(search.groups())
 
     def process_acquisitions(self):
         """
-        Failed reading acquisitions for:
-        # have masks
-        - 88_A_10
-        - 88_A_9
-        - 88_B_110
-        - 86_B_1
-        - 176_B_47
-        - 175_B_90
+        Processes raw MCD acquisition files to extract and save image data and metadata.
 
-        - 176_C_2
-        - 87_A_49
+        This method reads .mcd files, extracts individual acquisitions, and saves them as
+        TIFF images and JSON metadata files in the raw acquisitions directory.
         """
 
         from readimc import MCDFile
@@ -174,6 +229,13 @@ class Cords2024(BaseIMCDataset):
                             continue
 
     def validate_masks(self):
+        """
+        Validates the consistency between mask objects and metadata objects.
+
+        This method loads published image, mask, and metadata versions, then checks if the unique
+        object IDs in the masks match those in the metadata for each sample.
+        Logs mismatches for samples where the object IDs do not align.
+        """
         import numpy as np
         version_name = 'published'
         self.setup(image_version=version_name, mask_version=version_name, metadata_version=version_name,
@@ -200,6 +262,12 @@ class Cords2024(BaseIMCDataset):
         item = list(filter(lambda x: x[0] == '178_B_71', mismatches))
 
     def create_panel(self):
+        """
+        Creates and saves the panel (channel metadata) for the Cords2024 dataset.
+
+        This method reads channel information from raw acquisition JSON files, processes it,
+        and saves the consolidated panel as a Parquet file.
+        """
         from ai4bmr_core.utils.tidy import tidy_name
         import json
         import pandas as pd
@@ -223,7 +291,8 @@ class Cords2024(BaseIMCDataset):
         panel["target"] = targets.str[0].map(tidy_name).values
         # add suffix to target for duplicates (iridium)
         panel['target'] = panel.target + '_' + panel.groupby('target').cumcount().astype(str)
-        panel.loc[:, 'target'] = panel.target.str.replace('_0$', '', regex=True)
+        panel.loc[:, 'target'] = panel.target.str.replace('_0
+, '', regex=True)
 
         panel["keep"] = keep
 
@@ -244,6 +313,12 @@ class Cords2024(BaseIMCDataset):
         panel.to_parquet(panel_path)
 
     def create_images(self):
+        """
+        Creates and saves processed image files for the Cords2024 dataset.
+
+        This method reads raw image acquisitions, filters them based on the panel,
+        and saves the processed images as TIFF files.
+        """
         panel_path = self.get_panel_path("published")
         panel = pd.read_parquet(panel_path)
 
@@ -265,6 +340,12 @@ class Cords2024(BaseIMCDataset):
             imwrite(save_path, img)
 
     def create_masks(self):
+        """
+        Creates and saves processed mask files for the Cords2024 dataset.
+
+        This method reads raw mask files, processes them (including handling specific
+        naming conventions and potential mismatches), and saves the processed masks as TIFF files.
+        """
         import tifffile
         import shutil
         from loguru import logger
@@ -329,6 +410,13 @@ class Cords2024(BaseIMCDataset):
                 logger.info(f'Skipping mask {mask_path}. No corresponding image found.')
 
     def create_clinical_metadata(self):
+        """
+        Creates and saves the clinical metadata for the Cords2024 dataset.
+
+        This method reads raw clinical data, processes it to extract sample IDs,
+        and saves the consolidated clinical metadata as a Parquet file.
+        It also logs any samples for which clinical metadata or images are missing.
+        """
         from ai4bmr_core.utils.tidy import tidy_name
         import re
 
@@ -371,6 +459,12 @@ class Cords2024(BaseIMCDataset):
         clinical_metadata.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
     def create_metadata(self):
+        """
+        Creates and saves processed metadata (cell types) for the Cords2024 dataset.
+
+        This method reads raw single-cell experiment metadata, extracts sample and object IDs,
+        and saves the processed metadata as Parquet files, grouped by sample ID.
+        """
         path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/cell_types.parquet'
         metadata = pd.read_parquet(path)
 
@@ -393,6 +487,13 @@ class Cords2024(BaseIMCDataset):
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_features_spatial(self):
+        """
+        Creates and saves processed spatial features for the Cords2024 dataset.
+
+        This method reads raw spatial data, extracts sample and object IDs,
+        applies tidy naming conventions, and saves the processed spatial features
+        as Parquet files, grouped by sample ID.
+        """
         logger.info('Creating spatial features')
 
         from ai4bmr_core.utils.tidy import tidy_name
@@ -419,6 +520,13 @@ class Cords2024(BaseIMCDataset):
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_features_intensity(self):
+        """
+        Creates and saves processed intensity features for the Cords2024 dataset.
+
+        This method reads raw intensity data, renames columns based on a mapping,
+        extracts sample and object IDs, and saves the processed intensity features
+        as Parquet files, grouped by sample ID.
+        """
         logger.info('Creating intensity features')
 
         path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/intensity.parquet'
@@ -493,10 +601,20 @@ class Cords2024(BaseIMCDataset):
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_features(self):
+        """
+        Orchestrates the creation of both spatial and intensity features.
+        """
         self.create_features_spatial()
         self.create_features_intensity()
 
     def process_rdata(self, force: bool = False):
+        """
+        Processes R data files (RDS) to extract and convert single-cell experiment data
+        into Parquet format for metadata, spatial, and intensity features.
+
+        Args:
+            force (bool): If True, forces re-processing even if Parquet files already exist.
+        """
         import subprocess
         import textwrap
 
@@ -566,6 +684,14 @@ class Cords2024(BaseIMCDataset):
         subprocess.run(shell_command, shell=True, check=True)
 
     def create_annotated(self, version_name: str = 'annotated', mask_version: str = "published"):
+        """
+        Creates an annotated version of the dataset by filtering masks, intensity, and metadata
+        to include only objects that are present across all three modalities.
+
+        Args:
+            version_name (str): The name for the new annotated version (default: 'annotated').
+            mask_version (str): The mask version to use for annotation (default: 'published').
+        """
         from skimage.io import imread, imsave
         import numpy as np
 
@@ -602,7 +728,7 @@ class Cords2024(BaseIMCDataset):
         save_metadata_dir = self.metadata_dir / version
         save_metadata_dir.mkdir(parents=True, exist_ok=True)
 
-        for sample_id in sample_ids:
+        for sample_id in tqdm(sample_ids):
 
             # NOTE: remove core 178 as the object ids in the annotated data are no longer aligned with the masks as they
             #   had to regenerate the masks and they no longer align with the metadata
@@ -620,7 +746,7 @@ class Cords2024(BaseIMCDataset):
                 logger.warning(f'No corresponding mask found for {sample_id}. Skipping.')
                 continue
 
-            logger.info(f"Saving annotated mask {save_path}")
+            # logger.info(f"Saving annotated mask {save_path}")
 
             mask = imread(mask_path)
             intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
@@ -641,10 +767,11 @@ class Cords2024(BaseIMCDataset):
             assert len(np.unique(mask_filtered)) == len(objs) + 1
             imsave(save_path, mask_filtered)
 
-            idx = pd.IndexSlice[:, objs]
+            idx = pd.IndexSlice[:, objs.astype(str)]
 
             intensity_ = intensity_.loc[idx, :]
             intensity_.to_parquet(save_intensity_dir / f"{sample_id}.parquet", engine='fastparquet')
 
             metadata_ = metadata_.loc[idx, :]
             metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
+
