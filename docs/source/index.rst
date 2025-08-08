@@ -15,8 +15,8 @@ documentation for details.
    :maxdepth: 2
    :caption: Contents:
 
-.. automodule:: ai4bmr_datasets
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   installation
+   api
+
+
 
