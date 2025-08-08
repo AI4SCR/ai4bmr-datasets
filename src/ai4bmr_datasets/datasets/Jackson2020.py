@@ -62,6 +62,7 @@ class Jackson2020(BaseIMCDataset):
         """
         import requests
         import shutil
+        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
@@ -74,18 +75,7 @@ class Jackson2020(BaseIMCDataset):
             "https://zenodo.org/records/4607374/files/TumorStroma_masks.zip?download=1": download_dir / 'tumor_stroma_masks.zip',
         }
 
-        # Download files
-        for url, target_path in file_map.items():
-            if not target_path.exists() or force:
-                logger.info(f"Downloading {url} → {target_path}")
-                headers = {"User-Agent": "Mozilla/5.0"}
-                with requests.get(url, headers=headers, stream=True) as r:
-                    r.raise_for_status()
-                    with open(target_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-            else:
-                logger.info(f"Skipping download of {target_path.name}, already exists.")
+        download_file_map(file_map, force=force)
 
         # Extract zip files
         for target_path in file_map.values():

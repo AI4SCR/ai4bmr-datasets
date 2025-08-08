@@ -49,6 +49,7 @@ class Keren2018(BaseIMCDataset):
         """
         import requests
         import shutil
+        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
@@ -60,18 +61,7 @@ class Keren2018(BaseIMCDataset):
             "https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc2.xlsx": download_dir / "1-s2.0-S0092867418311000-mmc2.xlsx",
         }
 
-        # Download files
-        for url, target_path in file_map.items():
-            if not target_path.exists() or force:
-                logger.info(f"Downloading {url} → {target_path}")
-                headers = {"User-Agent": "Mozilla/5.0"}
-                with requests.get(url, headers=headers, stream=True) as r:
-                    r.raise_for_status()
-                    with open(target_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-            else:
-                logger.info(f"Skipping download of {target_path.name}, already exists.")
+        download_file_map(file_map, force=force)
 
         # Extract zip files
         for target_path in file_map.values():
