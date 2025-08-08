@@ -1,5 +1,8 @@
 # SpatialProteomicsNet
 
+[![Documentation Status](https://readthedocs.org/projects/ai4bmr-datasets/badge/?version=latest)](https://ai4bmr-datasets.readthedocs.io/en/latest/?badge=latest)
+[![GitHub Pages Status](https://github.com/AI4SCR/ai4bmr-datasets/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/AI4SCR/ai4bmr-datasets/actions/workflows/deploy-docs.yml)
+
 **SpatialProteomicsNet** is an open-source Python package providing a unified interface to access, prepare, and load spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
 
 For a detailed description, motivation, and full list of supported technologies and use cases, please refer to [paper.md](./paper.md).
