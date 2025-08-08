@@ -11,11 +11,19 @@ class BaseIMCDataset:
     doi: str = None
 
     """
-    Base class for managing Imaging Mass Cytometry (IMC) datasets,
-    including loading images, masks, features (intensity, spatial), and metadata.
+    Base class for managing Imaging Mass Cytometry (IMC) datasets.
+
+    This class provides a standardized interface for loading and processing IMC data,
+    including images, masks, features (intensity, spatial), and clinical metadata.
+    It handles directory resolution, data versioning, and alignment of different data modalities.
+
+    Attributes:
+        name (str): The name of the dataset.
+        id (str): A unique identifier for the dataset.
+        doi (str): The Digital Object Identifier (DOI) for the dataset's publication.
     """
 
-    def __init__(self, 
+    def __init__(self,
                  base_dir: Path | None = None,
                  image_version: str | None = None,
                  mask_version: str | None = None,
@@ -28,10 +36,20 @@ class BaseIMCDataset:
                  join: str = "outer",
                  ):
         """
-        Initialize the dataset with a base directory.
+        Initializes the BaseIMCDataset with specified configurations.
 
         Args:
-            base_dir (Path, None): Base directory for the dataset that contains 01_raw and 02_processed folders.
+            base_dir (Path | None): Base directory for the dataset, containing '01_raw' and '02_processed' folders.
+                                    If None, it defaults to an environment variable or a cache directory.
+            image_version (str | None): Identifier for the image version to load.
+            mask_version (str | None): Identifier for the mask version to load.
+            feature_version (str | None): Identifier for the feature version to load.
+            metadata_version (str | None): Identifier for the metadata version to load.
+            load_intensity (bool): If True, intensity features will be loaded.
+            load_spatial (bool): If True, spatial features will be loaded.
+            load_metadata (bool): If True, observation-level metadata will be loaded.
+            align (bool): If True, aligns and intersects all available sample IDs across modalities.
+            join (str): Specifies the type of join to perform during alignment (e.g., 'outer').
         """
 
         self.base_dir = self.resolve_base_dir(base_dir=base_dir)
@@ -54,7 +72,19 @@ class BaseIMCDataset:
         self.intensity = None
         self.spatial = None
 
-    def resolve_base_dir(self, base_dir: Path | None):
+    def resolve_base_dir(self, base_dir: Path | None) -> Path:
+        """
+        Resolves the base directory for the dataset.
+
+        If `base_dir` is None, it attempts to use the 'AI4BMR_DATASETS_DIR' environment variable.
+        If the environment variable is not set, it defaults to a cache directory within the user's home directory.
+
+        Args:
+            base_dir (Path | None): The initial base directory provided.
+
+        Returns:
+            Path: The resolved absolute path to the base directory.
+        """
         import os
         if base_dir is None:
             base_dir = os.environ.get("AI4BMR_DATASETS_DIR", None)
@@ -64,10 +94,26 @@ class BaseIMCDataset:
                 base_dir = Path(base_dir) / self.name
         return base_dir
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns the number of samples in the dataset.
+
+        Returns:
+            int: The number of samples.
+        """
         return len(self.sample_ids)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict:
+        """
+        Retrieves a single sample from the dataset by index.
+
+        Args:
+            idx (int): The index of the sample to retrieve.
+
+        Returns:
+            dict: A dictionary containing the sample's ID, image, mask, panel, intensity,
+                  spatial features, and metadata.
+        """
         sample_id = self.sample_ids[idx]
         return {
             "sample_id": sample_id,
@@ -83,6 +129,18 @@ class BaseIMCDataset:
         }
 
     def setup(self, sample_ids: list[str] | None = None):
+        """
+        Loads data (images, masks, features, metadata) from disk based on the configured versions.
+
+        This method populates the dataset's attributes (`images`, `masks`, `intensity`, `spatial`,
+        `metadata`, `clinical`, `panel`) by reading data from the file system.
+        If `align` is True (configured in `__init__`), it ensures that all loaded attributes
+        share the same set of sample IDs.
+
+        Args:
+            sample_ids (list[str] | None): Optional list of specific sample IDs to load. If None,
+                                            all available samples will be considered.
+        """
         feature_version = self.feature_version or self.get_version_name(image_version=self.image_version,
                                                                    mask_version=self.mask_version)
         metadata_version = self.metadata_version or self.get_version_name(image_version=self.image_version,
@@ -210,6 +268,14 @@ class BaseIMCDataset:
             self.metadata = metadata
 
     def create_annotated(self, version_name: str = 'annotated', mask_version: str = "published"):
+        """
+        Creates an annotated version of the dataset by filtering masks, intensity, and metadata
+        to include only objects that are present across all three modalities.
+
+        Args:
+            version_name (str): The name for the new annotated version (default: 'annotated').
+            mask_version (str): The mask version to use for annotation (default: 'published').
+        """
         from skimage.io import imread, imsave
         import numpy as np
 
@@ -288,59 +354,132 @@ class BaseIMCDataset:
             metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
 
     @property
-    def raw_dir(self):
+    def raw_dir(self) -> Path:
+        """
+        Returns the path to the raw data directory (01_raw).
+        """
         return self.base_dir / "01_raw"
 
     @property
-    def processed_dir(self):
+    def processed_dir(self) -> Path:
+        """
+        Returns the path to the processed data directory (02_processed).
+        """
         return self.base_dir / "02_processed"
 
     @property
-    def images_dir(self):
+    def images_dir(self) -> Path:
+        """
+        Returns the path to the images directory within the processed data.
+        """
         return self.processed_dir / "images"
 
-    def get_image_version_dir(self, image_version: str):
+    def get_image_version_dir(self, image_version: str) -> Path:
+        """
+        Returns the path to a specific image version directory.
+
+        Args:
+            image_version (str): The identifier for the image version.
+
+        Returns:
+            Path: The path to the specified image version directory.
+        """
         return self.images_dir / image_version
 
     @property
-    def masks_dir(self):
+    def masks_dir(self) -> Path:
+        """
+        Returns the path to the masks directory within the processed data.
+        """
         return self.processed_dir / "masks"
 
-    def get_mask_version_dir(self, mask_version: str):
+    def get_mask_version_dir(self, mask_version: str) -> Path:
+        """
+        Returns the path to a specific mask version directory.
+
+        Args:
+            mask_version (str): The identifier for the mask version.
+
+        Returns:
+            Path: The path to the specified mask version directory.
+        """
         return self.masks_dir / mask_version
 
     @property
-    def metadata_dir(self):
+    def metadata_dir(self) -> Path:
+        """
+        Returns the path to the metadata directory within the processed data.
+        """
         return self.processed_dir / "metadata"
 
     @staticmethod
-    def get_version_name(version: str | None = None, image_version: str | None = None, mask_version: str | None = None):
+    def get_version_name(version: str | None = None, image_version: str | None = None, mask_version: str | None = None) -> str:
+        """
+        Generates a version name based on image and mask versions, or a provided version string.
+
+        Args:
+            version (str | None): A direct version string to use if provided.
+            image_version (str | None): The image version identifier.
+            mask_version (str | None): The mask version identifier.
+
+        Returns:
+            str: The generated version name.
+        """
         if image_version is not None and mask_version is not None:
             return f"{image_version}-{mask_version}"
         else:
             return version
 
     @property
-    def features_dir(self):
+    def features_dir(self) -> Path:
+        """
+        Returns the path to the features directory within the processed data.
+        """
         return self.processed_dir / "features"
 
     @property
-    def spatial_dir(self):
+    def spatial_dir(self) -> Path:
+        """
+        Returns the path to the spatial features directory.
+        """
         return self.features_dir / "spatial"
 
     @property
-    def intensity_dir(self):
+    def intensity_dir(self) -> Path:
+        """
+        Returns the path to the intensity features directory.
+        """
         return self.features_dir / "intensity"
 
-    def get_panel_path(self, image_version: str):
+    def get_panel_path(self, image_version: str) -> Path:
+        """
+        Returns the path to the panel file for a given image version.
+
+        Args:
+            image_version (str): The identifier for the image version.
+
+        Returns:
+            Path: The path to the panel.parquet file.
+        """
         images_dir = self.get_image_version_dir(image_version)
         return images_dir / "panel.parquet"
 
     @property
-    def clinical_metadata_path(self):
+    def clinical_metadata_path(self) -> Path:
+        """
+        Returns the path to the clinical metadata file.
+        """
         return self.metadata_dir / "clinical.parquet"
 
     def compute_features(self, image_version: str, mask_version: str, force: bool = False):
+        """
+        Computes and saves intensity and spatial features for the dataset.
+
+        Args:
+            image_version (str): The image version to use for feature computation.
+            mask_version (str): The mask version to use for feature computation.
+            force (bool): If True, recomputes features even if they already exist.
+        """
         from ai4bmr_datasets.utils.imc.features import intensity_features, spatial_features
         from tifffile import imread
 
@@ -398,3 +537,4 @@ class BaseIMCDataset:
 
             intensity.to_parquet(save_intensity_dir / f'{sample_id}.parquet', engine="fastparquet")
             spatial.to_parquet(save_spatial_dir / f'{sample_id}.parquet', engine="fastparquet")
+
