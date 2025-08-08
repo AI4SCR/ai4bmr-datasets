@@ -1,42 +1,49 @@
-name: Deploy Sphinx Docs to GitHub Pages
+name: Build and deploy documentation
 
+# Trigger the workflow on every push to the main branch.
 on:
   push:
-    branches:
-      - main  # or master, depending on your default branch
-  workflow_dispatch:
+    branches: [v1.1.0]
+
+# Allow the workflow to read the repository (for building) and write to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    # Check out your repository source code.
+    - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    # Set up a Python environment (choose the version you use for docs).
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.x' # Use a compatible Python version
+        python-version: '3.11'
 
+    # Install your project and documentation dependencies.
+    # docs/requirements.txt should list Sphinx, themes and any extensions.
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
-        pip install -e . # Install project in editable mode to resolve local imports
+        pip install -r docs/requirements.txt
+        pip install .
 
-    - name: Build Sphinx documentation
-      run: |
-        # Temporarily comment out problematic imports for Sphinx build
-        sed -i 's/^from \.DummyPoints import DummyPoints/# from .DummyPoints import DummyPoints/' src/ai4bmr_datasets/datasets/__init__.py
-        sed -i 's/^from \.DummyImages import DummyImages/# from .DummyImages import DummyImages/' src/ai4bmr_datasets/datasets/__init__.py
-        sed -i 's/^from \.DummyTabular import DummyTabular/# from .DummyTabular import DummyTabular/' src/ai4bmr_datasets/datasets/__init__.py
-        
-        /Users/adrianomartinelli/.venv/ai4bmr-learn/bin/sphinx-build -b html docs/source docs/build/html
+    # Build the HTML documentation into docs/build/html using the Makefile.
+    - name: Build documentation
+      run: make -C docs html
 
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v4
+    # Prepare GitHub Pages deployment (creates the gh-pages branch and sets up authentication).
+    - uses: actions/configure-pages@v5
+
+    # Upload the generated HTML as an artifact for deployment.
+    - uses: actions/upload-pages-artifact@v3
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: docs/build/html
-        publish_branch: gh-pages # The branch to publish the documentation to
+        # The directory of the built documentation.
+        path: docs/build/html
+
+    # Deploy the artifact to GitHub Pages.
+    - uses: actions/deploy-pages@v4
+      id: deploy

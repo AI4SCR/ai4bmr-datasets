@@ -96,7 +96,6 @@ class Cords2024(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import requests
         import shutil
         from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
@@ -291,8 +290,7 @@ class Cords2024(BaseIMCDataset):
         panel["target"] = targets.str[0].map(tidy_name).values
         # add suffix to target for duplicates (iridium)
         panel['target'] = panel.target + '_' + panel.groupby('target').cumcount().astype(str)
-        panel.loc[:, 'target'] = panel.target.str.replace('_0
-, '', regex=True)
+        panel.loc[:, 'target'] = panel.target.str.replace('_0$', '', regex=True)
 
         panel["keep"] = keep
 
@@ -426,7 +424,7 @@ class Cords2024(BaseIMCDataset):
         clinical_metadata = clinical_metadata.drop(columns='Unnamed: 0')
 
         sample_ids = clinical_metadata["Tma_ac"].to_list()
-        sample_ids = [re.sub(r"^(\d+)([A-Za-z])", r"\1_\2", s) for s in sample_ids]
+        sample_ids = [re.sub(r"^(\d+)([A-Za-z])", r"\\1_\\2", s) for s in sample_ids]
 
         clinical_metadata["sample_id"] = sample_ids
         clinical_metadata = clinical_metadata.set_index("sample_id")
@@ -774,4 +772,3 @@ class Cords2024(BaseIMCDataset):
 
             metadata_ = metadata_.loc[idx, :]
             metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
-
