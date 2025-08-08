@@ -15,8 +15,29 @@ class Danenberg2022(BaseIMCDataset):
     id = "Danenberg2022"
     doi = "10.1038/s41588-022-01041-y"
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    def __init__(self, 
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
+
+        super().__init__(base_dir=base_dir,
+                         image_version=image_version,
+                         mask_version=mask_version,
+                         feature_version=feature_version,
+                         metadata_version=metadata_version,
+                         load_intensity=load_intensity,
+                         load_spatial=load_spatial,
+                         load_metadata=load_metadata,
+                         align=align,
+                         join=join)
 
     def prepare_data(self):
         self.download()

@@ -23,8 +23,7 @@ class Keren2018(BaseIMCDataset):
     - we have patient ids up to 44 in `raw_sca` but only have images for patient ids up to 41
     """
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    
 
     def prepare_data(self):
         self.download()

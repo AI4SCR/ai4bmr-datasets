@@ -15,7 +15,18 @@ class BaseIMCDataset:
     including loading images, masks, features (intensity, spatial), and metadata.
     """
 
-    def __init__(self, base_dir: Path | None = None):
+    def __init__(self, 
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
         """
         Initialize the dataset with a base directory.
 
@@ -24,6 +35,15 @@ class BaseIMCDataset:
         """
 
         self.base_dir = self.resolve_base_dir(base_dir=base_dir)
+        self.image_version = image_version
+        self.mask_version = mask_version
+        self.feature_version = feature_version
+        self.metadata_version = metadata_version
+        self.load_intensity = load_intensity
+        self.load_spatial = load_spatial
+        self.load_metadata = load_metadata
+        self.align = align
+        self.join = join
 
         self.sample_ids = None
         self.clinical = None
@@ -62,53 +82,21 @@ class BaseIMCDataset:
             ),
         }
 
-    def setup(
-            self,
-            image_version: str | None = None,
-            mask_version: str | None = None,
-            feature_version: str | None = None,
-            metadata_version: str | None = None,
-            load_intensity: bool = False,
-            load_spatial: bool = False,
-            load_metadata: bool = False,
-            sample_ids: list[str] | None = None,
-            align: bool = False,
-            join: str = "outer",
-    ):
-        """
-        Load data (images, masks, features, metadata) from disk.
-        If only image_version and mask_version are provided features and metadata will be loaded from the combined
-        version {image_version-mask_version}. To load specific versions of features and metadata please use the
-        corresponding keywords. This is useful when you want to load features as `published` by a publication.
-
-        Align ensures that all loaded attributes share the same samples. This is useful because often not all samples
-        are present in images, masks or provided metadata.
-
-        Args:
-            image_version (str | None): Image version identifier.
-            mask_version (str | None): Mask version identifier.
-            feature_version (str | None): Feature version identifier.
-            metadata_version (str | None): Metadata version identifier.
-            load_intensity (bool): Whether to load intensity features.
-            load_spatial (bool): Whether to load spatial features.
-            load_metadata (bool): Whether to load observation-level metadata.
-            align (bool): Whether to align and intersect all available sample IDs.
-        """
-
-        feature_version = feature_version or self.get_version_name(image_version=image_version,
-                                                                   mask_version=mask_version)
-        metadata_version = metadata_version or self.get_version_name(image_version=image_version,
-                                                                     mask_version=mask_version)
+    def setup(self, sample_ids: list[str] | None = None):
+        feature_version = self.feature_version or self.get_version_name(image_version=self.image_version,
+                                                                   mask_version=self.mask_version)
+        metadata_version = self.metadata_version or self.get_version_name(image_version=self.image_version,
+                                                                     mask_version=self.mask_version)
 
         intensity = spatial = metadata = None
         ids_from_metadata = ids_from_intensity = ids_from_spatial = set()
 
         logger.info(
-            f"Loading dataset {self.name} with image_version={image_version} and mask_version={mask_version}"
+            f"Loading dataset {self.name} with image_version={self.image_version} and mask_version={self.mask_version}"
         )
 
         # load panel
-        panel_path = self.get_panel_path(image_version=image_version)
+        panel_path = self.get_panel_path(image_version=self.image_version)
         panel = pd.read_parquet(panel_path, engine="fastparquet")
 
         assert panel.index.name == "channel_index"
@@ -122,7 +110,7 @@ class BaseIMCDataset:
         ids_from_clinical = set(clinical.index)
 
         # load features [intensity]
-        if load_intensity:
+        if self.load_intensity:
             intensity_dir = self.intensity_dir / feature_version
             intensity = pd.concat(
                 [
@@ -136,7 +124,7 @@ class BaseIMCDataset:
             ids_from_intensity = set(intensity.index.get_level_values("sample_id"))
 
         # load features [spatial]
-        if load_spatial:
+        if self.load_spatial:
             spatial_dir = self.spatial_dir / feature_version
             spatial = pd.concat(
                 [
@@ -149,7 +137,7 @@ class BaseIMCDataset:
             ids_from_spatial = set(spatial.index.get_level_values("sample_id"))
 
         # load images
-        images_dir = self.get_image_version_dir(image_version=image_version)
+        images_dir = self.get_image_version_dir(image_version=self.image_version)
         images = {}
         for image_path in images_dir.glob("*.tiff"):
             images[image_path.stem] = Image(
@@ -160,14 +148,14 @@ class BaseIMCDataset:
         ids_from_images = set(images.keys())
 
         # load masks
-        masks_dir = self.get_mask_version_dir(mask_version=mask_version)
+        masks_dir = self.get_mask_version_dir(mask_version=self.mask_version)
         masks = {}
         for mask_path in masks_dir.glob("*.tiff"):
             masks[mask_path.stem] = Mask(id=mask_path.stem, data_path=mask_path, metadata_path=None)
         ids_from_masks = set(masks.keys())
 
         # load metadata
-        if load_metadata:
+        if self.load_metadata:
             metadata_dir = self.metadata_dir / metadata_version
             metadata = pd.concat(
                 [
@@ -177,7 +165,7 @@ class BaseIMCDataset:
             )
             ids_from_metadata = set(metadata.index.get_level_values("sample_id"))
 
-        if align:
+        if self.align:
             from functools import reduce
             list_of_sets = [ids_from_images,
                             ids_from_masks,

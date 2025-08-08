@@ -8,13 +8,13 @@ tags:
   - computational pathology
   - machine learning
   - computer vision
-authors:
+author:
   - name: Adriano Martinelli
-    orcid: 0000-0002-9288-5103
-    affiliation: 1, 2, 4
+    mail: adriano.martinelli@chuv.ch
+    affiliation: [ 1, 2, 4, '*' ]
   - name: Marianna Rapsomaniki
-    orcid: 0000-0003-3883-4871
-    affiliation: 1, 3, 4
+    mail: marianna.rapsomaniki@chuv.ch
+    affiliation: [ 1, 3, 4 ]
 affiliations:
   - index: 1
     name: University Hospital Lausanne (CHUV), Lausanne, Switzerland
@@ -24,13 +24,16 @@ affiliations:
     name: University of Lausanne (UNIL), Lausanne, Switzerland
   - index: 4
     name: Swiss Institute of Bioinformatics (SIB), Lausanne, Switzerland
-date: 21 June 2025
+date: 2025-06-11
 bibliography: paper.bib
+#csl: https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl
 ---
 
 # Summary
 
-`SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for
+`SpatialProteomicsNet` is an open-source Python
+package ([https://github.com/AI4SCR/ai4bmr-datasets](https://github.com/AI4SCR/ai4bmr-datasets)) that provides a
+harmonized and standardized interface for
 accessing
 spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
 IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
