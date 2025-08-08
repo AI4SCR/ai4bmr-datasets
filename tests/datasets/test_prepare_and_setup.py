@@ -21,15 +21,15 @@ def test_prepare_data(dataset_name):
     try:
         tmpdir = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/temporary')
         base_dir = Path(tmpdir)
-        ds = Dataset(base_dir=base_dir)
-        ds.prepare_data()
-
         image_version = metadata_version = feature_version = 'published'
         mask_version = 'published_cell' if dataset_name == "Danenberg2022" else 'published'
-        ds.setup(image_version=image_version,
-                 mask_version=mask_version,
-                 metadata_version=metadata_version, load_metadata=True,
-                 feature_version=feature_version, load_intensity=True)
+        ds = Dataset(base_dir=base_dir,
+                     image_version=image_version,
+                     mask_version=mask_version,
+                     metadata_version=metadata_version, load_metadata=True,
+                     feature_version=feature_version, load_intensity=True)
+        ds.prepare_data()
+        ds.setup()
 
         assert isinstance(ds.images, dict)
         assert isinstance(ds.masks, dict)

@@ -22,8 +22,29 @@ class Cords2024(BaseIMCDataset):
     def doi(self):
         return "10.1016/j.ccell.2023.12.021"
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    def __init__(self, 
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
+
+        super().__init__(base_dir=base_dir,
+                         image_version=image_version,
+                         mask_version=mask_version,
+                         feature_version=feature_version,
+                         metadata_version=metadata_version,
+                         load_intensity=load_intensity,
+                         load_spatial=load_spatial,
+                         load_metadata=load_metadata,
+                         align=align,
+                         join=join)
 
         # raw data paths
         self.raw_clinical_metadata = self.raw_dir / "comp_csv_files" / "cp_csv" / "clinical_data_ROI.csv"
