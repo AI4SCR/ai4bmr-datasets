@@ -96,7 +96,6 @@ class Cords2024(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import requests
         import shutil
         from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
@@ -773,4 +772,3 @@ class Cords2024(BaseIMCDataset):
 
             metadata_ = metadata_.loc[idx, :]
             metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
-
