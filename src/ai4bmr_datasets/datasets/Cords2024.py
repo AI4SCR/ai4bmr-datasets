@@ -290,7 +290,7 @@ class Cords2024(BaseIMCDataset):
         panel["target"] = targets.str[0].map(tidy_name).values
         # add suffix to target for duplicates (iridium)
         panel['target'] = panel.target + '_' + panel.groupby('target').cumcount().astype(str)
-        panel.loc[:, 'target'] = panel.target.str.replace('_0$', '', regex=True)
+        panel.loc[:, 'target'] = panel.target.str.replace('_0', '', regex=True)
 
         panel["keep"] = keep
 
@@ -424,7 +424,7 @@ class Cords2024(BaseIMCDataset):
         clinical_metadata = clinical_metadata.drop(columns='Unnamed: 0')
 
         sample_ids = clinical_metadata["Tma_ac"].to_list()
-        sample_ids = [re.sub(r"^(\d+)([A-Za-z])", r"\\1_\\2", s) for s in sample_ids]
+        sample_ids = [re.sub(r"^(\d+)([A-Za-z])", r"\1_\2", s) for s in sample_ids]
 
         clinical_metadata["sample_id"] = sample_ids
         clinical_metadata = clinical_metadata.set_index("sample_id")
