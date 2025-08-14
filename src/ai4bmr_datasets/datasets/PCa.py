@@ -11,8 +11,44 @@ class PCa(BaseIMCDataset):
     id = "PCa"
     doi = "unpublished"
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    def __init__(self,
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
+        """
+        Initializes the Cords2024 dataset.
+
+        Args:
+            base_dir (Path | None): Base directory for the dataset.
+            image_version (str | None): Version of the images to load.
+            mask_version (str | None): Version of the masks to load.
+            feature_version (str | None): Version of the features to load.
+            metadata_version (str | None): Version of the metadata to load.
+            load_intensity (bool): Whether to load intensity features.
+            load_spatial (bool): Whether to load spatial features.
+            load_metadata (bool): Whether to load metadata.
+            align (bool): Whether to align sample IDs across modalities.
+            join (str): Type of join for alignment (e.g., 'outer').
+        """
+
+        super().__init__(base_dir=base_dir,
+                         image_version=image_version,
+                         mask_version=mask_version,
+                         feature_version=feature_version,
+                         metadata_version=metadata_version,
+                         load_intensity=load_intensity,
+                         load_spatial=load_spatial,
+                         load_metadata=load_metadata,
+                         align=align,
+                         join=join)
 
         # raw paths
         self.raw_clinical_metadata_path = (
