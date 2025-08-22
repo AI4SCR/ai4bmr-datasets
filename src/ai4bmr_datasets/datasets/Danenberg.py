@@ -53,8 +53,8 @@ class Danenberg2022(BaseIMCDataset):
         self.create_metadata_and_intensity()
         self.create_clinical_metadata()
 
-        self.create_annotated(mask_version='published_cell')
-        self.create_annotated(mask_version='published_nucleus')
+        self.create_annotated(version_name='annotated_cell', mask_version='published_cell')
+        self.create_annotated(version_name='annotated_nucleus', mask_version='published_nucleus')
 
     def download(self, force: bool = False):
         """
@@ -196,7 +196,7 @@ class Danenberg2022(BaseIMCDataset):
             try:
                 sample_id = self.get_sample_id(str(img_path))
             except Exception as e:
-                print('debug', img_path)
+                print('debug', img_path)  # TODO: remove
 
             save_path = save_dir / f"{sample_id}.tiff"
             if save_path.exists():
@@ -263,7 +263,7 @@ class Danenberg2022(BaseIMCDataset):
         # INTENSITY
         logger.info('Creating `published` intensity')
 
-        # note: some marker as not as in the panel.target.
+        # note: some marker are not as in the panel.target.
         marker_to_target = {
             'er': "estrogen_receptor_alpha",
             'cd45ro': 'cd45',

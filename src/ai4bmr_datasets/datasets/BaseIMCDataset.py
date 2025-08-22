@@ -279,7 +279,7 @@ class BaseIMCDataset:
         from skimage.io import imread, imsave
         import numpy as np
 
-        logger.info(f'Creating new data version: `annotated`')
+        logger.info(f'Creating new data version: `{version_name}`')
 
         metadata_version = 'published'
         metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
@@ -302,14 +302,13 @@ class BaseIMCDataset:
         logger.info(f"Found {len(sample_ids)} samples with metadata, intensity, masks and images")
 
         # ANNOTATED DATA
-        version = 'annotated'
-        save_masks_dir = self.masks_dir / version
+        save_masks_dir = self.masks_dir / version_name
         save_masks_dir.mkdir(parents=True, exist_ok=True)
 
-        save_intensity_dir = self.intensity_dir / version
+        save_intensity_dir = self.intensity_dir / version_name
         save_intensity_dir.mkdir(parents=True, exist_ok=True)
 
-        save_metadata_dir = self.metadata_dir / version
+        save_metadata_dir = self.metadata_dir / version_name
         save_metadata_dir.mkdir(parents=True, exist_ok=True)
 
         for sample_id in sample_ids:
