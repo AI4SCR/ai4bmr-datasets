@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from ai4bmr_core.utils.saving import save_image, save_mask
+from ai4bmr_core.utils import io
 from ai4bmr_core.utils.tidy import tidy_name
 from tifffile import imread
 from loguru import logger
@@ -199,7 +199,7 @@ class Keren2018(BaseIMCDataset):
             stack = np.stack(stack, axis=0)
             assert len(stack) == 36
 
-            save_image(stack, save_path)
+            io.imsave(stack, save_path)
 
 
     def create_masks(self):
@@ -246,7 +246,7 @@ class Keren2018(BaseIMCDataset):
             mask[segm == 0] = 0
             assert 1 not in mask.flat
 
-            save_mask(mask, save_path)
+            io.save_mask(mask, save_path)
 
     def create_clinical_metadata(self):
         """
