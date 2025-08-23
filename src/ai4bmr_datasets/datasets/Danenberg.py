@@ -128,7 +128,10 @@ class Danenberg2022(BaseIMCDataset):
 
     def create_images(self):
         images_dir = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/Images'
-        img_paths = list(images_dir.rglob('*.tiff'))
+        img_paths = [
+            p for p in images_dir.rglob('*.tiff')
+            if not p.name.startswith('._')
+        ]
         img_paths = sorted(filter(lambda x: 'FullStack' in str(x), img_paths))
 
         save_dir = self.images_dir / self.get_version_name(version='published')

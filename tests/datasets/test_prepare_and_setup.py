@@ -1,6 +1,6 @@
 import pytest
 
-@pytest.mark.skip(reason="Only run when downloading changes")
+# @pytest.mark.skip(reason="Only run when downloading changes")
 @pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024", "Keren2018"])
 def test_prepare_data(dataset_name):
     from pathlib import Path
@@ -14,14 +14,14 @@ def test_prepare_data(dataset_name):
         case "Cords2024":
             from ai4bmr_datasets import Cords2024 as Dataset
         case "Keren2018":
-            from ai4bmr_datasets import Cords2024 as Dataset
+            from ai4bmr_datasets import Keren2018 as Dataset
         case _:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
 
     try:
-        tmpdir = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/temporary')
-        base_dir = Path(tmpdir)
-        ds = Dataset(base_dir=base_dir)
+        # tmpdir = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/temporary')
+        # base_dir = Path(tmpdir)
+        ds = Dataset()
         ds.prepare_data()
 
         image_version = metadata_version = feature_version = 'published'
@@ -41,7 +41,12 @@ def test_prepare_data(dataset_name):
         print(f"Error preparing dataset {dataset_name}: {e}")
     finally:
         # Clean up temporary directory if it was created
-        if 'tmpdir' in locals() and tmpdir.exists():
-            shutil.rmtree(tmpdir, ignore_errors=True)
-            print(f"Cleaned up temporary directory: {tmpdir}")
+        pass
+        # if 'tmpdir' in locals() and tmpdir.exists():
+        #     shutil.rmtree(tmpdir, ignore_errors=True)
+        #     print(f"Cleaned up temporary directory: {tmpdir}")
 
+# test_prepare_data("Jackson2020")
+# test_prepare_data("Danenberg2022")
+test_prepare_data("Cords2024")
+# test_prepare_data("Keren2018")
