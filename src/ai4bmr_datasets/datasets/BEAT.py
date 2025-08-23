@@ -1,5 +1,4 @@
 import json
-import json
 import subprocess
 import textwrap
 from pathlib import Path
@@ -30,9 +29,13 @@ class BEAT:
     def __init__(self, base_dir: Path | None = None):
         self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat')
         self.raw_dir = self.base_dir / '01_raw'
-        self.processed_dir = self.base_dir / '02_processed'
+        self.processed_dir = self.base_dir / '02_processed_v2'
         self.dataset_dir = self.processed_dir / 'datasets' / 'beat'
         self.tools_dir = self.base_dir / '03_tools'
+
+        # GLOBAL PARAMS
+        self.target_mpp = 0.8624999831542972
+        self.overlap = 0.25
 
     def prepare_tools(self):
         bfconvert = self.tools_dir / "bftools" / "bfconvert"
@@ -124,14 +127,14 @@ class BEAT:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(save_path, engine='fastparquet')
 
+    def get_clinical_metadata(self):
+        return pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
+
     def get_wsi_path(self, sample_id: str):
         clinical = self.get_clinical_metadata()
         wsi_path = clinical[clinical.index == sample_id].wsi_path.item()
         assert Path(wsi_path).exists()
         return wsi_path
-
-    def get_clinical_metadata(self):
-        return pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
 
     def prepare_wsi(self, sample_id: str, force: bool = False):
 
@@ -203,8 +206,9 @@ class BEAT:
         subprocess.run(sbatch_command, shell=True, check=True)
 
     def post_process_tiff_flags(self, sample_id: str):
+        logger.info(f'Setting tiff flags for {sample_id}')
 
-        wsi_path = self.get_wsi_path(sample_id)
+        wsi_path = self.dataset_dir / sample_id / 'wsi.tiff'
         slide = openslide.OpenSlide(wsi_path)
 
         try:
@@ -228,6 +232,7 @@ class BEAT:
             subprocess.run(cmd, shell=True, check=True)
 
     def segment(self, sample_id: str, model_name: str = 'grandqc', target_mpp: float = 4.0):
+        logger.info(f'🧩 Segmenting {sample_id} with {model_name}')
 
         seg_model = get_seg_model(model_name=model_name)  # hest, grandqc, grandqc_artifact
         sample_dir = self.dataset_dir / sample_id
@@ -243,8 +248,6 @@ class BEAT:
         if save_contours_path.exists() and save_contours_path.exists():
             logger.info(f'{sample_id} is already segmented')
             return
-
-        logger.info(f'🧩 segmenting {sample_id}')
 
         slide = OpenSlide(img_path)
 
@@ -280,25 +283,6 @@ class BEAT:
         save_path = img_path.parent / 'thumbnail.png'
         imsave(str(save_path), thumbnail)
 
-    def prepare_data(self, force: bool = False):
-        self.prepare_tools()
-        self.prepare_clinical()
-
-        self.prepare_wsi(force=force)
-        self.post_process_tiff_flags()
-
-        self.segment(model_name='hest', target_mpp=4)
-        self.segment(model_name='grandqc', target_mpp=4)
-
-        self.create_coords(patch_size=224)
-        self.create_coords(patch_size=512)
-
-        patch_size = patch_stride = 512
-        target_mpp = 0.8625
-        overlap = 0.25
-        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
-        self.create_embeddings(coords_version=coords_version, model_name='uni_v1')
-
     def filter_contours(self):
         # TODO: potentially post-process contours or improve filtering during segmentation.
         # NOTE: we only use contours that are larger than the median area of all found contours
@@ -310,15 +294,16 @@ class BEAT:
 
     def create_coords(self, sample_id: str, patch_size: int = 512, model_name: str = 'hest'):
         patch_stride = patch_size
-        target_mpp = 0.8624999831542972  # TODO: check this value for the used model
-        overlap = 0.25
+        target_mpp = self.target_mpp
+        overlap = self.overlap
         coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+        logger.info(f'Create coords version {coords_version} for {sample_id}.')
 
         wsi_path = self.dataset_dir / sample_id / 'wsi.tiff'
         coords_path = self.dataset_dir / sample_id / 'coords' / f"{coords_version}.json"
 
         if coords_path.exists():
-            logger.info(f'{coords_path} exists.')
+            logger.info(f'Found coords at {coords_path}.')
             return
 
         contours_path = self.dataset_dir / sample_id / 'contours' / f"segment-mpp=4.0-model_name={model_name}.parquet"
@@ -344,8 +329,8 @@ class BEAT:
         logger.info(f'Visualizing patches for {sample_id}')
 
         patch_stride = patch_size
-        target_mpp = 0.8624999831542972
-        overlap = 0.25
+        target_mpp = self.target_mpp
+        overlap = self.overlap
 
         coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
         coords_path = self.dataset_dir / sample_id / 'coords' / f'{coords_version}.json'
@@ -371,10 +356,8 @@ class BEAT:
         logger.info(f'Visualizing coords of {sample_id}')
 
         patch_stride = patch_size
-        target_mpp = 0.8624999831542972
-        overlap = 0.25
 
-        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={self.target_mpp:.4f}-overlap={self.overlap:.2f}'
         coords_path = self.dataset_dir / sample_id / 'coords' / f'{coords_version}.json'
         assert coords_path.exists()
 
@@ -431,8 +414,31 @@ class BEAT:
                 save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
                 torch.save(x, save_path)
 
-    def create_umaps(self, embeddings_version: ''):
-        pass
+    def create_umaps(self, model_name: str, coords_version: str):
+        embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / f'model={model_name}' / coords_version
+
+    def prepare_data(self, sample_id: str, force: bool = False):
+        self.prepare_tools()
+        self.prepare_clinical()
+
+        self.prepare_wsi(sample_id=sample_id, force=force)
+        self.post_process_tiff_flags(sample_id=sample_id)
+        self.create_thumbnail(sample_id=sample_id)
+
+        self.segment(sample_id=sample_id, model_name='hest', target_mpp=4.0)
+        self.segment(sample_id=sample_id, model_name='grandqc', target_mpp=4.0)
+
+        for patch_size in [224, 448]:
+            self.create_coords(sample_id=sample_id, patch_size=patch_size)
+            self.visualize_coords(sample_id=sample_id, patch_size=patch_size)
+            self.visualize_patches(sample_id=sample_id, patch_size=patch_size)
+
+        patch_size = patch_stride = 448
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={self.target_mpp:.4f}-overlap={self.overlap:.2f}'
+        self.create_embeddings(sample_id=sample_id, coords_version=coords_version, model_name='uni_v1')
+
 
 sample_id = '1FP2.0E.0'
 beat = self = BEAT()
+beat.prepare_data(sample_id=sample_id)
+
