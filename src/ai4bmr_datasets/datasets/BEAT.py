@@ -32,8 +32,8 @@ class BEAT:
     def __init__(self, base_dir: Path | None = None):
         self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat')
         self.raw_dir = self.base_dir / '01_raw'
-        self.processed_dir = self.base_dir / '02_processed'
-        self.datasets_dir = self.processed_dir / 'datasets'
+        self.processed_dir = self.base_dir / '02_processed_v2'
+        self.dataset_dir = self.processed_dir / 'datasets' / 'beat'
         self.tools_dir = self.base_dir / '03_tools'
 
     def prepare_tools(self):
@@ -126,147 +126,147 @@ class BEAT:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(save_path, engine='fastparquet')
 
-    def prepare_wsi(self, force: bool = False):
+    def get_wsi_path(self, sample_id: str):
+        wsi_path = clinical[clinical.index == sample_id].wsi_path.item()
+        assert Path(wsi_path).exists()
+        return wsi_path
+
+    def get_clinical_metadata(self):
+        return pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
+
+    def prepare_wsi(self, sample_id: str, force: bool = False):
+
+        if sample_id in ['1GUG.0M.2',  '1GVQ.06.2']:
+            return
+
         self.prepare_tools()
 
-        dataset_dir = self.datasets_dir / 'beat'
+        dataset_dir = self.dataset_dir
         dataset_dir.mkdir(parents=True, exist_ok=True)
 
-        clinical = pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
+        clinical = self.get_clinical_metadata()
         bfconvert = self.tools_dir / "bftools" / "bfconvert"
 
-        wsi_paths = list(self.base_dir.rglob('*.ndpi')) + list(self.base_dir.rglob('*.czi'))
-        for wsi_path in wsi_paths:
+        wsi_path = self.get_wsi_path(sample_id)
 
-            save_name = clinical[clinical.wsi_path == str(wsi_path)].index.item()
-            if save_name in [
-                '1GUG.0M.2',  # barcode
-                '1GVQ.06.2',  # barcode
-            ]:
-                continue
+        intermediate_path = dataset_dir / sample_id / 'intermediate.tiff'
+        save_path = dataset_dir / sample_id / 'wsi.tiff'
 
-            intermediate_path = dataset_dir / save_name / 'intermediate.tiff'
-            save_path = dataset_dir / save_name / 'wsi.tiff'
+        if save_path.exists() and not force:
+            logger.info(f"File {save_path} already exists. Skipping conversion.")
+            return
+        else:
+            logger.info(f'Converting {wsi_path} to {sample_id}.')
+            return
 
-            if save_path.exists() and not force:
-                logger.info(f"File {save_path} already exists. Skipping conversion.")
-                continue
-            else:
-                logger.info(f'Converting {wsi_path} to {save_name}.')
-                continue
+        assert False
+        job_name = f"{sample_id}-wsi2tiff"
+        logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
+        num_cpus = 16
 
-            assert False
-            job_name = f"proj=beat-task=wsi2tiff-{save_name}"
-            logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
-            num_cpus = 16
+        sbatch_command = f"""
+        sbatch \\
+        --job-name={job_name} \\
+        --output=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.log \\
+        --error=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.err \\
+        --time=24:00:00 \\
+        --mem=128G \\
+        --cpus-per-task={num_cpus} \\
+        <<'EOF'
+        #!/bin/bash
+        
+        source /users/amarti51/miniconda3/bin/activate
+        conda activate beat
+        
+        INPUT="{wsi_path}"
+        INTERMEDIATE="{intermediate_path}"
+        OUTPUT="{save_path}"
+        BFCONVERT="{bfconvert}"
+        
+        mkdir -p "$(dirname "{save_path}")"
 
-            sbatch_command = f"""
-            sbatch \\
-            --job-name={job_name} \\
-            --output=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.log \\
-            --error=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.err \\
-            --time=24:00:00 \\
-            --mem=128G \\
-            --cpus-per-task={num_cpus} \\
-            <<'EOF'
-            #!/bin/bash
+        # Convert NDPI/other WSI to intermediate TIFF
+        # /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 -series 0 -pyramid-resolutions 4 -pyramid-scale 2 "$INPUT" "$INTERMEDIATE"
+        echo "* Exporting full-res TIFF..."
+        /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -series 0 "$INPUT" "$INTERMEDIATE"
+
+        # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
+        echo "* Building OpenSlide-compatible pyramid TIFF..."
+        export VIPS_CONCURRENCY={num_cpus - 1}
+        /usr/bin/time -v vips tiffsave "$INTERMEDIATE" "$OUTPUT" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw
+        
+        rm "$INTERMEDIATE"
+        
+        EOF
+        """
+        sbatch_command = textwrap.dedent(sbatch_command).strip()
+
+        subprocess.run(sbatch_command, shell=True, check=True)
+
+    def post_process_tiff_flags(self, sample_id: str):
+
+        wsi_paths = self.get_wsi_path(sample_id)
+        slide = openslide.OpenSlide(wsi_path)
+
+        try:
+            mpp = get_mpp(slide)
+        except AssertionError:
+            logger.error(f'Error retriving slide mpp for {wsi_path}')
+            return
+
+        if str(mpp).startswith('4.422'):
+            cmd = f"""
+            # set XResolution (tag 282) to 22611
+            tiffset -s 282 22611 "{wsi_path}"
             
-            source /users/amarti51/miniconda3/bin/activate
-            conda activate beat
+            # set YResolution (tag 283) to 22611
+            tiffset -s 283 22611 "{wsi_path}"
             
-            INPUT="{wsi_path}"
-            INTERMEDIATE="{intermediate_path}"
-            OUTPUT="{save_path}"
-            BFCONVERT="{bfconvert}"
-            
-            mkdir -p "$(dirname "{save_path}")"
-
-            # Convert NDPI/other WSI to intermediate TIFF
-            # /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 -series 0 -pyramid-resolutions 4 -pyramid-scale 2 "$INPUT" "$INTERMEDIATE"
-            echo "* Exporting full-res TIFF..."
-            /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -series 0 "$INPUT" "$INTERMEDIATE"
-
-            # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
-            echo "* Building OpenSlide-compatible pyramid TIFF..."
-            export VIPS_CONCURRENCY={num_cpus - 1}
-            /usr/bin/time -v vips tiffsave "$INTERMEDIATE" "$OUTPUT" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw
-            
-            rm "$INTERMEDIATE"
-            
-            EOF
+            # set ResolutionUnit (tag 296) to 3 (centimeter)
+            tiffset -s 296 3 "{wsi_path}"
             """
-            sbatch_command = textwrap.dedent(sbatch_command).strip()
+            cmd = textwrap.dedent(cmd).strip()
+            subprocess.run(cmd, shell=True, check=True)
 
-            subprocess.run(sbatch_command, shell=True, check=True)
-
-    def post_process_tiff_flags(self):
-
-        wsi_paths = list(self.datasets_dir.rglob('*wsi.tiff'))
-        for wsi_path in wsi_paths:
-            slide = openslide.OpenSlide(wsi_path)
-
-            try:
-                mpp = get_mpp(slide)
-            except AssertionError:
-                logger.error(f'Error retriving slide mpp for {wsi_path}')
-                continue
-
-            if str(mpp).startswith('4.422'):
-                cmd = f"""
-                # set XResolution (tag 282) to 22611
-                tiffset -s 282 22611 "{wsi_path}"
-                
-                # set YResolution (tag 283) to 22611
-                tiffset -s 283 22611 "{wsi_path}"
-                
-                # set ResolutionUnit (tag 296) to 3 (centimeter)
-                tiffset -s 296 3 "{wsi_path}"
-                """
-                cmd = textwrap.dedent(cmd).strip()
-                subprocess.run(cmd, shell=True, check=True)
-
-    def segment(self, sample_dirs: list[Path] | None = None, model_name: str = 'grandqc', target_mpp: float = 4.0,
-                source_mpp: float = None):
+    def segment(self, sample_id: str, model_name: str = 'grandqc', target_mpp: float = 4.0):
 
         seg_model = get_seg_model(model_name=model_name)  # hest, grandqc, grandqc_artifact
-        sample_dirs = sample_dirs or [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
-        for i, sample_dir in enumerate(sample_dirs, start=1):
+        sample_dir = self.dataset_dir / sample_id
+        img_path = sample_dir / 'wsi.tiff'
 
-            img_path = sample_dir / 'wsi.tiff'
-            if not img_path.exists():
-                continue
+        if not img_path.exists():
+            return
 
-            version_name = f'segment-mpp={target_mpp}-model_name={model_name}' + (
-                f'-src_mpp={source_mpp}' if source_mpp else '')
-            save_coords_path = sample_dir / 'coords' / f'{version_name}.json'
-            save_contours_path = sample_dir / 'contours' / f'{version_name}.parquet'
+        version_name = f'segment-mpp={target_mpp}-model_name={model_name}'
+        save_coords_path = sample_dir / 'coords' / f'{version_name}.json'
+        save_contours_path = sample_dir / 'contours' / f'{version_name}.parquet'
 
-            if save_contours_path.exists() and save_contours_path.exists():
-                logger.info(f'[{i}/{len(sample_dirs)}] {sample_dir} is already segmented')
-                continue
+        if save_contours_path.exists() and save_contours_path.exists():
+            logger.info(f'[{i}/{len(sample_dirs)}] {sample_dir} is already segmented')
+            return
 
-            logger.info(f'[{i}/{len(sample_dirs)}] 🧩 segmenting {sample_dir}')
+        logger.info(f'[{i}/{len(sample_dirs)}] 🧩 segmenting {sample_dir}')
 
-            slide = OpenSlide(img_path)
+        slide = OpenSlide(img_path)
 
-            try:
-                mpp = get_mpp_and_resolution(slide)[0]
-            except AssertionError:
-                logger.error(f'Error retriving slide mpp for {img_path}')
-                continue
+        try:
+            mpp = get_mpp_and_resolution(slide)[0]
+        except AssertionError:
+            logger.error(f'Error retriving slide mpp for {img_path}')
+            return
 
-            logger.info(
-                f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
+        logger.info(
+            f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
 
-            if save_contours_path.exists():
-                continue
+        if save_contours_path.exists():
+            return
 
-            segment_slide(slide,
-                          seg_model=seg_model,
-                          target_mpp=target_mpp,
-                          source_mpp=source_mpp,
-                          save_contours_path=save_contours_path,
-                          save_coords_path=save_coords_path)
+        segment_slide(slide,
+                      seg_model=seg_model,
+                      target_mpp=target_mpp,
+                      source_mpp=source_mpp,
+                      save_contours_path=save_contours_path,
+                      save_coords_path=save_coords_path)
 
     def create_thumbnail(self):
 
