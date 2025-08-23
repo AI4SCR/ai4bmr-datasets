@@ -25,6 +25,15 @@ from tqdm import tqdm
 from trident.patch_encoder_models import encoder_factory
 from ai4bmr_learn.plotting.umap import plot_umap
 
+# NOTES: check segmentation of
+# - 1FU3.06.0
+# - 1HRW.06.0 reports mpp=0.0863
+# - 1GUG.0M.1 reports mpp=0.0863
+# - 1G59.06.0 reports mpp=0.0863
+# - 1G3S.06.0 reports mpp=0.0863
+# - 1GP0.06.0 reports mpp=0.0863
+
+
 class BEAT:
 
     def __init__(self, base_dir: Path | None = None):
@@ -35,7 +44,8 @@ class BEAT:
         self.tools_dir = self.base_dir / '03_tools'
 
         # GLOBAL PARAMS
-        self.target_mpp = 0.8624999831542972
+        # self.target_mpp = 0.8624999831542972
+        self.target_mpp = 0.862515094
         self.overlap = 0.25
 
     def prepare_tools(self):
@@ -163,6 +173,7 @@ class BEAT:
         else:
             logger.info(f'Converting {wsi_path} to {sample_id}.')
 
+        assert False, 'this should not run'
         # Convert NDPI/other WSI to intermediate TIFF
         if not intermediate_path.exists():
             cmd1 = f'/usr/bin/time -v "{bfconvert}" -nogroup -bigtiff -series 0 "{wsi_path}" "{intermediate_path}"'
@@ -253,11 +264,14 @@ class BEAT:
 
         try:
             mpp = get_mpp(slide)
-        except AssertionError:
+            logger.info(f'tiff file has an mpp={mpp}')
+        except AssertionError as e:
             logger.error(f'Error retrieving slide mpp for {wsi_path}')
-            return
+            raise e
 
         if str(mpp).startswith('4.422'):
+            logger.info(f'Setting mpp to 0.4422')
+
             cmd = f"""
             # set XResolution (tag 282) to 22611
             tiffset -s 282 22611 "{wsi_path}"
@@ -265,6 +279,22 @@ class BEAT:
             # set YResolution (tag 283) to 22611
             tiffset -s 283 22611 "{wsi_path}"
             
+            # set ResolutionUnit (tag 296) to 3 (centimeter)
+            tiffset -s 296 3 "{wsi_path}"
+            """
+            cmd = textwrap.dedent(cmd).strip()
+            subprocess.run(cmd, shell=True, check=True)
+
+        if str(mpp).startswith('0.08624'):
+            logger.info(f'Setting mpp to 0.862515094')
+
+            cmd = f"""
+            # set XResolution (tag 282) to 11594
+            tiffset -s 282 11594 "{wsi_path}"
+
+            # set YResolution (tag 283) to 11594
+            tiffset -s 283 11594 "{wsi_path}"
+
             # set ResolutionUnit (tag 296) to 3 (centimeter)
             tiffset -s 296 3 "{wsi_path}"
             """
@@ -500,16 +530,18 @@ class BEAT:
         self.create_patch_embeddings(sample_id=sample_id, coords_version=coords_version, model_name='uni_v1')
 
 
-sample_id = '1FP2.0E.0'
-sample_id = '1FU2.06.0'
-beat = self = BEAT()
+# sample_id = '1FP2.0E.0'
+# sample_id = '1FU2.06.0'
+# beat = self = BEAT()
+# beat.prepare_clinical()
+# beat.prepare_wsi(sample_id=sample_id)
 
 #model_name='uni_v1'
 # coords_version='patch_size=448-stride=448-mpp=0.8625-overlap=0.25'
 # beat.create_umap(sample_id=sample_id, model_name=model_name, coords_version=coords_version)
 
-sample_ids = beat.get_sample_ids()
-for sample_id in sample_ids:
-    beat.prepare_wsi_with_slurm(sample_id=sample_id)
-beat.prepare_data(sample_id=sample_id)
+# sample_ids = beat.get_sample_ids()
+# for sample_id in sample_ids:
+#     beat.prepare_wsi_with_slurm(sample_id=sample_id)
+# beat.prepare_data(sample_id=sample_id)
 
