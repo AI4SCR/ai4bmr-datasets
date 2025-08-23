@@ -25,7 +25,7 @@ def get_all_sample_outputs(wildcards):
         with checkpoints.prepare_clinical.get().output[0].open():
             clinical_metadata = beat.get_clinical_metadata()
             SAMPLES = clinical_metadata.index.tolist()
-            return expand("samples/{sample}/done.txt", sample=SAMPLES)
+            return expand("checkpoints/samples/{sample}/done.txt", sample=SAMPLES)
     except FileNotFoundError:
         raise WorkflowError("Clinical metadata not found. Please run 'snakemake prepare_clinical' first.")
 
@@ -46,7 +46,7 @@ rule prepare_wsi:
         "checkpoints/tools.done",
         "checkpoints/clinical.done"
     output:
-        touch("samples/{sample}/wsi.done")
+        touch("checkpoints/samples/{sample}/wsi.done")
     params:
         sample_id="{sample}"
     run:
@@ -57,9 +57,9 @@ rule prepare_wsi:
 
 rule post_process_tiff_flags:
     input:
-        "samples/{sample}/wsi.done"
+        "checkpoints/samples/{sample}/wsi.done"
     output:
-        touch("samples/{sample}/tiff_flags.done")
+        touch("checkpoints/samples/{sample}/tiff_flags.done")
     params:
         sample_id="{sample}"
     run:
@@ -67,9 +67,9 @@ rule post_process_tiff_flags:
 
 rule create_thumbnail:
     input:
-        "samples/{sample}/wsi.done"
+        "checkpoints/samples/{sample}/wsi.done"
     output:
-        touch("samples/{sample}/thumbnail.done")
+        touch("checkpoints/samples/{sample}/thumbnail.done")
     params:
         sample_id="{sample}"
     run:
@@ -77,9 +77,9 @@ rule create_thumbnail:
 
 rule segment:
     input:
-        "samples/{sample}/wsi.done"
+        "checkpoints/samples/{sample}/wsi.done"
     output:
-        touch("samples/{sample}/segment_{model_name}.done")
+        touch("checkpoints/samples/{sample}/segment_{model_name}.done")
     params:
         sample_id="{sample}",
         model_name="{model_name}"
@@ -88,9 +88,9 @@ rule segment:
 
 rule create_coords:
     input:
-        "samples/{sample}/segment_hest.done" # as in prepare_data
+        "checkpoints/samples/{sample}/segment_hest.done" # as in prepare_data
     output:
-        touch("samples/{sample}/coords_{patch_size}.done")
+        touch("checkpoints/samples/{sample}/coords_{patch_size}.done")
     params:
         patch_size=lambda wildcards: int(wildcards.patch_size)
     run:
@@ -98,9 +98,9 @@ rule create_coords:
 
 rule visualize_coords:
     input:
-        "samples/{sample}/coords_{patch_size}.done"
+        "checkpoints/samples/{sample}/coords_{patch_size}.done"
     output:
-        touch("samples/{sample}/visualize_coords_{patch_size}.done")
+        touch("checkpoints/samples/{sample}/visualize_coords_{patch_size}.done")
     params:
         patch_size=lambda wildcards: int(wildcards.patch_size)
     run:
@@ -108,9 +108,9 @@ rule visualize_coords:
 
 rule visualize_patches:
     input:
-        "samples/{sample}/coords_{patch_size}.done"
+        "checkpoints/samples/{sample}/coords_{patch_size}.done"
     output:
-        touch("samples/{sample}/visualize_patches_{patch_size}.done")
+        touch("checkpoints/samples/{sample}/visualize_patches_{patch_size}.done")
     params:
         patch_size=lambda wildcards: int(wildcards.patch_size)
     run:
@@ -118,9 +118,9 @@ rule visualize_patches:
 
 rule create_embeddings:
     input:
-        "samples/{sample}/coords_448.done"
+        "checkpoints/samples/{sample}/coords_448.done"
     output:
-        touch("samples/{sample}/embeddings.done")
+        touch("checkpoints/samples/{sample}/embeddings.done")
     params:
         sample_id="{sample}"
     run:
@@ -129,16 +129,16 @@ rule create_embeddings:
         target_mpp = beat.target_mpp
         overlap = beat.overlap
         coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
-        beat.create_embeddings(sample_id=wildcards.sample, coords_version=coords_version, model_name='uni_v1')
+        beat.create_patch_embeddings(sample_id=wildcards.sample, coords_version=coords_version, model_name='uni_v1')
 
 rule sample_done:
     input:
-        "samples/{sample}/tiff_flags.done",
-        "samples/{sample}/thumbnail.done",
-        expand("samples/{{sample}}/segment_{model_name}.done", model_name=['hest', 'grandqc']),
-        expand("samples/{{sample}}/coords_{patch_size}.done", patch_size=[224, 448]),
-        expand("samples/{{sample}}/visualize_coords_{patch_size}.done", patch_size=[224, 448]),
-        expand("samples/{{sample}}/visualize_patches_{patch_size}.done", patch_size=[224, 448]),
-        "samples/{sample}/embeddings.done"
+        "checkpoints/samples/{sample}/tiff_flags.done",
+        "checkpoints/samples/{sample}/thumbnail.done",
+        expand("checkpoints/samples/{{sample}}/segment_{model_name}.done", model_name=['hest', 'grandqc']),
+        expand("checkpoints/samples/{{sample}}/coords_{patch_size}.done", patch_size=[224, 448]),
+        expand("checkpoints/samples/{{sample}}/visualize_coords_{patch_size}.done", patch_size=[224, 448]),
+        expand("checkpoints/samples/{{sample}}/visualize_patches_{patch_size}.done", patch_size=[224, 448]),
+        "checkpoints/samples/{sample}/embeddings.done"
     output:
-        touch("samples/{sample}/done.txt")
+        touch("checkpoints/samples/{sample}/done.txt")
