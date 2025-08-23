@@ -1,10 +1,3 @@
-import sys
-from pathlib import Path
-from snakemake.exceptions import print_exception, WorkflowError
-
-# Add the src directory to the python path to import the BEAT class
-sys.path.append(str(Path(__file__).parent.parent.parent.resolve() / 'src'))
-
 from ai4bmr_datasets.datasets.BEAT import BEAT
 
 # Initialize the BEAT class
@@ -15,8 +8,7 @@ SAMPLES = beat.get_sample_ids()[:2]
 rule all:
     input:
         "checkpoints/tools.done",
-        "checkpoints/clinical.done",
-        expand("checkpoints/samples/{sample}/embeddings.done", sample=SAMPLES)
+        expand("checkpoints/samples/{sample}/embeddings.done",sample=SAMPLES)
 
 
 rule prepare_tools:
@@ -64,17 +56,17 @@ rule segment:
         sample_id="{sample}",
         model_name="{model_name}"
     run:
-        beat.segment(sample_id=wildcards.sample, model_name=wildcards.model_name, target_mpp=4.0)
+        beat.segment(sample_id=wildcards.sample,model_name=wildcards.model_name,target_mpp=4.0)
 
 rule create_coords:
     input:
-        "checkpoints/samples/{sample}/segment_hest.done" # as in prepare_data
+        "checkpoints/samples/{sample}/segment_hest.done"  # as in prepare_data
     output:
         touch("checkpoints/samples/{sample}/coords_{patch_size}.done")
     params:
         patch_size=lambda wildcards: int(wildcards.patch_size)
     run:
-        beat.create_coords(sample_id=wildcards.sample, patch_size=params.patch_size)
+        beat.create_coords(sample_id=wildcards.sample,patch_size=params.patch_size)
 
 rule visualize_coords:
     input:
@@ -84,7 +76,7 @@ rule visualize_coords:
     params:
         patch_size=lambda wildcards: int(wildcards.patch_size)
     run:
-        beat.visualize_coords(sample_id=wildcards.sample, patch_size=params.patch_size)
+        beat.visualize_coords(sample_id=wildcards.sample,patch_size=params.patch_size)
 
 rule visualize_patches:
     input:
@@ -94,7 +86,7 @@ rule visualize_patches:
     params:
         patch_size=lambda wildcards: int(wildcards.patch_size)
     run:
-        beat.visualize_patches(sample_id=wildcards.sample, patch_size=params.patch_size)
+        beat.visualize_patches(sample_id=wildcards.sample,patch_size=params.patch_size)
 
 rule create_embeddings:
     input:
@@ -109,4 +101,4 @@ rule create_embeddings:
         target_mpp = beat.target_mpp
         overlap = beat.overlap
         coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
-        beat.create_patch_embeddings(sample_id=wildcards.sample, coords_version=coords_version, model_name='uni_v1')
+        beat.create_patch_embeddings(sample_id=wildcards.sample,coords_version=coords_version,model_name='uni_v1')

@@ -12,6 +12,7 @@ from ai4bmr_core.utils.tidy import tidy_name
 from ai4bmr_learn.data_models.Coordinate import SlideCoordinate
 from ai4bmr_learn.datasets.items import SlidePatches, get_patch
 from ai4bmr_learn.plotting.patches import visualize_coords
+from ai4bmr_learn.utils.device import batch_to_device
 from ai4bmr_learn.utils.images import filter_coords
 from ai4bmr_learn.utils.slides import get_coordinates_dict, get_mpp, get_mpp_and_resolution, get_seg_model, \
     get_slide_patcher_params, get_thumbnail, segment_slide
@@ -163,9 +164,10 @@ class BEAT:
             logger.info(f'Converting {wsi_path} to {sample_id}.')
 
         # Convert NDPI/other WSI to intermediate TIFF
-        cmd1 = f'/usr/bin/time -v "{bfconvert}" -nogroup -bigtiff -series 0 "{wsi_path}" "{intermediate_path}"'
-        logger.info(f"Running command: {cmd1}")
-        subprocess.run(cmd1, shell=True, check=True)
+        if not intermediate_path.exists():
+            cmd1 = f'/usr/bin/time -v "{bfconvert}" -nogroup -bigtiff -series 0 "{wsi_path}" "{intermediate_path}"'
+            logger.info(f"Running command: {cmd1}")
+            subprocess.run(cmd1, shell=True, check=True)
 
         # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
         cmd2 = f'/usr/bin/time -v vips tiffsave "{intermediate_path}" "{save_path}" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw'
@@ -242,6 +244,8 @@ class BEAT:
         subprocess.run(sbatch_command, shell=True, check=True)
 
     def post_process_tiff_flags(self, sample_id: str):
+        # NOTE: extracting the mpp from some slides does lead to wrong conversion for some reason.
+        #   to be investigated. For now we set the resolution ourselves.
         logger.info(f'Setting tiff flags for {sample_id}')
 
         wsi_path = self.dataset_dir / sample_id / 'wsi.tiff'
@@ -250,7 +254,7 @@ class BEAT:
         try:
             mpp = get_mpp(slide)
         except AssertionError:
-            logger.error(f'Error retriving slide mpp for {wsi_path}')
+            logger.error(f'Error retrieving slide mpp for {wsi_path}')
             return
 
         if str(mpp).startswith('4.422'):
@@ -446,6 +450,7 @@ class BEAT:
                 images = images.to('cuda').to(precision)
                 x = model(images)
 
+                batch = batch_to_device(batch, device='cpu')
                 batch['embedding'] = x.cpu()
                 save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
                 torch.save(x, save_path)
@@ -462,14 +467,16 @@ class BEAT:
         assert embeddings_dir.exists(), f'`embeddings_dir` {embeddings_dir} does not exist.'
 
         fname = f'model={model_name}-{coords_version}.png'
-        save_path = self.dataset_dir / sample_id / 'visualizations' / 'umaps' / 'by-sample' / fname
+        save_path = self.dataset_dir / sample_id / 'visualizations' / 'umaps' / 'by-sample' / sample_id / fname
+        save_path.parent.mkdir(parents=True, exist_ok=True)
 
         data = []
-        for path in sorted(embeddings_dir.glob('.pt')):
+        for path in sorted(embeddings_dir.glob('*.pt')):
             data.append(torch.load(path))
-        data = torch.cat(data)
+        data = torch.cat(data).cpu()
 
         ax = plot_umap(data=data)
+        ax.figure.tight_layout()
         ax.figure.savefig(save_path, dpi=300)
 
     def prepare_data(self, sample_id: str, force: bool = False):
@@ -493,10 +500,16 @@ class BEAT:
         self.create_patch_embeddings(sample_id=sample_id, coords_version=coords_version, model_name='uni_v1')
 
 
-# sample_id = '1FP2.0E.0'
-beat = BEAT()
+sample_id = '1FP2.0E.0'
+sample_id = '1FU2.06.0'
+beat = self = BEAT()
+
+#model_name='uni_v1'
+# coords_version='patch_size=448-stride=448-mpp=0.8625-overlap=0.25'
+# beat.create_umap(sample_id=sample_id, model_name=model_name, coords_version=coords_version)
+
 sample_ids = beat.get_sample_ids()
 for sample_id in sample_ids:
-    beat.prepare_wsi(sample_id=sample_id)
-# beat.prepare_data(sample_id=sample_id)
+    beat.prepare_wsi_with_slurm(sample_id=sample_id)
+beat.prepare_data(sample_id=sample_id)
 
