@@ -1,4 +1,3 @@
-
 import sys
 from pathlib import Path
 from snakemake.exceptions import print_exception, WorkflowError
@@ -11,28 +10,15 @@ from ai4bmr_datasets.datasets.BEAT import BEAT
 # Initialize the BEAT class
 beat = BEAT()
 
-# Checkpoint to prepare clinical data. This needs to be a checkpoint
-# because the list of samples is not known before this rule is executed.
-checkpoint prepare_clinical:
-    output:
-        touch("checkpoints/clinical.done")
-    run:
-        beat.prepare_clinical()
-
-# Function to get the list of samples after the clinical data has been prepared.
-def get_all_sample_outputs(wildcards):
-    try:
-        with checkpoints.prepare_clinical.get().output[0].open():
-            clinical_metadata = beat.get_clinical_metadata()
-            SAMPLES = clinical_metadata.index.tolist()
-            return expand("checkpoints/samples/{sample}/done.txt", sample=SAMPLES)
-    except FileNotFoundError:
-        raise WorkflowError("Clinical metadata not found. Please run 'snakemake prepare_clinical' first.")
+# Read sample IDs from the file
+with open("workflows/BEAT/sample_ids.txt") as f:
+    SAMPLES = [line.strip() for line in f.readlines()]
 
 rule all:
     input:
         "checkpoints/tools.done",
-        get_all_sample_outputs,
+        "checkpoints/clinical.done",
+        expand("checkpoints/samples/{sample}/done.txt", sample=SAMPLES)
 
 
 rule prepare_tools:
@@ -40,6 +26,12 @@ rule prepare_tools:
         touch("checkpoints/tools.done")
     run:
         beat.prepare_tools()
+
+rule prepare_clinical:
+    output:
+        touch("checkpoints/clinical.done")
+    run:
+        beat.prepare_clinical()
 
 rule prepare_wsi:
     input:
@@ -50,9 +42,6 @@ rule prepare_wsi:
     params:
         sample_id="{sample}"
     run:
-        # The prepare_wsi method in the BEAT class seems to be incomplete or designed for a specific cluster environment.
-        # Calling it directly might not work as expected due to an `assert False` statement.
-        # This is a known limitation.
         beat.prepare_wsi(sample_id=wildcards.sample)
 
 rule post_process_tiff_flags:
