@@ -403,7 +403,7 @@ class BEAT:
         dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
         model = model.to('cuda').to(precision)
 
-        save_embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / f'model={model_name}' / coords_version
+        save_embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / 'patch' / f'model={model_name}' / coords_version
         save_embeddings_dir.mkdir(parents=True, exist_ok=True)
         with torch.no_grad():
             for batch_idx, batch in tqdm(enumerate(dl), total=len(dl)):
@@ -415,13 +415,27 @@ class BEAT:
                 save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
                 torch.save(x, save_path)
 
-    def create_slide_embedding(self, sample_id: str, model_name: str = 'uni_v1',
+    def create_slide_embedding(self, sample_id: str, coords_version: str, model_name: str = 'uni_v1',
                                batch_size: int = 64, num_workers: int = 12):
-        
-        ax = plot_umap()
 
-    def create_umaps(self, sample_id: str, model_name: str, coords_version: str):
-        embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / f'model={model_name}' / coords_version
+        embeddings_dir = embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / 'patch' / f'model={model_name}' / coords_version
+
+    def create_umap(self, sample_id: str, model_name: str, coords_version: str):
+        logger.info(f'Computing UMAP for {sample_id}.')
+
+        embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / 'patch' / f'model={model_name}' / coords_version
+        assert embeddings_dir.exists(), f'`embeddings_dir` {embeddings_dir} does not exist.'
+
+        fname = f'model={model_name}-{coords_version}.png'
+        save_path = self.dataset_dir / sample_id / 'visualizations' / 'umaps' / 'by-sample' / fname
+
+        data = []
+        for path in sorted(embeddings_dir.glob('.pt')):
+            data.append(torch.load(path))
+        data = torch.cat(data)
+
+        ax = plot_umap(data=data)
+        ax.figure.savefig(save_path, dpi=300)
 
     def prepare_data(self, sample_id: str, force: bool = False):
         self.prepare_tools()
