@@ -63,11 +63,45 @@ data are stored in Parquet format for fast access.
 
 ## ⚙️ Installation
 
-Both [python](https://www.python.org/downloads/) and [R](https://www.r-project.org) need to be installed on your system.
-The package can be installed via pip from GitHub:
+### Prerequisites
+
+- Python >= 3.10
+- R >= 4.4.1
+
+To install R, please visit the [R project website](https://www.r-project.org/) and follow the installation instructions for your operating system.
+
+### Environment Setup
+
+We recommend using a virtual environment to install the required dependencies.
+
+#### Using `venv`
 
 ```bash
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
+# Create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install the package
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
+```
+
+#### Using `conda`
+
+```bash
+# Create a conda environment
+conda create -n ai4bmr-datasets python=3.10
+conda activate ai4bmr-datasets
+
+# Install the package
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
+```
+
+### Stable Release
+
+The package can be installed via pip from the latest stable release:
+
+```bash
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
 ```
 
 ---
