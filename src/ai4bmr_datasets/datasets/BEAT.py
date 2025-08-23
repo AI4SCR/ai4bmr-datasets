@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import InterpolationMode, v2
 from tqdm import tqdm
 from trident.patch_encoder_models import encoder_factory
-
+from ai4bmr_learn.plotting.umap import plot_umap
 
 class BEAT:
 
@@ -145,13 +145,11 @@ class BEAT:
         if sample_id in ['1GUG.0M.2',  '1GVQ.06.2']:
             return
 
-        self.prepare_tools()
-
         dataset_dir = self.dataset_dir
         dataset_dir.mkdir(parents=True, exist_ok=True)
 
-        clinical = self.get_clinical_metadata()
         bfconvert = self.tools_dir / "bftools" / "bfconvert"
+        assert bfconvert.exists()
 
         wsi_path = self.get_wsi_path(sample_id)
 
@@ -163,9 +161,8 @@ class BEAT:
             return
         else:
             logger.info(f'Converting {wsi_path} to {sample_id}.')
-            return
 
-        assert False
+        # assert False
         job_name = f"{sample_id}-wsi2tiff"
         logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
         num_cpus = 16
@@ -182,7 +179,7 @@ class BEAT:
         #!/bin/bash
         
         source /users/amarti51/miniconda3/bin/activate
-        conda activate beat
+        conda activate omics
         
         INPUT="{wsi_path}"
         INTERMEDIATE="{intermediate_path}"
@@ -376,8 +373,8 @@ class BEAT:
         img = visualize_coords(coords=coords, slide=slide)
         imsave(coords_path.with_suffix('.png'), img)
 
-    def create_embeddings(self, sample_id: str, coords_version: str, model_name: str = 'uni_v1',
-                          batch_size: int = 64, num_workers: int = 12):
+    def create_patch_embeddings(self, sample_id: str, coords_version: str, model_name: str = 'uni_v1',
+                                batch_size: int = 64, num_workers: int = 12):
         logger.info(f'Computing embeddings for {sample_id}')
 
         factory = encoder_factory(model_name)
@@ -418,7 +415,12 @@ class BEAT:
                 save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
                 torch.save(x, save_path)
 
-    def create_umaps(self, model_name: str, coords_version: str):
+    def create_slide_embedding(self, sample_id: str, model_name: str = 'uni_v1',
+                               batch_size: int = 64, num_workers: int = 12):
+        
+        ax = plot_umap()
+
+    def create_umaps(self, sample_id: str, model_name: str, coords_version: str):
         embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / f'model={model_name}' / coords_version
 
     def prepare_data(self, sample_id: str, force: bool = False):
@@ -439,10 +441,13 @@ class BEAT:
 
         patch_size = patch_stride = 448
         coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={self.target_mpp:.4f}-overlap={self.overlap:.2f}'
-        self.create_embeddings(sample_id=sample_id, coords_version=coords_version, model_name='uni_v1')
+        self.create_patch_embeddings(sample_id=sample_id, coords_version=coords_version, model_name='uni_v1')
 
 
-sample_id = '1FP2.0E.0'
-beat = self = BEAT()
-beat.prepare_data(sample_id=sample_id)
+# sample_id = '1FP2.0E.0'
+beat = BEAT()
+sample_ids = beat.get_sample_ids()
+for sample_id in sample_ids:
+    beat.prepare_wsi(sample_id=sample_id)
+# beat.prepare_data(sample_id=sample_id)
 
