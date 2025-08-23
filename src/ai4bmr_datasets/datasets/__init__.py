@@ -4,6 +4,7 @@ from .Danenberg import Danenberg2022
 from .Jackson2020 import Jackson2020
 
 from .PCa import PCa
+from .BEAT import BEAT
 
 from .BEAT import BEAT
 

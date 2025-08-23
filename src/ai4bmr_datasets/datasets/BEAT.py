@@ -1,8 +1,30 @@
-import shutil
+from pathlib import Path
+import json
+import subprocess
+import textwrap
+from dataclasses import asdict
 from pathlib import Path
 
+import geopandas as gpd
+import numpy as np
+import openslide
 import pandas as pd
+import torch
+from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_learn.data_models.Coordinate import SlideCoordinate
+from ai4bmr_learn.datasets.items import Patches, get_patch
+from ai4bmr_learn.plotting.contours import visualize_contours
+from ai4bmr_learn.plotting.patches import visualize_coords
+from ai4bmr_learn.utils.images import filter_coords
+from ai4bmr_learn.utils.slides import get_coordinates_dict, get_mpp, get_mpp_and_resolution, get_seg_model,     get_slide_patcher_params, get_thumbnail, segment_slide
 from loguru import logger
+from openslide import OpenSlide
+from skimage.io import imsave
+from torch.utils.data import DataLoader
+from torchvision.transforms import v2
+from tqdm import tqdm
+from trident.patch_encoder_models import encoder_factory, encoder_factory
+
 
 class BEAT:
 
@@ -10,28 +32,23 @@ class BEAT:
         self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat')
         self.raw_dir = self.base_dir / '01_raw'
         self.processed_dir = self.base_dir / '02_processed'
+        self.datasets_dir = self.processed_dir / 'datasets'
         self.tools_dir = self.base_dir / '03_tools'
-        self.log_dir = self.base_dir / '04_logs'
-
-        self.images_dir = self.processed_dir / 'images'
-        self.images_dir.mkdir(parents=True, exist_ok=True)
 
     def prepare_tools(self):
-        bfconvert = self.tools_dir / "bftools" /"bfconvert"
+        bfconvert = self.tools_dir / "bftools" / "bfconvert"
 
         if bfconvert.exists():
             logger.info(f"bfconvert found at {bfconvert}. Skipping installation.")
             return
 
-        import textwrap
-        import subprocess
         logger.info("⚙️Installing Bio-Formats tools.")
         self.tools_dir.mkdir(parents=True, exist_ok=True)
 
         install_cmd = f"""
         wget https://downloads.openmicroscopy.org/bio-formats/8.2.0/artifacts/bftools.zip -O {self.tools_dir}/bftools.zip
-        unzip {self.tools_dir}/bftools.zip
-        {self.tools_dir / "bftools" /"bfconvert"} -version || exit
+        unzip {self.tools_dir}/bftools.zip -d {self.tools_dir}
+        {self.tools_dir / "bftools" / "bfconvert"} -version || exit
         """
 
         install_cmd = textwrap.dedent(install_cmd).strip()
@@ -45,8 +62,6 @@ class BEAT:
         What are the corresponding numbers for `2024-05-31_n98-n100`
 
         """
-        import pandas as pd
-        from ai4bmr_core.utils.tidy import tidy_name
 
         clinical = pd.read_excel(self.raw_dir / 'H_E_Images/Image_ID_vs_patient_blockIDs.xlsx')
         clinical.columns = clinical.columns.map(tidy_name)
@@ -101,7 +116,8 @@ class BEAT:
 
         metadata = pd.DataFrame.from_records(records)
         metadata = metadata.merge(clinical)
-        metadata['sample_id'] = metadata['sample_barcode'] + '.' + metadata.groupby('sample_barcode').cumcount().astype(str)
+        metadata['sample_id'] = metadata['sample_barcode'].str.strip() + '.' + metadata.groupby(
+            'sample_barcode').cumcount().astype(str)
         metadata = metadata.convert_dtypes().astype({'wsi_path': str})
         metadata = metadata.set_index('sample_id')
 
@@ -109,53 +125,357 @@ class BEAT:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(save_path, engine='fastparquet')
 
-    def prepare_data(self, force: bool = False):
-        import textwrap
-        import subprocess
-        from ai4bmr_core.utils.tidy import tidy_name
-
+    def prepare_wsi(self, sample_id: str, force: bool = False):
         self.prepare_tools()
-        self.images_dir.mkdir(parents=True, exist_ok=True)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        dataset_dir = self.datasets_dir / 'beat'
+        dataset_dir.mkdir(parents=True, exist_ok=True)
 
         clinical = pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
         bfconvert = self.tools_dir / "bftools" / "bfconvert"
 
-        wsi_paths = list(self.base_dir.rglob('*.ndpi')) + list(self.base_dir.rglob('*.czi'))
-        for wsi_path in wsi_paths:
+        wsi_path = Path(clinical.loc[sample_id, 'wsi_path'])
+        save_name = sample_id
 
-            save_name = clinical[clinical.wsi_path == str(wsi_path)].index.item()
-            save_path = self.images_dir / f'{save_name}.ome.tiff'
+        if save_name in [
+            '1GUG.0M.2',  # barcode
+            '1GVQ.06.2',  # barcode
+        ]:
+            logger.info(f"Skipping sample {save_name} based on barcode.")
+            return
 
-            if save_path.exists() and not force:
-                logger.info(f"File {save_path} already exists. Skipping conversion.")
+        intermediate_path = dataset_dir / save_name / 'intermediate.tiff'
+        save_path = dataset_dir / save_name / 'wsi.tiff'
 
-            job_name = f"wsi2tiff-{save_name}"
-            logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
+        if save_path.exists() and not force:
+            logger.info(f"File {save_path} already exists. Skipping conversion.")
+            return
 
-            sbatch_command = f"""
-            sbatch \\
-            --job-name={job_name} \\
-            --output=/users/amarti51/logs/{job_name}-%A-%a.log \\
-            --error=/users/amarti51/logs/{job_name}-%A-%a.err \\
-            --time=08:00:00 \\
-            --mem=128G \\
-            --cpus-per-task=12 \\
-            <<'EOF'
-            #!/bin/bash
+        logger.info(f'Converting {wsi_path} to {save_name}.')
 
-            INPUT="{wsi_path}"
-            OUTPUT="{save_path}"
-            BFCONVERT="{bfconvert}"
+        job_name = f"proj=beat-task=wsi2tiff-{save_name}"
+        logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
+        num_cpus = 16
 
-            /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 "$INPUT" "$OUTPUT"
-            EOF
+        sbatch_command = f"""
+        sbatch \
+        --job-name={job_name} \
+        --output=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.log \
+        --error=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.err \
+        --time=24:00:00 \
+        --mem=128G \
+        --cpus-per-task={num_cpus} \
+        <<'EOF'
+        #!/bin/bash
+        
+        source /users/amarti51/miniconda3/bin/activate
+        conda activate beat
+        
+        INPUT="{wsi_path}"
+        INTERMEDIATE="{intermediate_path}"
+        OUTPUT="{save_path}"
+        BFCONVERT="{bfconvert}"
+        
+        mkdir -p "$(dirname "{save_path}")"
+
+        # Convert NDPI/other WSI to intermediate TIFF
+        # /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 -series 0 -pyramid-resolutions 4 -pyramid-scale 2 "$INPUT" "$INTERMEDIATE"
+        echo "* Exporting full-res TIFF..."
+        /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -series 0 "$INPUT" "$INTERMEDIATE"
+
+        # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
+        echo "* Building OpenSlide-compatible pyramid TIFF..."
+        export VIPS_CONCURRENCY={num_cpus - 1}
+        /usr/bin/time -v vips tiffsave "$INTERMEDIATE" "$OUTPUT" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw
+        
+        rm "$INTERMEDIATE"
+        
+        EOF
+        """
+        sbatch_command = textwrap.dedent(sbatch_command).strip()
+
+        subprocess.run(sbatch_command, shell=True, check=True)
+
+    def post_process_tiff_flags(self, sample_id: str):
+        dataset_dir = self.datasets_dir / 'beat'
+        wsi_path = dataset_dir / sample_id / 'wsi.tiff'
+
+        if not wsi_path.exists():
+            logger.warning(f"WSI file not found for sample {sample_id} at {wsi_path}")
+            return
+
+        slide = openslide.OpenSlide(wsi_path)
+
+        try:
+            mpp = get_mpp(slide)
+        except AssertionError:
+            logger.error(f'Error retriving slide mpp for {wsi_path}')
+            return
+
+        if str(mpp).startswith('4.422'):
+            cmd = f"""
+            # set XResolution (tag 282) to 22611
+            tiffset -s 282 22611 "{wsi_path}"
+            
+            # set YResolution (tag 283) to 22611
+            tiffset -s 283 22611 "{wsi_path}"
+            
+            # set ResolutionUnit (tag 296) to 3 (centimeter)
+            tiffset -s 296 3 "{wsi_path}"
             """
-            sbatch_command = textwrap.dedent(sbatch_command).strip()
+            cmd = textwrap.dedent(cmd).strip()
+            subprocess.run(cmd, shell=True, check=True)
 
-            subprocess.run(sbatch_command, shell=True, check=True)
+    def segment(self, sample_id: str, model_name: str = 'grandqc', target_mpp: float = 4.0,
+                source_mpp: float = None):
 
-    def setup(self):
+        seg_model = get_seg_model(model_name=model_name)  # hest, grandqc, grandqc_artifact
+        sample_dir = self.datasets_dir / 'beat' / sample_id
+
+        if not sample_dir.is_dir():
+            logger.warning(f"Sample directory not found for sample {sample_id} at {sample_dir}")
+            return
+
+        img_path = sample_dir / 'wsi.tiff'
+        if not img_path.exists():
+            logger.warning(f"WSI file not found for sample {sample_id} at {img_path}")
+            return
+
+        version_name = f'segment-mpp={target_mpp}-model_name={model_name}' + (
+            f'-src_mpp={source_mpp}' if source_mpp else '')
+        save_coords_path = sample_dir / 'coords' / f'{version_name}.json'
+        save_contours_path = sample_dir / 'contours' / f'{version_name}.parquet'
+
+        if save_contours_path.exists() and save_coords_path.exists():
+            logger.info(f'{sample_dir} is already segmented')
+            return
+
+        logger.info(f'🧩 segmenting {sample_dir}')
+
+        slide = OpenSlide(img_path)
+
+        try:
+            mpp = get_mpp_and_resolution(slide)[0]
+        except AssertionError:
+            logger.error(f'Error retriving slide mpp for {img_path}')
+            return
+
+        logger.info(
+            f'{sample_dir.name} reports mpp={mpp:.4f}' + (f', assuming mpp={source_mpp}' if source_mpp else ''))
+
+        if save_contours_path.exists():
+            return
+
+        segment_slide(slide,
+                      seg_model=seg_model,
+                      target_mpp=target_mpp,
+                      source_mpp=source_mpp,
+                      save_contours_path=save_contours_path,
+                      save_coords_path=save_coords_path)
+
+    def create_thumbnail(self, sample_id: str):
+        sample_dir = self.datasets_dir / 'beat' / sample_id
+        img_path = sample_dir / 'wsi.tiff'
+        if not img_path.exists():
+            logger.warning(f"WSI file not found for sample {sample_id} at {img_path}")
+            return
+
+        logger.info(f'Create thumbnail for {sample_dir.name}')
+
+        slide = OpenSlide(img_path)
+        thumbnail, _ = get_thumbnail(slide=slide)
+
+        save_path = img_path.parent / 'thumbnail.png'
+        imsave(str(save_path), thumbnail)
+
+    def prepare_data(self, sample_id: str, force: bool = False):
+        self.prepare_tools()
+        self.prepare_clinical()
+
+        self.prepare_wsi(sample_id=sample_id, force=force)
+        self.post_process_tiff_flags(sample_id=sample_id)
+
+        self.segment(sample_id=sample_id, model_name='hest', target_mpp=4)
+        self.segment(sample_id=sample_id, model_name='grandqc', target_mpp=4)
+
+        self.create_coords(sample_id=sample_id, patch_size=224)
+        self.create_coords(sample_id=sample_id, patch_size=512)
+
+        patch_size = 512
+        patch_stride = patch_size
+        target_mpp = 0.8625
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+        self.create_embeddings(sample_id=sample_id, coords_version=coords_version, model_name='uni_v1')
+
+    def filter_contours(self):
+        # TODO: potentially post-process contours or improve filtering during segmentation.
+        # NOTE: we only use contours that are larger than the median area of all found contours
+        q = np.quantile(contours.geometry.area, 0.5)
+        filter_ = contours.geometry.area > q
+        import matplotlib.pyplot as plt
+        plt.imshow(visualize_contours(contours=contours[filter_], slide=slide)).figure.show()
+
+    def create_coords(self, sample_id: str, patch_size: int = 512):
+        patch_stride = patch_size
+        target_mpp = 0.8624999831542972  # TODO: check this value for the used model
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+
+        sample_dir = self.datasets_dir / 'beat' / sample_id
+        wsi_path = sample_dir / 'wsi.tiff'
+
+        if not wsi_path.exists():
+            logger.warning(f"WSI file not found for sample {sample_id} at {wsi_path}")
+            return
+
+        save_coords_path = wsi_path.parent / 'coords' / f"{coords_version}.json"
+        if save_coords_path.exists():
+            logger.info(f'{save_coords_path} exists. Skipping.')
+            return
+
+        contours_path = wsi_path.parent / 'contours' / "segment-mpp=4-model_name=hest.parquet"
+        if not contours_path.exists():
+            logger.warning(f"Contours file not found for sample {sample_id} at {contours_path}")
+            return
+
+        contours = gpd.read_parquet(contours_path)
+
+        slide = OpenSlide(str(wsi_path))
+        params = get_slide_patcher_params(slide=slide, patch_size=patch_size, patch_stride=patch_stride,
+                                          target_mpp=target_mpp)
+        coords = get_coordinates_dict(**params)
+        logger.info(f'{len(coords)} coordinates before filtering')
+        coords = [SlideCoordinate(**i) for i in coords]
+
+        logger.info('Filtering coordinates...')
+        coords = filter_coords(coords=coords, contours=contours, overlap=overlap)
+
+        save_coords_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(save_coords_path, 'w') as f:
+            coords_dict = [i.model_dump() for i in coords]
+            json.dump(coords_dict, f)
+
+        img = visualize_coords(coords=coords, slide=slide)
+        imsave(save_coords_path.with_suffix('.png'), img)
+
+        logger.info('Visualizing patches...')
+        save_patches_dir = wsi_path.parent / 'patches' / coords_version
+        save_patches_dir.mkdir(parents=True, exist_ok=True)
+        for i in np.random.choice(range(len(coords)), size=100, replace=False):
+            item = coords[i].model_dump()
+            img = get_patch(item=item, as_tensor=False)
+            save_path = save_patches_dir / f'id={coords[i].id}-uuid={coords[i].uuid}.png'
+            imsave(save_path, np.array(img))
+
+    def visualize_patches(self, sample_id: str, patch_size: int = 512, num_patches: int = 100):
+        patch_stride = patch_size
+        target_mpp = 0.8624999831542972  # TODO: check this value for the used model
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+
+        sample_dir = self.datasets_dir / 'beat' / sample_id
+        wsi_path = sample_dir / 'wsi.tiff'
+        if not wsi_path.exists():
+            logger.warning(f"WSI file not found for sample {sample_id} at {wsi_path}")
+            return
+
+        coords_path = sample_dir / 'coords' / f"{coords_version}.json"
+        if not coords_path.exists():
+            logger.warning(f"Coords file not found for sample {sample_id} at {coords_path}")
+            return
+
+        with open(coords_path, 'r') as f:
+            coords = json.load(f)
+            coords = [SlideCoordinate(**i) for i in coords]
+
+        logger.info('Visualizing patches...')
+        save_patches_dir = wsi_path.parent / 'patches' / coords_version
+        save_patches_dir.mkdir(parents=True, exist_ok=True)
+        for i in np.random.choice(range(len(coords)), size=min(num_patches, len(coords)), replace=False):
+            item = coords[i].model_dump()
+            img = get_patch(item=item, as_tensor=False)
+            save_path = save_patches_dir / f'id={coords[i].id}-uuid={coords[i].uuid}.png'
+            imsave(save_path, np.array(img))
+
+    def visualize_coords(self, sample_id: str, patch_size: int = 512):
+        patch_stride = patch_size
+        target_mpp = 0.8624999831542972  # TODO: check this value for the used model
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+
+        sample_dir = self.datasets_dir / 'beat' / sample_id
+        wsi_path = sample_dir / 'wsi.tiff'
+        if not wsi_path.exists():
+            logger.warning(f"WSI file not found for sample {sample_id} at {wsi_path}")
+            return
+
+        coords_path = sample_dir / 'coords' / f"{coords_version}.json"
+        if not coords_path.exists():
+            logger.warning(f"Coords file not found for sample {sample_id} at {coords_path}")
+            return
+
+        slide = OpenSlide(str(wsi_path))
+
+        with open(coords_path, 'r') as f:
+            coords = json.load(f)
+            coords = [SlideCoordinate(**i) for i in coords]
+
+        logger.info('Visualizing coords...')
+        img = visualize_coords(coords=coords, slide=slide)
+        imsave(coords_path.with_suffix('.png'), img)
+
+    def create_embeddings(self, sample_id: str, coords_version: str, model_name: str = 'uni_v1',
+                          batch_size: int = 64, num_workers: int = 12):
+
+        factory = encoder_factory(model_name)
+        model = factory.model
+        # TODO: check how to convert to v2.
+        #  - save option would be to inspect manually and create the v2 transforms for each model
+        #  - but seems to work fine
+        transform = factory.eval_transforms
+        precision = factory.precision
+
+        sample_dir = self.datasets_dir / 'beat' / sample_id
+        if not sample_dir.is_dir():
+            logger.warning(f"Sample directory not found for sample {sample_id} at {sample_dir}")
+            return
+
+        logger.info(f'Computing patch embeddings for {sample_dir.stem}...')
+
+        coords_path = sample_dir / 'coords' / f'{coords_version}.json'
+        if not coords_path.exists():
+            logger.warning(f"Coords file not found for sample {sample_id} at {coords_path}")
+            return
+
+        mean = transform.transforms[-1].mean
+        std = transform.transforms[-1].std
+        transform = v2.Compose([
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=mean, std=std)
+        ])
+
+        ds = Patches(items_path=coords_path, transform=transform)
+        ds.setup()
+        dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        model = model.to('cuda').to(precision)
+
+        logger.info('Computing embeddings...')
+        save_embeddings_dir = sample_dir / 'embeddings' / f'model={model_name}' / coords_version
+        save_embeddings_dir.mkdir(parents=True, exist_ok=True)
+        with torch.no_grad():
+            for batch_idx, batch in tqdm(enumerate(dl), total=len(dl)):
+                images = batch.pop('image')
+                images = images.to('cuda').to(precision)
+                x = model(images)
+
+                batch['embedding'] = x.cpu()
+                save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
+                torch.save(x, save_path)
+
+    def create_umaps(self, embeddings_version: ''):
         pass
 
-# self = BEAT()
+
+beat = self = BEAT()
