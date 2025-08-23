@@ -1,9 +1,30 @@
-import shutil
-from openslide import OpenSlide
+from pathlib import Path
+import json
+import subprocess
+import textwrap
+from dataclasses import asdict
 from pathlib import Path
 
+import geopandas as gpd
+import numpy as np
+import openslide
 import pandas as pd
+import torch
+from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_learn.data_models.Coordinate import SlideCoordinate
+from ai4bmr_learn.datasets.items import Patches, get_patch
+from ai4bmr_learn.plotting.contours import visualize_contours
+from ai4bmr_learn.plotting.patches import visualize_coords
+from ai4bmr_learn.utils.images import filter_coords
+from ai4bmr_learn.utils.slides import get_coordinates_dict, get_mpp, get_mpp_and_resolution, get_seg_model, \
+    get_slide_patcher_params, get_thumbnail, segment_slide
 from loguru import logger
+from openslide import OpenSlide
+from skimage.io import imsave
+from torch.utils.data import DataLoader
+from torchvision.transforms import v2
+from tqdm import tqdm
+from trident.patch_encoder_models import encoder_factory, encoder_factory
 
 
 class BEAT:
@@ -22,8 +43,6 @@ class BEAT:
             logger.info(f"bfconvert found at {bfconvert}. Skipping installation.")
             return
 
-        import textwrap
-        import subprocess
         logger.info("⚙️Installing Bio-Formats tools.")
         self.tools_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,8 +63,6 @@ class BEAT:
         What are the corresponding numbers for `2024-05-31_n98-n100`
 
         """
-        import pandas as pd
-        from ai4bmr_core.utils.tidy import tidy_name
 
         clinical = pd.read_excel(self.raw_dir / 'H_E_Images/Image_ID_vs_patient_blockIDs.xlsx')
         clinical.columns = clinical.columns.map(tidy_name)
@@ -110,9 +127,6 @@ class BEAT:
         metadata.to_parquet(save_path, engine='fastparquet')
 
     def prepare_wsi(self, force: bool = False):
-        import textwrap
-        import subprocess
-
         self.prepare_tools()
 
         dataset_dir = self.datasets_dir / 'beat'
@@ -130,13 +144,18 @@ class BEAT:
                 '1GVQ.06.2',  # barcode
             ]:
                 continue
-            
+
             intermediate_path = dataset_dir / save_name / 'intermediate.tiff'
             save_path = dataset_dir / save_name / 'wsi.tiff'
 
             if save_path.exists() and not force:
                 logger.info(f"File {save_path} already exists. Skipping conversion.")
+                continue
+            else:
+                logger.info(f'Converting {wsi_path} to {save_name}.')
+                continue
 
+            assert False
             job_name = f"proj=beat-task=wsi2tiff-{save_name}"
             logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
             num_cpus = 16
@@ -181,15 +200,11 @@ class BEAT:
             subprocess.run(sbatch_command, shell=True, check=True)
 
     def post_process_tiff_flags(self):
-        from ai4bmr_learn.utils.slides import get_mpp
-        import openslide
-        import textwrap
-        import subprocess
 
         wsi_paths = list(self.datasets_dir.rglob('*wsi.tiff'))
         for wsi_path in wsi_paths:
             slide = openslide.OpenSlide(wsi_path)
-            
+
             try:
                 mpp = get_mpp(slide)
             except AssertionError:
@@ -210,9 +225,8 @@ class BEAT:
                 cmd = textwrap.dedent(cmd).strip()
                 subprocess.run(cmd, shell=True, check=True)
 
-    def segment(self, sample_dirs: list[Path] | None = None, model_name: str = 'grandqc', target_mpp: float = 4.0, source_mpp: float = None):
-        from ai4bmr_learn.utils.slides import segment_slide, get_seg_model, get_mpp_and_resolution
-        from openslide import OpenSlide
+    def segment(self, sample_dirs: list[Path] | None = None, model_name: str = 'grandqc', target_mpp: float = 4.0,
+                source_mpp: float = None):
 
         seg_model = get_seg_model(model_name=model_name)  # hest, grandqc, grandqc_artifact
         sample_dirs = sample_dirs or [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
@@ -255,9 +269,6 @@ class BEAT:
                           save_coords_path=save_coords_path)
 
     def create_thumbnail(self):
-        from skimage.io import imsave
-        from ai4bmr_learn.utils.slides import get_thumbnail
-        from openslide import OpenSlide
 
         sample_dirs = [i for i in (self.datasets_dir / 'beat').iterdir() if i.is_dir()]
         for i, sample_dir in enumerate(sample_dirs, start=1):
@@ -284,53 +295,43 @@ class BEAT:
         self.segment(model_name='hest', target_mpp=4)
         self.segment(model_name='grandqc', target_mpp=4)
 
-        self.create_patch_embeddings()
+        self.create_coords(patch_size=224)
+        self.create_coords(patch_size=512)
 
-    def setup(self):
-        pass
+        patch_size = patch_stride = 512
+        target_mpp = 0.8625
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+        self.create_embeddings(coords_version=coords_version, model_name='uni_v1')
 
-    def create_patch_embeddings(self, model_name: str = 'uni_v1', batch_size: int = 64, num_workers: int = 12):
-        from trident.patch_encoder_models import encoder_factory
-        from ai4bmr_learn.utils.slides import get_coordinates_dict, get_slide_patcher_params, get_mpp
-        from ai4bmr_learn.utils.images import filter_coords
-        from ai4bmr_learn.data_models.Coordinate import SlideCoordinate
-        from ai4bmr_learn.datasets.Patches import Patches, get_patch
-        from ai4bmr_learn.plotting.patches import visualize_coords
-        from ai4bmr_learn.plotting.contours import visualize_contours
-        from openslide import OpenSlide
-        import geopandas as gpd
-        from dataclasses import asdict
-        import json
-        from skimage.io import imsave
-        import numpy as np
-        from torchvision.transforms import v2
-        import torch
-        from torch.utils.data import DataLoader
-        from ai4bmr_learn.utils.device import batch_to_device
-        from tqdm import tqdm
+    def filter_contours(self):
+        # TODO: potentially post-process contours or improve filtering during segmentation.
+        # NOTE: we only use contours that are larger than the median area of all found contours
+        q = np.quantile(contours.geometry.area, 0.5)
+        filter_ = contours.geometry.area > q
+        import matplotlib.pyplot as plt
+        plt.imshow(visualize_contours(contours=contours[filter_], slide=slide)).figure.show()
 
-        factory = encoder_factory(model_name)
-        model = factory.model
-        transform = factory.eval_transforms  # TODO: check how to convert to v2
-        precision = factory.precision
+    def create_coords(self, patch_size: int = 512):
+        patch_stride = patch_size
+        target_mpp = 0.8624999831542972  # TODO: check this value for the used model
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
 
         wsi_paths = sorted(self.datasets_dir.rglob('*wsi.tiff'))
         for i, wsi_path in enumerate(wsi_paths):
-            logger.info(f'[{i}/{len(wsi_paths)}] Computing patch embeddings for {wsi_path.parent.name}...')
 
-            slide = OpenSlide(str(wsi_path))
+            save_coords_path = wsi_path.parent / 'coords' / f"{coords_version}.json"
+            if save_coords_path.exists():
+                logger.info(f'{coords_path} exists. Skipping.')
+                continue
+
             contours_path = wsi_path.parent / 'contours' / "segment-mpp=4-model_name=hest.parquet"
             contours = gpd.read_parquet(contours_path)
 
-            q = np.quantile(contours.geometry.area, 0.5)
-            filter_ = contours.geometry.area > q
-            import matplotlib.pyplot as plt
-            plt.imshow(visualize_contours(contours=contours[filter_], slide=slide)).figure.show()
-
-            patch_size = patch_stride = 224
-            target_mpp = 0.8624999831542972  # TODO: check this value for the used model
-            overlap = 0.25
-            params = get_slide_patcher_params(slide=slide, patch_size=patch_size, patch_stride=patch_stride, target_mpp=target_mpp)
+            slide = OpenSlide(str(wsi_path))
+            params = get_slide_patcher_params(slide=slide, patch_size=patch_size, patch_stride=patch_stride,
+                                              target_mpp=target_mpp)
             coords = get_coordinates_dict(**params)
             logger.info(f'{len(coords)} coordinates before filtering')
             coords = [SlideCoordinate(**i) for i in coords]
@@ -338,28 +339,96 @@ class BEAT:
             logger.info('Filtering coordinates...')
             coords = filter_coords(coords=coords, contours=contours, overlap=overlap)
 
-            coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
-            save_coords_path = wsi_path.parent / 'coords' / f'{coords_version}.json'
             save_coords_path.parent.mkdir(parents=True, exist_ok=True)
             with open(save_coords_path, 'w') as f:
-                    coords_dict = [asdict(i) for i in coords]
-                    json.dump(coords_dict, f)
-                
-            img = visualize_coords(coords=coords,slide=slide)
+                coords_dict = [i.model_dump() for i in coords]
+                json.dump(coords_dict, f)
+
+            img = visualize_coords(coords=coords, slide=slide)
             imsave(save_coords_path.with_suffix('.png'), img)
 
             logger.info('Visualizing patches...')
             save_patches_dir = wsi_path.parent / 'patches' / coords_version
             save_patches_dir.mkdir(parents=True, exist_ok=True)
             for i in np.random.choice(range(len(coords)), size=100, replace=False):
-                img = get_patch(coord=coords[i], as_tensor=False)
+                item = coords[i].model_dump()
+                img = get_patch(item=item, as_tensor=False)
                 save_path = save_patches_dir / f'id={coords[i].id}-uuid={coords[i].uuid}.png'
                 imsave(save_path, np.array(img))
 
+    def visualize_patches(self):
+        patch_stride = patch_size
+        target_mpp = 0.8624999831542972  # TODO: check this value for the used model
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+
+        wsi_paths = sorted(self.datasets_dir.rglob('*wsi.tiff'))
+        for i, wsi_path in enumerate(wsi_paths):
+
+            slide = OpenSlide(str(wsi_path))
+
+            save_coords_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(coords_path, 'r') as f:
+                coords = json.load(coords_path, f)
+                coords = [SlideCoordinate(**i) for i in coords]
+
+            logger.info('Visualizing patches...')
+            save_patches_dir = wsi_path.parent / 'patches' / coords_version
+            save_patches_dir.mkdir(parents=True, exist_ok=True)
+            for i in np.random.choice(range(len(coords)), size=num_patches, replace=False):
+                item = coords[i].model_dump()
+                img = get_patch(item=item, as_tensor=False)
+                save_path = save_patches_dir / f'id={coords[i].id}-uuid={coords[i].uuid}.png'
+                imsave(save_path, np.array(img))
+
+    def visualize_coords(self, patch_size: int = 512, num_patches: int = 100):
+        patch_stride = patch_size
+        target_mpp = 0.8624999831542972  # TODO: check this value for the used model
+        overlap = 0.25
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+
+        wsi_paths = sorted(self.datasets_dir.rglob('*wsi.tiff'))
+        for i, wsi_path in enumerate(wsi_paths):
+
+            slide = OpenSlide(str(wsi_path))
+
+            save_coords_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(coords_path, 'r') as f:
+                coords = json.load(coords_path, f)
+                coords = [SlideCoordinate(**i) for i in coords]
+
+            logger.info('Visualizing coords...')
+            img = visualize_coords(coords=coords, slide=slide)
+            imsave(save_coords_path.with_suffix('.png'), img)
+
+    def create_embeddings(self, coords_version: str, model_name: str = 'uni_v1',
+                          batch_size: int = 64, num_workers: int = 12):
+
+        factory = encoder_factory(model_name)
+        model = factory.model
+        # TODO: check how to convert to v2.
+        #  - save option would be to inspect manually and create the v2 transforms for each model
+        #  - but seems to work fine
+        transform = factory.eval_transforms
+        precision = factory.precision
+
+        sample_dirs = sorted((self.datasets_dir / 'beat').iterdir())
+        for i, sample_dir in enumerate(sample_dirs):
+            logger.info(f'[{i}/{len(wsi_paths)}] Computing patch embeddings for {sample_dir.stem}...')
+
+            coords_path = wsi_path.parent / 'coords' / f'{coords_version}.json'
+            assert coords_path.exists(), f'`coords_path` {coords_path} does not exist.'
+
             mean = transform.transforms[-1].mean
             std = transform.transforms[-1].std
-            transform = v2.Compose([v2.ToDtype(torch.float32, scale=True), v2.Normalize(mean=mean, std=std)])
-            ds = Patches(coords=coords, transform=transform)
+            transform = v2.Compose([
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=mean, std=std)
+            ])
+
+            ds = Patches(items_path=coords_path, transform=transform)
+            ds.setup()
             dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
             model = model.to('cuda').to(precision)
 
@@ -371,7 +440,13 @@ class BEAT:
                     images = batch.pop('image')
                     images = images.to('cuda').to(precision)
                     x = model(images)
-                    
+
                     batch['embedding'] = x.cpu()
                     save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
                     torch.save(x, save_path)
+
+    def create_umaps(self, embeddings_version: ''):
+        pass
+
+
+beat = self = BEAT()
