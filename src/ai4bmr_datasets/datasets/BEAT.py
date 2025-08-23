@@ -130,6 +130,10 @@ class BEAT:
     def get_clinical_metadata(self):
         return pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
 
+    def get_sample_ids(self):
+        clinical = self.get_clinical_metadata()
+        return clinical.index.tolist()
+
     def get_wsi_path(self, sample_id: str):
         clinical = self.get_clinical_metadata()
         wsi_path = clinical[clinical.index == sample_id].wsi_path.item()
