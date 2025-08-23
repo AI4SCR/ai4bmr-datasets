@@ -162,6 +162,41 @@ class BEAT:
         else:
             logger.info(f'Converting {wsi_path} to {sample_id}.')
 
+        # Convert NDPI/other WSI to intermediate TIFF
+        cmd1 = f'/usr/bin/time -v "{bfconvert}" -nogroup -bigtiff -series 0 "{wsi_path}" "{intermediate_path}"'
+        logger.info(f"Running command: {cmd1}")
+        subprocess.run(cmd1, shell=True, check=True)
+
+        # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
+        cmd2 = f'/usr/bin/time -v vips tiffsave "{intermediate_path}" "{save_path}" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw'
+        logger.info(f"Running command: {cmd2}")
+        subprocess.run(cmd2, shell=True, check=True)
+        
+        # Remove intermediate file
+        intermediate_path.unlink()
+
+    def prepare_wsi_with_slurm(self, sample_id: str, force: bool = False):
+
+        if sample_id in ['1GUG.0M.2',  '1GVQ.06.2']:
+            return
+
+        dataset_dir = self.dataset_dir
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+
+        bfconvert = self.tools_dir / "bftools" / "bfconvert"
+        assert bfconvert.exists()
+
+        wsi_path = self.get_wsi_path(sample_id)
+
+        intermediate_path = dataset_dir / sample_id / 'intermediate.tiff'
+        save_path = dataset_dir / sample_id / 'wsi.tiff'
+
+        if save_path.exists() and not force:
+            logger.info(f"File {save_path} already exists. Skipping conversion.")
+            return
+        else:
+            logger.info(f'Converting {wsi_path} to {sample_id}.')
+
         # assert False
         job_name = f"{sample_id}-wsi2tiff"
         logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")

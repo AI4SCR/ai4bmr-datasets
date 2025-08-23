@@ -1,0 +1,133 @@
+import sys
+from pathlib import Path
+from snakemake.exceptions import print_exception, WorkflowError
+
+# Add the src directory to the python path to import the BEAT class
+sys.path.append(str(Path(__file__).parent.parent.parent.resolve() / 'src'))
+
+from ai4bmr_datasets.datasets.BEAT import BEAT
+
+# Initialize the BEAT class
+beat = BEAT()
+
+# Read sample IDs from the file
+with open("workflows/BEAT/sample_ids.txt") as f:
+    SAMPLES = [line.strip() for line in f.readlines()]
+
+rule all:
+    input:
+        "checkpoints/tools.done",
+        "checkpoints/clinical.done",
+        expand("checkpoints/samples/{sample}/done.txt", sample=SAMPLES)
+
+
+rule prepare_tools:
+    output:
+        touch("checkpoints/tools.done")
+    run:
+        beat.prepare_tools()
+
+rule prepare_clinical:
+    output:
+        touch("checkpoints/clinical.done")
+    run:
+        beat.prepare_clinical()
+
+rule prepare_wsi:
+    input:
+        "checkpoints/tools.done",
+        "checkpoints/clinical.done"
+    output:
+        touch("checkpoints/samples/{sample}/wsi.done")
+    params:
+        sample_id="{sample}"
+    run:
+        beat.prepare_wsi(sample_id=wildcards.sample)
+
+rule post_process_tiff_flags:
+    input:
+        "checkpoints/samples/{sample}/wsi.done"
+    output:
+        touch("checkpoints/samples/{sample}/tiff_flags.done")
+    params:
+        sample_id="{sample}"
+    run:
+        beat.post_process_tiff_flags(sample_id=wildcards.sample)
+
+rule create_thumbnail:
+    input:
+        "checkpoints/samples/{sample}/wsi.done"
+    output:
+        touch("checkpoints/samples/{sample}/thumbnail.done")
+    params:
+        sample_id="{sample}"
+    run:
+        beat.create_thumbnail(sample_id=wildcards.sample)
+
+rule segment:
+    input:
+        "checkpoints/samples/{sample}/wsi.done"
+    output:
+        touch("checkpoints/samples/{sample}/segment_{model_name}.done")
+    params:
+        sample_id="{sample}",
+        model_name="{model_name}"
+    run:
+        beat.segment(sample_id=wildcards.sample, model_name=wildcards.model_name, target_mpp=4.0)
+
+rule create_coords:
+    input:
+        "checkpoints/samples/{sample}/segment_hest.done" # as in prepare_data
+    output:
+        touch("checkpoints/samples/{sample}/coords_{patch_size}.done")
+    params:
+        patch_size=lambda wildcards: int(wildcards.patch_size)
+    run:
+        beat.create_coords(sample_id=wildcards.sample, patch_size=params.patch_size)
+
+rule visualize_coords:
+    input:
+        "checkpoints/samples/{sample}/coords_{patch_size}.done"
+    output:
+        touch("checkpoints/samples/{sample}/visualize_coords_{patch_size}.done")
+    params:
+        patch_size=lambda wildcards: int(wildcards.patch_size)
+    run:
+        beat.visualize_coords(sample_id=wildcards.sample, patch_size=params.patch_size)
+
+rule visualize_patches:
+    input:
+        "checkpoints/samples/{sample}/coords_{patch_size}.done"
+    output:
+        touch("checkpoints/samples/{sample}/visualize_patches_{patch_size}.done")
+    params:
+        patch_size=lambda wildcards: int(wildcards.patch_size)
+    run:
+        beat.visualize_patches(sample_id=wildcards.sample, patch_size=params.patch_size)
+
+rule create_embeddings:
+    input:
+        "checkpoints/samples/{sample}/coords_448.done"
+    output:
+        touch("checkpoints/samples/{sample}/embeddings.done")
+    params:
+        sample_id="{sample}"
+    run:
+        patch_size = 448
+        patch_stride = 448
+        target_mpp = beat.target_mpp
+        overlap = beat.overlap
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+        beat.create_patch_embeddings(sample_id=wildcards.sample, coords_version=coords_version, model_name='uni_v1')
+
+rule sample_done:
+    input:
+        "checkpoints/samples/{sample}/tiff_flags.done",
+        "checkpoints/samples/{sample}/thumbnail.done",
+        expand("checkpoints/samples/{{sample}}/segment_{model_name}.done", model_name=['hest', 'grandqc']),
+        expand("checkpoints/samples/{{sample}}/coords_{patch_size}.done", patch_size=[224, 448]),
+        expand("checkpoints/samples/{{sample}}/visualize_coords_{patch_size}.done", patch_size=[224, 448]),
+        expand("checkpoints/samples/{{sample}}/visualize_patches_{patch_size}.done", patch_size=[224, 448]),
+        "checkpoints/samples/{sample}/embeddings.done"
+    output:
+        touch("checkpoints/samples/{sample}/done.txt")
