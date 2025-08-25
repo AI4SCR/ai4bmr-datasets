@@ -28,16 +28,5 @@ for sample_dir in base_dir.iterdir():
             os.symlink(wsi_path, symlink_path)
             print(f"Linked {wsi_path} -> {symlink_path}")
 
-# export WSI_DIR=/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_slides
-# export JOB_DIR=/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed
-# python run_batch_of_slides.py --task seg --wsi_dir $WSI_DIR --job_dir $JOB_DIR --gpu 0 --segmenter hest
-# python run_batch_of_slides.py --task coords --wsi_dir $WSI_DIR --job_dir $JOB_DIR --mag 20 --patch_size 256 --overlap 0
-# python run_batch_of_slides.py --task feat --wsi_dir $WSI_DIR --job_dir $JOB_DIR --patch_encoder uni_v1 --mag 20 --patch_size 256
-# python run_batch_of_slides.py --task feat --wsi_dir $WSI_DIR --job_dir $JOB_DIR --slide_encoder titan --mag 20 --patch_size 512
-from openslide import OpenSlide
-img_paths = sorted(Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_slides').glob('*.tiff'))
-for img_path in img_paths:
-    try:
-        slide = OpenSlide(img_path)
-    except Exception as e:
-        print(f'{sample_id} has error {e}')
+
+

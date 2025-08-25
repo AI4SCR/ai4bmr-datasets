@@ -25,6 +25,7 @@ from tqdm import tqdm
 from trident.patch_encoder_models import encoder_factory
 from ai4bmr_learn.plotting.umap import plot_umap
 
+
 # NOTES: check segmentation of
 # - 1FU3.06.0
 # - 1HRW.06.0 reports mpp=0.0863
@@ -190,7 +191,7 @@ class BEAT:
         cmd2 = f'/usr/bin/time -v vips tiffsave "{intermediate_path}" "{save_path}" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw'
         logger.info(f"Running command: {cmd2}")
         subprocess.run(cmd2, shell=True, check=True)
-        
+
         # Remove intermediate file
         intermediate_path.unlink()
 
@@ -493,8 +494,26 @@ class BEAT:
 
     def create_slide_embedding(self, sample_id: str, coords_version: str, model_name: str = 'uni_v1',
                                batch_size: int = 64, num_workers: int = 12):
+        import h5py
+        import numpy as np
+        from pathlib import Path
+        from ai4bmr_learn.plotting.umap import plot_umap
 
-        embeddings_dir = embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / 'patch' / f'model={model_name}' / coords_version
+        embeddings_dir = Path("/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed_subset/20x_256px_0px_overlap/features_uni_v1/")
+        paths = sorted(embeddings_dir.glob('*.h5'))
+        data = []
+        for path in paths:
+            with h5py.File(path, "r") as f:
+                # print("Keys in file:", list(f.keys()))  # top-level datasets
+                embeddings = f["features"][:]
+            data.append(embeddings)
+        data = np.concat(data, axis=0)
+        print("Shape:", data.shape)
+
+        ax = plot_umap(data=data)
+        ax.figure.tight_layout()
+        ax.figure.savefig(save_path, dpi=300)
+
 
     def create_umap(self, sample_id: str, model_name: str, coords_version: str):
         logger.info(f'Computing UMAP for {sample_id}.')
@@ -517,7 +536,8 @@ class BEAT:
 
     def create_slides_umaps(self):
 
-        embeddings_dir: Path = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed/20x_512px_0px_overlap/slide_features_titan')
+        embeddings_dir: Path = Path(
+            '/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed_subset/20x_512px_0px_overlap/slide_features_titan')
         save_path = embeddings_dir.parent / 'umap-slides.png'
 
         data = []
@@ -534,7 +554,7 @@ class BEAT:
         metadata = pd.read_parquet(metadata_path)
 
         wsi_paths = sorted(self.dataset_dir.rglob('wsi.tiff'))
-        records =[]
+        records = []
         for wsi_path in wsi_paths:
             sample_id = wsi_path.parent.name
 
@@ -573,11 +593,27 @@ class BEAT:
 # sample_id = '1FP2.0E.0'
 # sample_id = '1FU2.06.0'
 # beat = self = BEAT()
+# SAMPLES = {'1HUJ.0D.0',
+#            '1GUG.0M.0',
+#            '1GJC.06.0',
+#            '1FYP.06.0',
+#            '1G5B.06.0',
+#            '1HJ6.06.0',
+#            '1GJA.06.0',
+#            '1GRQ.06.0',
+#            '1HJC.06.0',
+#            '1GNX.06.0',
+#            '1HJ4.06.0',
+#            '1GS6.0H.0',
+#            '1GTL.06.0',}
+# for sample_id in SAMPLES:
+#     beat.prepare_wsi_with_slurm(sample_id=sample_id)
+
 # beat.create_thumbnail('1GUG.0M.0')
 # beat.prepare_clinical()
 # beat.prepare_wsi(sample_id=sample_id)
 
-#model_name='uni_v1'
+# model_name='uni_v1'
 # coords_version='patch_size=448-stride=448-mpp=0.8625-overlap=0.25'
 # beat.create_umap(sample_id=sample_id, model_name=model_name, coords_version=coords_version)
 
@@ -585,4 +621,3 @@ class BEAT:
 # for sample_id in sample_ids:
 #     beat.prepare_wsi_with_slurm(sample_id=sample_id)
 # beat.prepare_data(sample_id=sample_id)
-
