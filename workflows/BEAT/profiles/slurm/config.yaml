@@ -1,0 +1,23 @@
+# Use the Slurm executor plugin
+executor: slurm
+
+# Default resources (used when a rule does not specify them explicitly).
+# These map to SLURM options like --cpus-per-task and --mem.
+default_resources:
+   slurm_account: mrapsoma_prometex
+   slurm_partition: cpu
+   threads: 8
+   mem_mb: 8192
+
+# Maximum number of concurrent jobs in the queue
+jobs: 50
+
+# Send SLURM logs to a central directory and keep them even on success
+slurm-logdir: /work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/snakemake
+slurm-keep-successful-logs: true
+
+# Whether to use conda environments defined in your Snakefile (here turned off)
+use-conda: false
+
+# Print the actual shell commands executed
+printshellcmds: true
