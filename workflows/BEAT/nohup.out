@@ -1,314 +1,0 @@
-Assuming unrestricted shared filesystem usage.
-host: dnagpu007
-Building DAG of jobs...
-Using shell: /usr/bin/bash
-Provided cores: 1 (use --cores to define parallelism)
-Rules claiming more threads will be scaled down.
-Job stats:
-job                  count
------------------  -------
-all                      1
-create_coords           11
-create_embeddings       11
-segment                 11
-total                   34
-
-Select jobs to execute...
-Execute 1 jobs...
-
-[Mon Aug 25 14:45:52 2025]
-localrule segment:
-    input: checkpoints/samples/1GS6.0H.0/wsi.done, checkpoints/samples/1GS6.0H.0/tiff_flags.done
-    output: checkpoints/samples/1GS6.0H.0/segment_hest.done
-    log: logs/samples/1GS6.0H.0/segment_hest.log
-    jobid: 644
-    reason: Missing output files: checkpoints/samples/1GS6.0H.0/segment_hest.done
-    wildcards: sample=1GS6.0H.0, model_name=hest
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 14:45:58.522 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:312 - 🧩 Segmenting 1GS6.0H.0 with hest
-Fetching 1 files:   0%|          | 0/1 [00:00<?, ?it/s]Fetching 1 files: 100%|██████████| 1/1 [00:00<00:00, 1170.29it/s]
-2025-08-25 14:46:00.924 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:337 - 1GS6.0H.0 reports mpp=0.0863
-2025-08-25 14:46:00.924 | INFO     | ai4bmr_learn.utils.device:get_device:20 - CUDA is available. Using GPU.
-2025-08-25 14:46:00.945 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1GS6.0H.0/coords/segment-mpp=4.0-model_name=hest.json
-2025-08-25 14:46:00.945 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 16 items
-Segmenting:   0%|          | 0/1 [00:00<?, ?it/s]Segmenting: 100%|██████████| 1/1 [05:12<00:00, 312.49s/it]Segmenting: 100%|██████████| 1/1 [05:12<00:00, 312.55s/it]
-Touching output file checkpoints/samples/1GS6.0H.0/segment_hest.done.
-[Mon Aug 25 14:51:16 2025]
-Finished jobid: 644 (Rule: segment)
-1 of 34 steps (3%) done
-Execute 1 jobs...
-
-[Mon Aug 25 14:51:16 2025]
-localrule segment:
-    input: checkpoints/samples/1FYP.06.0/wsi.done, checkpoints/samples/1FYP.06.0/tiff_flags.done
-    output: checkpoints/samples/1FYP.06.0/segment_hest.done
-    log: logs/samples/1FYP.06.0/segment_hest.log
-    jobid: 829
-    reason: Missing output files: checkpoints/samples/1FYP.06.0/segment_hest.done
-    wildcards: sample=1FYP.06.0, model_name=hest
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 14:51:22.583 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:312 - 🧩 Segmenting 1FYP.06.0 with hest
-Fetching 1 files:   0%|          | 0/1 [00:00<?, ?it/s]Fetching 1 files: 100%|██████████| 1/1 [00:00<00:00, 1024.00it/s]
-2025-08-25 14:51:25.223 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:337 - 1FYP.06.0 reports mpp=0.0863
-2025-08-25 14:51:25.223 | INFO     | ai4bmr_learn.utils.device:get_device:20 - CUDA is available. Using GPU.
-2025-08-25 14:51:25.285 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1FYP.06.0/coords/segment-mpp=4.0-model_name=hest.json
-2025-08-25 14:51:25.285 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 30 items
-Segmenting:   0%|          | 0/1 [00:00<?, ?it/s]Segmenting: 100%|██████████| 1/1 [09:30<00:00, 570.68s/it]Segmenting: 100%|██████████| 1/1 [09:30<00:00, 570.80s/it]
-Touching output file checkpoints/samples/1FYP.06.0/segment_hest.done.
-[Mon Aug 25 15:00:59 2025]
-Finished jobid: 829 (Rule: segment)
-2 of 34 steps (6%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:00:59 2025]
-localrule create_coords:
-    input: checkpoints/samples/1FYP.06.0/segment_hest.done
-    output: checkpoints/samples/1FYP.06.0/coords_448.done
-    log: logs/samples/1FYP.06.0/create_coords_448.log
-    jobid: 828
-    reason: Missing output files: checkpoints/samples/1FYP.06.0/coords_448.done; Input files updated by another job: checkpoints/samples/1FYP.06.0/segment_hest.done
-    wildcards: sample=1FYP.06.0, patch_size=448
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:01:07.434 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:377 - Create coords version patch_size=448-stride=448-mpp=0.8625-overlap=0.25 for 1FYP.06.0.
-2025-08-25 15:01:07.746 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:388 - 1FYP.06.0 has 1 contours.
-2025-08-25 15:01:07.755 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:394 - 667 coordinates before filtering
-2025-08-25 15:01:07.761 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:397 - Filtering coordinates...
-  0%|          | 0/667 [00:00<?, ?it/s] 38%|███▊      | 253/667 [00:00<00:00, 2521.55it/s] 76%|███████▌  | 506/667 [00:00<00:00, 2311.47it/s]100%|██████████| 667/667 [00:00<00:00, 2447.59it/s]
-Touching output file checkpoints/samples/1FYP.06.0/coords_448.done.
-[Mon Aug 25 15:01:09 2025]
-Finished jobid: 828 (Rule: create_coords)
-3 of 34 steps (9%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:01:09 2025]
-localrule segment:
-    input: checkpoints/samples/1GJC.06.0/wsi.done, checkpoints/samples/1GJC.06.0/tiff_flags.done
-    output: checkpoints/samples/1GJC.06.0/segment_hest.done
-    log: logs/samples/1GJC.06.0/segment_hest.log
-    jobid: 169
-    reason: Missing output files: checkpoints/samples/1GJC.06.0/segment_hest.done
-    wildcards: sample=1GJC.06.0, model_name=hest
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:01:15.722 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:312 - 🧩 Segmenting 1GJC.06.0 with hest
-Fetching 1 files:   0%|          | 0/1 [00:00<?, ?it/s]Fetching 1 files: 100%|██████████| 1/1 [00:00<00:00, 1168.98it/s]
-2025-08-25 15:01:20.471 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:337 - 1GJC.06.0 reports mpp=0.0863
-2025-08-25 15:01:20.471 | INFO     | ai4bmr_learn.utils.device:get_device:20 - CUDA is available. Using GPU.
-2025-08-25 15:01:20.484 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1GJC.06.0/coords/segment-mpp=4.0-model_name=hest.json
-2025-08-25 15:01:20.484 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 36 items
-Segmenting:   0%|          | 0/2 [00:00<?, ?it/s]Segmenting:  50%|█████     | 1/2 [09:09<09:09, 549.74s/it]Segmenting: 100%|██████████| 2/2 [09:09<00:00, 274.97s/it]
-Touching output file checkpoints/samples/1GJC.06.0/segment_hest.done.
-[Mon Aug 25 15:10:32 2025]
-Finished jobid: 169 (Rule: segment)
-4 of 34 steps (12%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:10:32 2025]
-localrule segment:
-    input: checkpoints/samples/1HJC.06.0/wsi.done, checkpoints/samples/1HJC.06.0/tiff_flags.done
-    output: checkpoints/samples/1HJC.06.0/segment_hest.done
-    log: logs/samples/1HJC.06.0/segment_hest.log
-    jobid: 849
-    reason: Missing output files: checkpoints/samples/1HJC.06.0/segment_hest.done
-    wildcards: sample=1HJC.06.0, model_name=hest
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:10:39.631 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:312 - 🧩 Segmenting 1HJC.06.0 with hest
-Fetching 1 files:   0%|          | 0/1 [00:00<?, ?it/s]Fetching 1 files: 100%|██████████| 1/1 [00:00<00:00, 246.55it/s]
-2025-08-25 15:10:44.170 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:337 - 1HJC.06.0 reports mpp=0.0863
-2025-08-25 15:10:44.170 | INFO     | ai4bmr_learn.utils.device:get_device:20 - CUDA is available. Using GPU.
-2025-08-25 15:10:44.192 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1HJC.06.0/coords/segment-mpp=4.0-model_name=hest.json
-2025-08-25 15:10:44.193 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 126 items
-Segmenting:   0%|          | 0/4 [00:00<?, ?it/s]Segmenting:  25%|██▌       | 1/4 [09:36<28:50, 576.85s/it]Segmenting:  50%|█████     | 2/4 [10:36<09:05, 272.61s/it]Segmenting:  75%|███████▌  | 3/4 [10:36<02:28, 148.30s/it]Segmenting: 100%|██████████| 4/4 [10:37<00:00, 89.88s/it] Segmenting: 100%|██████████| 4/4 [10:37<00:00, 159.32s/it]
-Touching output file checkpoints/samples/1HJC.06.0/segment_hest.done.
-[Mon Aug 25 15:21:24 2025]
-Finished jobid: 849 (Rule: segment)
-5 of 34 steps (15%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:21:24 2025]
-localrule create_coords:
-    input: checkpoints/samples/1HJC.06.0/segment_hest.done
-    output: checkpoints/samples/1HJC.06.0/coords_448.done
-    log: logs/samples/1HJC.06.0/create_coords_448.log
-    jobid: 848
-    reason: Missing output files: checkpoints/samples/1HJC.06.0/coords_448.done; Input files updated by another job: checkpoints/samples/1HJC.06.0/segment_hest.done
-    wildcards: sample=1HJC.06.0, patch_size=448
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:21:31.800 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:377 - Create coords version patch_size=448-stride=448-mpp=0.8625-overlap=0.25 for 1HJC.06.0.
-2025-08-25 15:21:31.947 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:388 - 1HJC.06.0 has 3 contours.
-2025-08-25 15:21:31.988 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:394 - 3384 coordinates before filtering
-2025-08-25 15:21:32.013 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:397 - Filtering coordinates...
-  0%|          | 0/3384 [00:00<?, ?it/s] 14%|█▍        | 466/3384 [00:00<00:00, 4656.11it/s] 28%|██▊       | 932/3384 [00:00<00:00, 3360.91it/s] 38%|███▊      | 1290/3384 [00:00<00:00, 3101.25it/s] 48%|████▊     | 1611/3384 [00:00<00:00, 2897.37it/s] 58%|█████▊    | 1962/3384 [00:00<00:00, 3080.34it/s] 70%|███████   | 2374/3384 [00:00<00:00, 3392.43it/s] 84%|████████▍ | 2840/3384 [00:00<00:00, 3771.65it/s]100%|█████████▉| 3371/3384 [00:00<00:00, 4232.33it/s]100%|██████████| 3384/3384 [00:00<00:00, 3665.81it/s]
-Touching output file checkpoints/samples/1HJC.06.0/coords_448.done.
-[Mon Aug 25 15:21:34 2025]
-Finished jobid: 848 (Rule: create_coords)
-6 of 34 steps (18%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:21:34 2025]
-localrule segment:
-    input: checkpoints/samples/1GRQ.06.0/wsi.done, checkpoints/samples/1GRQ.06.0/tiff_flags.done
-    output: checkpoints/samples/1GRQ.06.0/segment_hest.done
-    log: logs/samples/1GRQ.06.0/segment_hest.log
-    jobid: 709
-    reason: Missing output files: checkpoints/samples/1GRQ.06.0/segment_hest.done
-    wildcards: sample=1GRQ.06.0, model_name=hest
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:21:40.684 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:312 - 🧩 Segmenting 1GRQ.06.0 with hest
-Fetching 1 files:   0%|          | 0/1 [00:00<?, ?it/s]Fetching 1 files: 100%|██████████| 1/1 [00:00<00:00, 36.37it/s]
-2025-08-25 15:21:50.371 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:337 - 1GRQ.06.0 reports mpp=0.0863
-2025-08-25 15:21:50.371 | INFO     | ai4bmr_learn.utils.device:get_device:20 - CUDA is available. Using GPU.
-2025-08-25 15:21:50.386 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1GRQ.06.0/coords/segment-mpp=4.0-model_name=hest.json
-2025-08-25 15:21:50.387 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 16 items
-Segmenting:   0%|          | 0/1 [00:00<?, ?it/s]Segmenting: 100%|██████████| 1/1 [05:00<00:00, 300.81s/it]Segmenting: 100%|██████████| 1/1 [05:00<00:00, 300.90s/it]
-Touching output file checkpoints/samples/1GRQ.06.0/segment_hest.done.
-[Mon Aug 25 15:26:54 2025]
-Finished jobid: 709 (Rule: segment)
-7 of 34 steps (21%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:26:55 2025]
-localrule create_coords:
-    input: checkpoints/samples/1GRQ.06.0/segment_hest.done
-    output: checkpoints/samples/1GRQ.06.0/coords_448.done
-    log: logs/samples/1GRQ.06.0/create_coords_448.log
-    jobid: 708
-    reason: Missing output files: checkpoints/samples/1GRQ.06.0/coords_448.done; Input files updated by another job: checkpoints/samples/1GRQ.06.0/segment_hest.done
-    wildcards: sample=1GRQ.06.0, patch_size=448
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:27:40.798 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:377 - Create coords version patch_size=448-stride=448-mpp=0.8625-overlap=0.25 for 1GRQ.06.0.
-2025-08-25 15:27:41.040 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:388 - 1GRQ.06.0 has 1 contours.
-2025-08-25 15:27:41.112 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:394 - 304 coordinates before filtering
-2025-08-25 15:27:41.116 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:397 - Filtering coordinates...
-  0%|          | 0/304 [00:00<?, ?it/s] 79%|███████▉  | 241/304 [00:00<00:00, 2404.10it/s]100%|██████████| 304/304 [00:00<00:00, 2518.40it/s]
-Touching output file checkpoints/samples/1GRQ.06.0/coords_448.done.
-[Mon Aug 25 15:27:42 2025]
-Finished jobid: 708 (Rule: create_coords)
-8 of 34 steps (24%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:27:42 2025]
-localrule create_embeddings:
-    input: checkpoints/samples/1GRQ.06.0/coords_448.done
-    output: checkpoints/samples/1GRQ.06.0/embeddings.done
-    log: logs/samples/1GRQ.06.0/create_embeddings.log
-    jobid: 707
-    reason: Missing output files: checkpoints/samples/1GRQ.06.0/embeddings.done; Input files updated by another job: checkpoints/samples/1GRQ.06.0/coords_448.done
-    wildcards: sample=1GRQ.06.0
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:27:49.146 | INFO     | ai4bmr_datasets.datasets.BEAT:create_patch_embeddings:454 - Computing embeddings for 1GRQ.06.0
-2025-08-25 15:28:03.638 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1GRQ.06.0/coords/patch_size=448-stride=448-mpp=0.8625-overlap=0.25.json
-2025-08-25 15:28:03.639 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 169 items
-  0%|          | 0/3 [00:00<?, ?it/s] 33%|███▎      | 1/3 [00:59<01:59, 59.82s/it] 67%|██████▋   | 2/3 [00:59<00:24, 24.72s/it]100%|██████████| 3/3 [01:00<00:00, 20.05s/it]
-Touching output file checkpoints/samples/1GRQ.06.0/embeddings.done.
-[Mon Aug 25 15:29:06 2025]
-Finished jobid: 707 (Rule: create_embeddings)
-9 of 34 steps (26%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:29:06 2025]
-localrule create_embeddings:
-    input: checkpoints/samples/1FYP.06.0/coords_448.done
-    output: checkpoints/samples/1FYP.06.0/embeddings.done
-    log: logs/samples/1FYP.06.0/create_embeddings.log
-    jobid: 827
-    reason: Missing output files: checkpoints/samples/1FYP.06.0/embeddings.done; Input files updated by another job: checkpoints/samples/1FYP.06.0/coords_448.done
-    wildcards: sample=1FYP.06.0
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:29:13.186 | INFO     | ai4bmr_datasets.datasets.BEAT:create_patch_embeddings:454 - Computing embeddings for 1FYP.06.0
-2025-08-25 15:29:24.421 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1FYP.06.0/coords/patch_size=448-stride=448-mpp=0.8625-overlap=0.25.json
-2025-08-25 15:29:24.442 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 270 items
-  0%|          | 0/5 [00:00<?, ?it/s] 20%|██        | 1/5 [01:19<05:19, 79.97s/it] 40%|████      | 2/5 [01:20<01:39, 33.02s/it] 60%|██████    | 3/5 [01:20<00:36, 18.01s/it] 80%|████████  | 4/5 [01:20<00:10, 10.96s/it]100%|██████████| 5/5 [01:20<00:00, 16.11s/it]
-Touching output file checkpoints/samples/1FYP.06.0/embeddings.done.
-[Mon Aug 25 15:30:47 2025]
-Finished jobid: 827 (Rule: create_embeddings)
-10 of 34 steps (29%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:30:47 2025]
-localrule create_embeddings:
-    input: checkpoints/samples/1HJC.06.0/coords_448.done
-    output: checkpoints/samples/1HJC.06.0/embeddings.done
-    log: logs/samples/1HJC.06.0/create_embeddings.log
-    jobid: 847
-    reason: Missing output files: checkpoints/samples/1HJC.06.0/embeddings.done; Input files updated by another job: checkpoints/samples/1HJC.06.0/coords_448.done
-    wildcards: sample=1HJC.06.0
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:30:54.014 | INFO     | ai4bmr_datasets.datasets.BEAT:create_patch_embeddings:454 - Computing embeddings for 1HJC.06.0
-2025-08-25 15:31:04.958 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1HJC.06.0/coords/patch_size=448-stride=448-mpp=0.8625-overlap=0.25.json
-2025-08-25 15:31:04.970 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 315 items
-  0%|          | 0/5 [00:00<?, ?it/s] 20%|██        | 1/5 [01:19<05:16, 79.03s/it] 40%|████      | 2/5 [01:19<01:37, 32.65s/it] 60%|██████    | 3/5 [01:19<00:35, 17.81s/it] 80%|████████  | 4/5 [01:19<00:10, 10.84s/it]100%|██████████| 5/5 [01:19<00:00,  6.98s/it]100%|██████████| 5/5 [01:19<00:00, 15.95s/it]
-Touching output file checkpoints/samples/1HJC.06.0/embeddings.done.
-[Mon Aug 25 15:32:27 2025]
-Finished jobid: 847 (Rule: create_embeddings)
-11 of 34 steps (32%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:32:27 2025]
-localrule create_coords:
-    input: checkpoints/samples/1GJC.06.0/segment_hest.done
-    output: checkpoints/samples/1GJC.06.0/coords_448.done
-    log: logs/samples/1GJC.06.0/create_coords_448.log
-    jobid: 168
-    reason: Missing output files: checkpoints/samples/1GJC.06.0/coords_448.done; Input files updated by another job: checkpoints/samples/1GJC.06.0/segment_hest.done
-    wildcards: sample=1GJC.06.0, patch_size=448
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:32:33.775 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:377 - Create coords version patch_size=448-stride=448-mpp=0.8625-overlap=0.25 for 1GJC.06.0.
-2025-08-25 15:32:33.853 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:388 - 1GJC.06.0 has 2 contours.
-2025-08-25 15:32:34.540 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:394 - 696 coordinates before filtering
-2025-08-25 15:32:34.547 | INFO     | ai4bmr_datasets.datasets.BEAT:create_coords:397 - Filtering coordinates...
-  0%|          | 0/696 [00:00<?, ?it/s] 41%|████      | 282/696 [00:00<00:00, 2812.75it/s] 94%|█████████▎| 651/696 [00:00<00:00, 3325.75it/s]100%|██████████| 696/696 [00:00<00:00, 3345.51it/s]
-Touching output file checkpoints/samples/1GJC.06.0/coords_448.done.
-[Mon Aug 25 15:32:35 2025]
-Finished jobid: 168 (Rule: create_coords)
-12 of 34 steps (35%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:32:35 2025]
-localrule create_embeddings:
-    input: checkpoints/samples/1GJC.06.0/coords_448.done
-    output: checkpoints/samples/1GJC.06.0/embeddings.done
-    log: logs/samples/1GJC.06.0/create_embeddings.log
-    jobid: 167
-    reason: Missing output files: checkpoints/samples/1GJC.06.0/embeddings.done; Input files updated by another job: checkpoints/samples/1GJC.06.0/coords_448.done
-    wildcards: sample=1GJC.06.0
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:32:41.729 | INFO     | ai4bmr_datasets.datasets.BEAT:create_patch_embeddings:454 - Computing embeddings for 1GJC.06.0
-2025-08-25 15:32:53.233 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1GJC.06.0/coords/patch_size=448-stride=448-mpp=0.8625-overlap=0.25.json
-2025-08-25 15:32:53.235 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 163 items
-  0%|          | 0/3 [00:00<?, ?it/s] 33%|███▎      | 1/3 [01:11<02:22, 71.03s/it] 67%|██████▋   | 2/3 [01:11<00:29, 29.46s/it]100%|██████████| 3/3 [01:11<00:00, 23.85s/it]
-Touching output file checkpoints/samples/1GJC.06.0/embeddings.done.
-[Mon Aug 25 15:34:07 2025]
-Finished jobid: 167 (Rule: create_embeddings)
-13 of 34 steps (38%) done
-Execute 1 jobs...
-
-[Mon Aug 25 15:34:07 2025]
-localrule segment:
-    input: checkpoints/samples/1G5B.06.0/wsi.done, checkpoints/samples/1G5B.06.0/tiff_flags.done
-    output: checkpoints/samples/1G5B.06.0/segment_hest.done
-    log: logs/samples/1G5B.06.0/segment_hest.log
-    jobid: 614
-    reason: Missing output files: checkpoints/samples/1G5B.06.0/segment_hest.done
-    wildcards: sample=1G5B.06.0, model_name=hest
-    resources: tmpdir=/tmp/55217260
-Select jobs to execute...
-2025-08-25 15:34:13.172 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:312 - 🧩 Segmenting 1G5B.06.0 with hest
-Fetching 1 files:   0%|          | 0/1 [00:00<?, ?it/s]Fetching 1 files: 100%|██████████| 1/1 [00:00<00:00, 37.49it/s]
-2025-08-25 15:34:20.557 | INFO     | ai4bmr_datasets.datasets.BEAT:segment:337 - 1G5B.06.0 reports mpp=0.0863
-2025-08-25 15:34:20.558 | INFO     | ai4bmr_learn.utils.device:get_device:20 - CUDA is available. Using GPU.
-2025-08-25 15:34:20.581 | INFO     | ai4bmr_learn.datasets.items:setup:112 - Setting up SlidePatches dataset from items_path: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat/1G5B.06.0/coords/segment-mpp=4.0-model_name=hest.json
-2025-08-25 15:34:20.581 | INFO     | ai4bmr_learn.datasets.items:setup:118 - Loaded 16 items
-Segmenting:   0%|          | 0/1 [00:00<?, ?it/s]

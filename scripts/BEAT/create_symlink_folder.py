@@ -3,10 +3,11 @@ from pathlib import Path
 import os
 
 # Base dataset directory
-base_dir = Path("/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/beat")
+base_dir = Path("/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed/datasets/beat")
 
 # Target directory where wsi_slides should be created
-target_dir = Path("/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets")
+target_dir = Path("/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed/datasets/beat-trident/")
+target_dir.mkdir(parents=True, exist_ok=True)
 symlink_dir = target_dir / "wsi_slides"
 symlink_dir.mkdir(exist_ok=True)
 

@@ -2,36 +2,17 @@ from ai4bmr_datasets.datasets.BEAT import BEAT
 
 # Initialize the BEAT class
 beat = BEAT()
-beat.prepare_clinical()
-SAMPLES = set(sorted(beat.get_sample_ids())[3:10])
+beat.prepare_metadata()
 SAMPLES = set(sorted(beat.get_sample_ids()))
-SAMPLES = SAMPLES - {'1G4X.06.0', '1GTL.06.0', '1H1Q.0F.0', '1GEG.0G.0', '1H1Q.0F.0'}
-SAMPLES = SAMPLES - {'1GTL.06.0'}
-# SAMPLES = ['1G4X.06.0']
-# SAMPLES = SAMPLES - {'1HUJ.0D.0',
-#                      '1GUG.0M.0',
-#                      '1GJC.06.0',
-#                      '1FYP.06.0',
-#                      '1G5B.06.0',
-#                      '1HJ6.06.0',
-#                      '1GJA.06.0',
-#                      '1GRQ.06.0',
-#                      '1HJC.06.0',
-#                      '1GNX.06.0',
-#                      '1HJ4.06.0',
-#                      '1GS6.0H.0',
-#                      '1GTL.06.0',
-#                      }  # LZWDecode: LZWDecode: Strip 4294967295 not terminated with EOI code.
-
 SEGMENTATION_MODELS = ['hest', 'grandqc']
 
 rule all:
     input:
         "checkpoints/tools.done",
         # "checkpoints/samples/{sample}/wsi.done",
-        expand("checkpoints/samples/{sample}/embeddings.done", sample=SAMPLES),
         # expand("checkpoints/samples/{sample}/segment_{model_name}.done", sample=SAMPLES, model_name=SEGMENTATION_MODELS),
         # expand("checkpoints/samples/{sample}/coords_{patch_size}.done", sample=SAMPLES, patch_size=[448])
+        expand("checkpoints/samples/{sample}/embeddings.done", sample=SAMPLES),
 
 rule prepare_tools:
     output:

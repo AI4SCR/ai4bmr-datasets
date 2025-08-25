@@ -54,7 +54,7 @@ class PCa(BaseIMCDataset):
                 self.base_dir / "01_raw" / "metadata" / "ROI_matching_blockID.xlsx"
         )
         self.raw_tma_annotations_path = (
-                self.base_dir / "01_raw" / "metadata" / "tma-annotations-v2.xlsx"
+                self.base_dir / "01_raw" / "metadata" / "tma-annotations-v3.xlsx"
         )
 
         self.raw_tma_tidy_path = self.base_dir / "01_raw" / "metadata" / "TMA_tidy.txt"
@@ -527,7 +527,7 @@ class PCa(BaseIMCDataset):
         mapping = mapping[~filter_]
 
         sample_ids = set([i.stem for i in (self.raw_dir / 'acquisitions').glob('*.tiff')])
-        file_name_to_sample_id = {re.sub(r'\d+$', '', i) + ".tiff": i for i in sample_ids}
+        file_name_to_sample_id = {re.sub(r'_\d+$', '', i) + ".tiff": i for i in sample_ids}
         assert len(file_name_to_sample_id) == len(sample_ids)
         assert set(mapping.file_name_tidy) == set(file_name_to_sample_id.keys())
 
@@ -942,11 +942,13 @@ class PCa(BaseIMCDataset):
             "glandular_atrophy_pin",
             "cribriform",
         ]
+
+        df = df.convert_dtypes()
         for col in tidy_col_vals:
             df[col] = df[col].astype(str).map(tidy_name)
-
+        df = df.replace({'na': 'nan'})
         # note: ensure all values are in the expected set of values
-        assert df[tidy_col_vals].isin([
+        vals = [
             # assessment not possible
             'no_tissue',
             'too_much_loss',
@@ -959,13 +961,15 @@ class PCa(BaseIMCDataset):
             'unclear_annotation',
             # valid cores
             'nan',
+            # 'na',
             'no_tumor',
             'yes',
             'no',
             '3',
             '4',
             '5',
-        ]).all().all()
+        ]
+        assert df[tidy_col_vals].isin(vals).all().all()
 
         filter_ = df.gs_pat_1.isin(
             [
@@ -1080,6 +1084,10 @@ class PCa(BaseIMCDataset):
         ]
 
         df = df.astype({k: "category" for k in cat_cols})
-        samples = pd.concat([samples, df], axis=1)
+
+        # NOTE: with this we remove all samples for which we do not have Eva's annotations
+        samples = pd.concat([samples, df], axis=1, join='inner')
+        # samples = pd.concat([samples, df], axis=1)
+        assert 'nan' not in samples.index
         samples = samples.convert_dtypes()
         samples.to_parquet(self.clinical_metadata_path, engine="fastparquet")

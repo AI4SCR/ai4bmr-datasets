@@ -7,6 +7,7 @@ import geopandas as gpd
 import numpy as np
 import openslide
 import pandas as pd
+import tifffile
 import torch
 from ai4bmr_core.utils.tidy import tidy_name
 from ai4bmr_learn.data_models.Coordinate import SlideCoordinate
@@ -24,15 +25,6 @@ from torchvision.transforms import InterpolationMode, v2
 from tqdm import tqdm
 from trident.patch_encoder_models import encoder_factory
 from ai4bmr_learn.plotting.umap import plot_umap
-
-
-# NOTES: check segmentation of
-# - 1FU3.06.0
-# - 1HRW.06.0 reports mpp=0.0863
-# - 1G59.06.0 reports mpp=0.0863
-# - 1G3S.06.0 reports mpp=0.0863
-# - 1GP0.06.0 reports mpp=0.0863
-
 
 class BEAT:
     INVALID_SAMPLE_IDS = {
@@ -73,7 +65,7 @@ class BEAT:
         install_cmd = textwrap.dedent(install_cmd).strip()
         subprocess.run(install_cmd, shell=True, check=True)
 
-    def prepare_clinical(self):
+    def prepare_metadata(self):
         """Questions
         Is this n=12 or n=14? I assume -14 can be ignored
         2024-05-24_n.1 - n.14/malexan3-24-05-2024-012-14.czi
@@ -140,20 +132,20 @@ class BEAT:
         metadata = metadata.convert_dtypes().astype({'wsi_path': str})
         metadata = metadata.set_index('sample_id')
 
-        save_path = self.processed_dir / 'metadata' / 'clinical.parquet'
+        save_path = self.dataset_dir / 'metadata.parquet'
         save_path.parent.mkdir(parents=True, exist_ok=True)
         metadata.to_parquet(save_path, engine='fastparquet')
 
-    def get_clinical_metadata(self):
-        return pd.read_parquet(self.processed_dir / 'metadata' / 'clinical.parquet', engine='fastparquet')
+    def get_metadata(self):
+        return pd.read_parquet(self.dataset_dir / 'metadata.parquet', engine='fastparquet')
 
     def get_sample_ids(self):
-        clinical = self.get_clinical_metadata()
+        clinical = self.get_metadata()
         sample_ids = set(clinical.index.tolist()) - self.INVALID_SAMPLE_IDS
         return sample_ids
 
     def get_wsi_path(self, sample_id: str):
-        clinical = self.get_clinical_metadata()
+        clinical = self.get_metadata()
         wsi_path = clinical[clinical.index == sample_id].wsi_path.item()
         assert Path(wsi_path).exists()
         return wsi_path
@@ -515,7 +507,7 @@ class BEAT:
         ax.figure.savefig(save_path, dpi=300)
 
 
-    def create_umap(self, sample_id: str, model_name: str, coords_version: str):
+    def create_wsi_umap(self, sample_id: str, model_name: str, coords_version: str):
         logger.info(f'Computing UMAP for {sample_id}.')
 
         embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / 'patch' / f'model={model_name}' / coords_version
@@ -534,7 +526,7 @@ class BEAT:
         ax.figure.tight_layout()
         ax.figure.savefig(save_path, dpi=300)
 
-    def create_slides_umaps(self):
+    def create_slides_umap(self):
 
         embeddings_dir: Path = Path(
             '/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed_subset/20x_512px_0px_overlap/slide_features_titan')
@@ -549,29 +541,39 @@ class BEAT:
         ax.figure.tight_layout()
         ax.figure.savefig(save_path, dpi=300)
 
-    def add_mpp_to_metadata(self):
-        metadata_path = self.processed_dir / 'metadata' / 'clinical.parquet'
-        metadata = pd.read_parquet(metadata_path)
+    def add_stats_to_metadata(self):
 
-        wsi_paths = sorted(self.dataset_dir.rglob('wsi.tiff'))
-        records = []
-        for wsi_path in wsi_paths:
-            sample_id = wsi_path.parent.name
+        sample_dirs = sorted([i for i in self.dataset_dir.iterdir() if i.is_dir()])
+        stats = []
+        for sample_dir in sample_dirs:
+            sample_id = sample_dir.name
 
             if sample_id in self.INVALID_SAMPLE_IDS:
                 continue
 
-            slide = OpenSlide(wsi_path)
+            slide = OpenSlide(sample_dir / 'wsi.tiff')
+            width, height = slide.dimensions
             mpp = get_mpp(slide=slide)
-            records.append({'sample_id': sample_id, 'mpp': mpp})
+            record = {'sample_id': sample_id, 'width': width, 'height': height, 'mpp': mpp}
 
-        records = pd.DataFrame(records).set_index('sample_id')
-        metadata = pd.concat([metadata, records], axis=1)
+            for patch_size in [448]:
+                with open(sample_dir / 'coords' / f'patch_size={patch_size}-stride={patch_size}-mpp=0.8625-overlap=0.25.json') as f:
+                    coords = json.load(f)
+                    record[f'num_coords_patch_size={patch_size}'] = len(coords)
+
+            stats.append(record)
+
+        stats = pd.DataFrame(stats)
+        stats = stats.set_index('sample_id')
+
+        metadata_path = self.dataset_dir / 'metadata.parquet'
+        metadata = pd.read_parquet(metadata_path)
+        metadata = pd.concat([metadata, stats], axis=1)
         metadata.to_parquet(metadata_path)
 
     def prepare_data(self, sample_id: str, force: bool = False):
         self.prepare_tools()
-        self.prepare_clinical()
+        self.prepare_metadata()
 
         self.prepare_wsi(sample_id=sample_id, force=force)
         self.post_process_tiff_flags(sample_id=sample_id)
@@ -592,32 +594,4 @@ class BEAT:
 
 # sample_id = '1FP2.0E.0'
 # sample_id = '1FU2.06.0'
-# beat = self = BEAT()
-# SAMPLES = {'1HUJ.0D.0',
-#            '1GUG.0M.0',
-#            '1GJC.06.0',
-#            '1FYP.06.0',
-#            '1G5B.06.0',
-#            '1HJ6.06.0',
-#            '1GJA.06.0',
-#            '1GRQ.06.0',
-#            '1HJC.06.0',
-#            '1GNX.06.0',
-#            '1HJ4.06.0',
-#            '1GS6.0H.0',
-#            '1GTL.06.0',}
-# for sample_id in SAMPLES:
-#     beat.prepare_wsi_with_slurm(sample_id=sample_id)
-
-# beat.create_thumbnail('1GUG.0M.0')
-# beat.prepare_clinical()
-# beat.prepare_wsi(sample_id=sample_id)
-
-# model_name='uni_v1'
-# coords_version='patch_size=448-stride=448-mpp=0.8625-overlap=0.25'
-# beat.create_umap(sample_id=sample_id, model_name=model_name, coords_version=coords_version)
-
-# sample_ids = beat.get_sample_ids()
-# for sample_id in sample_ids:
-#     beat.prepare_wsi_with_slurm(sample_id=sample_id)
-# beat.prepare_data(sample_id=sample_id)
+beat = self = BEAT()
