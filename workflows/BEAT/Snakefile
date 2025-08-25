@@ -5,7 +5,8 @@ beat = BEAT()
 beat.prepare_clinical()
 SAMPLES = set(sorted(beat.get_sample_ids())[3:10])
 SAMPLES = set(sorted(beat.get_sample_ids()))
-# SAMPLES = SAMPLES - {'1G4X.06.0', '1GTL.06.0', '1H1Q.0F.0', '1GEG.0G.0', '1H1Q.0F.0'}
+SAMPLES = SAMPLES - {'1G4X.06.0', '1GTL.06.0', '1H1Q.0F.0', '1GEG.0G.0', '1H1Q.0F.0'}
+SAMPLES = SAMPLES - {'1GTL.06.0'}
 # SAMPLES = ['1G4X.06.0']
 # SAMPLES = SAMPLES - {'1HUJ.0D.0',
 #                      '1GUG.0M.0',
