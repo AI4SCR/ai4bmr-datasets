@@ -234,7 +234,7 @@ class BaseIMCDataset:
             sample_ids = reduce(lambda x, y: x.intersection(y) if y else x, list_of_sets, ids_from_clinical)
             sample_ids = list(sample_ids)
 
-            self.sample_ids = sample_ids
+            self.sample_ids = sorted(sample_ids)
             self.clinical = clinical.loc[sample_ids]
             self.images = {k: v for k, v in images.items() if k in sample_ids}
             self.masks = {k: v for k, v in masks.items() if k in sample_ids}
@@ -259,7 +259,7 @@ class BaseIMCDataset:
             self.metadata = metadata.loc[sample_ids] if metadata is not None else None
 
         else:
-            self.sample_ids = clinical.index.to_list()
+            self.sample_ids = sorted(clinical.index.to_list())
             self.clinical = clinical
             self.images = images
             self.masks = masks
@@ -487,7 +487,7 @@ class BaseIMCDataset:
         save_spatial_dir = self.spatial_dir / version_name
 
         if (save_intensity_dir.exists() or save_spatial_dir.exists()) and not force:
-            logger.error(
+            logger.warning(
                 f"Features directory {save_intensity_dir} already exists. Set force=True to overwrite to recompute.")
             return
 

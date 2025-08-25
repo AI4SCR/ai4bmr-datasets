@@ -6,3 +6,13 @@ def test_PCa():
     # ds.prepare_data()
     ds.setup()
     ds.images.keys()
+
+    len(ds.sample_ids)
+    sample_id = ds.sample_ids[0]
+    image = ds.images[sample_id]
+    ds.metadata.shape
+    ds.intensity.shape
+    ds.metadata.columns
+    ds.clinical.notna().sum()
+
+    list(filter(lambda x: '240208_IIIBL_X4Y6_55'.lower() in x, ds.sample_ids))

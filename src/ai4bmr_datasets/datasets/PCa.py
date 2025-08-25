@@ -5,7 +5,6 @@ from pathlib import Path
 import pandas as pd
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 
-
 class PCa(BaseIMCDataset):
     name = "PCa"
     id = "PCa"
@@ -528,7 +527,7 @@ class PCa(BaseIMCDataset):
         mapping = mapping[~filter_]
 
         sample_ids = set([i.stem for i in (self.raw_dir / 'acquisitions').glob('*.tiff')])
-        file_name_to_sample_id = {f"{re.sub(r'_\d+$', '', i)}.tiff": i for i in sample_ids}
+        file_name_to_sample_id = {re.sub(r'\d+$', '', i) + ".tiff": i for i in sample_ids}
         assert len(file_name_to_sample_id) == len(sample_ids)
         assert set(mapping.file_name_tidy) == set(file_name_to_sample_id.keys())
 
@@ -633,8 +632,6 @@ class PCa(BaseIMCDataset):
         This computes the metadata for each object in the dataset. The results can still contain objects that have been
         removed after the clustering, i.e. all elements that where used in the clustering are included in the metadata.
         """
-        if self.clinical_metadata_path.exists():
-            return
 
         # %% read metadata
         roi_match_blockId = pd.read_excel(self.raw_clinical_metadata_path, dtype=str)

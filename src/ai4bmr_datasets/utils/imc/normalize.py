@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def normalize(data: pd.DataFrame, scale: str = 'minmax', exclude_zeros: bool = False):
+def normalize(data: pd.DataFrame, scale: str | None = 'minmax', exclude_zeros: bool = False):
     """
     Normalize a DataFrame of numerical values using arcsinh transformation
     followed by either min-max or standard scaling.
@@ -51,6 +51,8 @@ def normalize(data: pd.DataFrame, scale: str = 'minmax', exclude_zeros: bool = F
     elif scale == "standard":
         from sklearn.preprocessing import StandardScaler
         x = StandardScaler().fit_transform(x)
+    elif scale is None:
+        pass
     else:
         raise NotImplementedError()
 
