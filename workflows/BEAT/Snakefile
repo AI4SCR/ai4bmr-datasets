@@ -5,8 +5,19 @@ beat = BEAT()
 beat.prepare_clinical()
 SAMPLES = set(sorted(beat.get_sample_ids())[3:10])
 SAMPLES = set(sorted(beat.get_sample_ids()))
-SAMPLES = SAMPLES - {'1G4X.06.0', '1GTL.06.0', '1H1Q.0F.0', '1GEG.0G.0', '1H1Q.0F.0'}
-
+# SAMPLES = SAMPLES - {'1G4X.06.0', '1GTL.06.0', '1H1Q.0F.0', '1GEG.0G.0', '1H1Q.0F.0'}
+# SAMPLES = ['1G4X.06.0']
+SAMPLES = SAMPLES - {'1HUJ.0D.0',
+                     '1GUG.0M.0',
+                     '1GJC.06.0',
+                     '1FYP.06.0',
+                     '1G5B.06.0',
+                     '1HJ6.06.0',
+                     '1GJA.06.0',
+                     '1GRQ.06.0',
+                     '1HJC.06.0',
+                     '1GNX.06.0'
+                     }  # LZWDecode: LZWDecode: Strip 4294967295 not terminated with EOI code.
 SEGMENTATION_MODELS = ['hest', 'grandqc']
 
 rule all:
@@ -36,6 +47,18 @@ rule prepare_wsi:
     run:
         beat.prepare_wsi(sample_id=wildcards.sample)
 
+rule create_thumbnail:
+    input:
+        "checkpoints/samples/{sample}/wsi.done",
+    output:
+        touch("checkpoints/samples/{sample}/thumbnail.done")
+    params:
+        sample_id="{sample}"
+    log:
+        "logs/samples/{sample}/create_thumbnail.log"
+    run:
+        beat.create_thumbnail(sample_id=wildcards.sample)
+
 rule post_process_tiff_flags:
     input:
         "checkpoints/samples/{sample}/wsi.done"
@@ -48,23 +71,21 @@ rule post_process_tiff_flags:
     run:
         beat.post_process_tiff_flags(sample_id=wildcards.sample)
 
-rule create_thumbnail:
-    input:
-        "checkpoints/samples/{sample}/wsi.done",
-        "checkpoints/samples/{sample}/tiff_flags.done"
-    output:
-        touch("checkpoints/samples/{sample}/thumbnail.done")
-    params:
-        sample_id="{sample}"
-    log:
-        "logs/samples/{sample}/create_thumbnail.log"
-    run:
-        beat.create_thumbnail(sample_id=wildcards.sample)
+# rule update_metadata:
+#     input:
+#         "checkpoints/samples/{sample}/wsi.done",
+#         "checkpoints/samples/{sample}/tiff_flags.done"
+#     output:
+#         touch("checkpoints/update_metadata.done")
+#     log:
+#         "logs/update_metadata.log"
+#     run:
+#         beat.add_mpp_to_metadata()
 
 rule segment:
     input:
         "checkpoints/samples/{sample}/wsi.done",
-        "checkpoints/samples/{sample}/tiff_flags.done"
+        "checkpoints/samples/{sample}/tiff_flags.done",
     output:
         touch("checkpoints/samples/{sample}/segment_{model_name}.done")
     params:

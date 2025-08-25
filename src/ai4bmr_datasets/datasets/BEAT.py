@@ -28,13 +28,18 @@ from ai4bmr_learn.plotting.umap import plot_umap
 # NOTES: check segmentation of
 # - 1FU3.06.0
 # - 1HRW.06.0 reports mpp=0.0863
-# - 1GUG.0M.1 reports mpp=0.0863
 # - 1G59.06.0 reports mpp=0.0863
 # - 1G3S.06.0 reports mpp=0.0863
 # - 1GP0.06.0 reports mpp=0.0863
 
 
 class BEAT:
+    INVALID_SAMPLE_IDS = {
+        '1GUG.0M.2',  # barcode
+        '1GVQ.06.2',  # barcode
+        '1GUG.0M.0',  # mpp_x != mpp_y
+        '1GVQ.06.1',  # mpp_x != mpp_y
+    }
 
     def __init__(self, base_dir: Path | None = None):
         self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat')
@@ -143,7 +148,8 @@ class BEAT:
 
     def get_sample_ids(self):
         clinical = self.get_clinical_metadata()
-        return clinical.index.tolist()
+        sample_ids = set(clinical.index.tolist()) - self.INVALID_SAMPLE_IDS
+        return sample_ids
 
     def get_wsi_path(self, sample_id: str):
         clinical = self.get_clinical_metadata()
@@ -153,7 +159,7 @@ class BEAT:
 
     def prepare_wsi(self, sample_id: str, force: bool = False):
 
-        if sample_id in ['1GUG.0M.2',  '1GVQ.06.2']:
+        if sample_id in self.INVALID_SAMPLE_IDS:
             return
 
         dataset_dir = self.dataset_dir
@@ -190,7 +196,7 @@ class BEAT:
 
     def prepare_wsi_with_slurm(self, sample_id: str, force: bool = False):
 
-        if sample_id in ['1GUG.0M.2',  '1GVQ.06.2']:
+        if sample_id in self.INVALID_SAMPLE_IDS:
             return
 
         dataset_dir = self.dataset_dir
@@ -509,6 +515,40 @@ class BEAT:
         ax.figure.tight_layout()
         ax.figure.savefig(save_path, dpi=300)
 
+    def create_slides_umaps(self):
+
+        embeddings_dir: Path = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed/20x_512px_0px_overlap/slide_features_titan')
+        save_path = embeddings_dir.parent / 'umap-slides.png'
+
+        data = []
+        for path in sorted(embeddings_dir.glob('*.pt')):
+            data.append(torch.load(path))
+        data = torch.cat(data).cpu()
+
+        ax = plot_umap(data=data)
+        ax.figure.tight_layout()
+        ax.figure.savefig(save_path, dpi=300)
+
+    def add_mpp_to_metadata(self):
+        metadata_path = self.processed_dir / 'metadata' / 'clinical.parquet'
+        metadata = pd.read_parquet(metadata_path)
+
+        wsi_paths = sorted(self.dataset_dir.rglob('wsi.tiff'))
+        records =[]
+        for wsi_path in wsi_paths:
+            sample_id = wsi_path.parent.name
+
+            if sample_id in self.INVALID_SAMPLE_IDS:
+                continue
+
+            slide = OpenSlide(wsi_path)
+            mpp = get_mpp(slide=slide)
+            records.append({'sample_id': sample_id, 'mpp': mpp})
+
+        records = pd.DataFrame(records).set_index('sample_id')
+        metadata = pd.concat([metadata, records], axis=1)
+        metadata.to_parquet(metadata_path)
+
     def prepare_data(self, sample_id: str, force: bool = False):
         self.prepare_tools()
         self.prepare_clinical()
@@ -533,6 +573,7 @@ class BEAT:
 # sample_id = '1FP2.0E.0'
 # sample_id = '1FU2.06.0'
 # beat = self = BEAT()
+# beat.create_thumbnail('1GUG.0M.0')
 # beat.prepare_clinical()
 # beat.prepare_wsi(sample_id=sample_id)
 
