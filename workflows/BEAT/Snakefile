@@ -13,6 +13,8 @@ rule all:
         # expand("checkpoints/samples/{sample}/segment_{model_name}.done", sample=SAMPLES, model_name=SEGMENTATION_MODELS),
         # expand("checkpoints/samples/{sample}/coords_{patch_size}.done", sample=SAMPLES, patch_size=[448])
         expand("checkpoints/samples/{sample}/embeddings.done", sample=SAMPLES),
+        expand("checkpoints/samples/{sample}/visualize_coords_{patch_size}.done", sample=SAMPLES, patch_size=448),
+        expand("checkpoints/samples/{sample}/visualize_patches_{patch_size}.done", sample=SAMPLES, patch_size=448),
 
 rule prepare_tools:
     output:
@@ -121,8 +123,7 @@ rule visualize_patches:
     log:
         "logs/samples/{sample}/visualize_patches_{patch_size}.log"
     run:
-        beat.visualize_patches(sample_id=wildcards.sample,
-                               patch_size=params.patch_size)
+        beat.visualize_patches(sample_id=wildcards.sample, patch_size=params.patch_size)
 
 rule create_embeddings:
     input:

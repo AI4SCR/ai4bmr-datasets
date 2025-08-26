@@ -26,6 +26,7 @@ from tqdm import tqdm
 from trident.patch_encoder_models import encoder_factory
 from ai4bmr_learn.plotting.umap import plot_umap
 
+
 class BEAT:
     INVALID_SAMPLE_IDS = {
         '1GUG.0M.2',  # barcode
@@ -37,7 +38,7 @@ class BEAT:
     def __init__(self, base_dir: Path | None = None):
         self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat')
         self.raw_dir = self.base_dir / '01_raw'
-        self.processed_dir = self.base_dir / '02_processed_v2'
+        self.processed_dir = self.base_dir / '02_processed'
         self.dataset_dir = self.processed_dir / 'datasets' / 'beat'
         self.tools_dir = self.base_dir / '03_tools'
 
@@ -414,6 +415,8 @@ class BEAT:
 
         save_patches_dir = self.dataset_dir / sample_id / 'visualizations' / 'patches' / coords_version
         save_patches_dir.mkdir(parents=True, exist_ok=True)
+
+        num_patches = min(num_patches, len(coords))
         idc = np.random.choice(range(len(coords)), size=num_patches, replace=False)
         for i in tqdm(idc):
             item = coords[i].model_dump()
@@ -491,7 +494,8 @@ class BEAT:
         from pathlib import Path
         from ai4bmr_learn.plotting.umap import plot_umap
 
-        embeddings_dir = Path("/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed_subset/20x_256px_0px_overlap/features_uni_v1/")
+        embeddings_dir = Path(
+            "/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed/datasets/wsi_embed_subset/20x_256px_0px_overlap/features_uni_v1/")
         paths = sorted(embeddings_dir.glob('*.h5'))
         data = []
         for path in paths:
@@ -506,30 +510,76 @@ class BEAT:
         ax.figure.tight_layout()
         ax.figure.savefig(save_path, dpi=300)
 
-
-    def create_wsi_umap(self, sample_id: str, model_name: str, coords_version: str):
-        logger.info(f'Computing UMAP for {sample_id}.')
-
+    def get_sample_embeddings(self, sample_id: str, model_name: str, coords_version: str, max_patches: int = 1000):
         embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / 'patch' / f'model={model_name}' / coords_version
         assert embeddings_dir.exists(), f'`embeddings_dir` {embeddings_dir} does not exist.'
 
-        fname = f'model={model_name}-{coords_version}.png'
-        save_path = self.dataset_dir / sample_id / 'visualizations' / 'umaps' / 'by-sample' / sample_id / fname
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-
         data = []
         for path in sorted(embeddings_dir.glob('*.pt')):
-            data.append(torch.load(path))
-        data = torch.cat(data).cpu()
+            data.append(torch.load(path).cpu())
+        data = torch.cat(data)
+
+        idc = torch.randperm(data.shape[0])[:max_patches]
+        data = data[idc]
+
+        return data
+
+    def create_wsi_umap(self, sample_id: str, model_name: str, coords_version: str, max_patches: int = 1000):
+        logger.info(f'Computing UMAP for {sample_id}')
+
+        fname = f'model={model_name}-{coords_version}.png'
+        save_path = self.dataset_dir / sample_id / 'visualizations' / 'umaps' / fname
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if save_path.exists():
+            return
+
+        data = self.get_sample_embeddings(sample_id=sample_id,
+                                          model_name=model_name,
+                                          coords_version=coords_version,
+                                          max_patches=max_patches)
+
+        if len(data) <= 15:
+            logger.error(f"{sample_id} has only {len(data)} patches. Can't compute UMAP.")
+            return
 
         ax = plot_umap(data=data)
+        ax.figure.tight_layout()
+        ax.figure.savefig(save_path, dpi=300)
+
+    def create_patches_umap(self, model_name: str, coords_version: str, max_patches_per_slide: int = 100):
+        logger.info(f'Computing UMAP for patches')
+
+        fname = f'model={model_name}-{coords_version}-max_patches_per_slide={max_patches_per_slide}.png'
+        save_path = self.base_dir / '04_outputs' / 'umaps' / fname
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if save_path.exists():
+            logger.info(f'UMAP already exists.')
+            return
+
+        data = []
+        labels = []
+        sample_ids = self.get_sample_ids()
+        for sample_id in tqdm(sample_ids):
+            tmp = self.get_sample_embeddings(sample_id=sample_id,
+                                       model_name=model_name,
+                                       coords_version=coords_version,
+                                       max_patches=max_patches_per_slide)
+            data.append(tmp)
+            labels.extend([sample_id] * len(tmp))
+
+        data = torch.concat(data)
+        labels = np.array(labels)
+
+        ax = plot_umap(data=data, labels=labels, show_legend=False)
         ax.figure.tight_layout()
         ax.figure.savefig(save_path, dpi=300)
 
     def create_slides_umap(self):
 
         embeddings_dir: Path = Path(
-            '/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed_v2/datasets/wsi_embed_subset/20x_512px_0px_overlap/slide_features_titan')
+            '/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat/02_processed/datasets/wsi_embed_subset/20x_512px_0px_overlap/slide_features_titan')
         save_path = embeddings_dir.parent / 'umap-slides.png'
 
         data = []
@@ -557,7 +607,8 @@ class BEAT:
             record = {'sample_id': sample_id, 'width': width, 'height': height, 'mpp': mpp}
 
             for patch_size in [448]:
-                with open(sample_dir / 'coords' / f'patch_size={patch_size}-stride={patch_size}-mpp=0.8625-overlap=0.25.json') as f:
+                with open(
+                        sample_dir / 'coords' / f'patch_size={patch_size}-stride={patch_size}-mpp=0.8625-overlap=0.25.json') as f:
                     coords = json.load(f)
                     record[f'num_coords_patch_size={patch_size}'] = len(coords)
 
@@ -594,4 +645,7 @@ class BEAT:
 
 # sample_id = '1FP2.0E.0'
 # sample_id = '1FU2.06.0'
-beat = self = BEAT()
+# coords_version = 'patch_size=448-stride=448-mpp=0.8625-overlap=0.25'
+# model_name = 'uni_v1'
+# max_patches_per_slide: int = 100
+# beat = self = BEAT()
