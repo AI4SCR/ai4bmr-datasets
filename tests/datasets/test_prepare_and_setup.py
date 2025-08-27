@@ -14,7 +14,7 @@ def test_prepare_data(dataset_name):
         case "Cords2024":
             from ai4bmr_datasets import Cords2024 as Dataset
         case "Keren2018":
-            from ai4bmr_datasets import Cords2024 as Dataset
+            from ai4bmr_datasets import Keren2018 as Dataset
         case _:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
 
@@ -49,3 +49,7 @@ def test_prepare_data(dataset_name):
         #     shutil.rmtree(tmpdir, ignore_errors=True)
         #     print(f"Cleaned up temporary directory: {tmpdir}")
 
+# test_prepare_data("Jackson2020")
+# test_prepare_data("Danenberg2022")
+test_prepare_data("Cords2024")
+# test_prepare_data("Keren2018")
