@@ -151,7 +151,10 @@ class Cords2024(BaseIMCDataset):
 
         # Extract zip files
         for target_path in file_map.values():
-            unzip_recursive(target_path)
+            try:
+                unzip_recursive(target_path)
+            except Exception as e:
+                logger.error(f'Failed to unzip {target_path}: {e}')
 
         shutil.rmtree(self.raw_dir / '__MACOSX', ignore_errors=True)
 

@@ -18,6 +18,8 @@ dependencies = [
     "openpyxl",
     "pandas",
     "tifffile",
+    "imagecodecs",
+    "zarr>3",
     "scikit-image",
     "matplotlib",
     "pyarrow",

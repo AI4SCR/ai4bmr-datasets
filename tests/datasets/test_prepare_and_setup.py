@@ -35,7 +35,7 @@ def prepare_dataset(base_dir: Path, dataset_name: str):
 # @pytest.mark.skip(reason="Only run when downloading changes")
 @pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024", "Keren2018"])
 def test_prepare_data(dataset_name):
-    tmpdir = Path('/Volumes/T7/ai4bmr-datasets')
+    tmpdir = Path(f'/Volumes/T7/ai4bmr-datasets/{dataset_name}')
     if tmpdir is None:
         with tempfile.TemporaryDirectory() as tmpdir:
             base_dir = Path(tmpdir)
@@ -43,7 +43,7 @@ def test_prepare_data(dataset_name):
     else:
         prepare_dataset(base_dir=tmpdir, dataset_name=dataset_name)
 
-test_prepare_data("Jackson2020")
+# test_prepare_data("Jackson2020")
 # test_prepare_data("Danenberg2022")
 # test_prepare_data("Cords2024")
 # test_prepare_data("Keren2018")
