@@ -110,14 +110,24 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
 
 ### 1. Load and prepare a dataset
 
+All datasets are initialized by passing the desired versions and data loading flags to the constructor.
+
 ```python
 from ai4bmr_datasets import Jackson2020
 from pathlib import Path
 
 base_dir = Path("/path/to/storage")  # can be None, resolves to ~/.cache/ai4bmr_datasets by default
-dataset = Jackson2020(base_dir=None)
+dataset = Jackson2020(
+    base_dir=None,
+    image_version="published",
+    mask_version="published",
+    # Optionally, load intensity features and metadata
+    feature_version="published", 
+    load_intensity=True,
+    metadata_version="published", 
+    load_metadata=True
+)
 dataset.prepare_data()  # Downloads and preprocesses data if needed, only needs to be run once
-dataset.setup(image_version="published", mask_version="published")
 ```
 
 ### 2. Access core components
@@ -128,16 +138,10 @@ print(dataset.images.keys()) # Dictionary of images
 print(dataset.masks.keys())  # Dictionary of masks
 ```
 
-### 3. Load optional cell-level features and metadata
+### 3. Access optional cell-level features and metadata
+
 
 ```python
-dataset.setup(
-    image_version="published",
-    mask_version="published",
-    feature_version="published", load_intensity=True,
-    metadata_version="published", load_metadata=True
-)
-
 print(dataset.intensity.shape)  # Cell x marker matrix
 print(dataset.metadata.shape)   # Cell x annotation matrix
 ```
