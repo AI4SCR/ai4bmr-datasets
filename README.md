@@ -126,7 +126,7 @@ dataset.setup()  # load the data
 ### 2. Access core components
 
 ```python
-print(dataset.sample_ids)  # List of sample IDs
+print(dataset.sample_ids)  # list of sample IDs
 print(dataset.images.keys())  # Dictionary of images
 print(dataset.masks.keys())  # Dictionary of masks
 ```
