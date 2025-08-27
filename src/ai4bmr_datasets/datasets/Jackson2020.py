@@ -13,10 +13,35 @@ class Jackson2020(BaseIMCDataset):
     id = "Jackson2020"
     doi = "10.1038/s41586-019-1876-x"
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    def __init__(self, 
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
+
+        super().__init__(base_dir=base_dir,
+                         image_version=image_version,
+                         mask_version=mask_version,
+                         feature_version=feature_version,
+                         metadata_version=metadata_version,
+                         load_intensity=load_intensity,
+                         load_spatial=load_spatial,
+                         load_metadata=load_metadata,
+                         align=align,
+                         join=join)
 
     def prepare_data(self):
+        """
+        Prepares the Jackson2020 dataset by downloading, creating clinical metadata,
+        panel, images, masks, and features, and finally creating annotated data.
+        """
         self.download()
 
         self.create_clinical_metadata()
@@ -29,8 +54,15 @@ class Jackson2020(BaseIMCDataset):
         self.create_annotated()
 
     def download(self, force: bool = False):
+        """
+        Downloads the raw data files for the Jackson2020 dataset from Zenodo.
+
+        Args:
+            force (bool): If True, forces re-download even if files already exist.
+        """
         import requests
         import shutil
+        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
@@ -43,18 +75,7 @@ class Jackson2020(BaseIMCDataset):
             "https://zenodo.org/records/4607374/files/TumorStroma_masks.zip?download=1": download_dir / 'tumor_stroma_masks.zip',
         }
 
-        # Download files
-        for url, target_path in file_map.items():
-            if not target_path.exists() or force:
-                logger.info(f"Downloading {url} → {target_path}")
-                headers = {"User-Agent": "Mozilla/5.0"}
-                with requests.get(url, headers=headers, stream=True) as r:
-                    r.raise_for_status()
-                    with open(target_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-            else:
-                logger.info(f"Skipping download of {target_path.name}, already exists.")
+        download_file_map(file_map, force=force)
 
         # Extract zip files
         for target_path in file_map.values():
@@ -65,6 +86,12 @@ class Jackson2020(BaseIMCDataset):
         logger.info("✅ Download and extraction completed.")
 
     def create_images(self):
+        """
+        Creates and saves processed image files for the Jackson2020 dataset.
+
+        This method reads raw OME-TIFF images, filters them based on the panel,
+        and saves the processed images as TIFF files.
+        """
         panel = pd.read_parquet(self.get_panel_path('published'))
         clinical = pd.read_parquet(self.clinical_metadata_path)
 
@@ -93,6 +120,12 @@ class Jackson2020(BaseIMCDataset):
                 logger.warning(f"Image file {img_path} does not exist. Skipping.")
 
     def create_masks(self):
+        """
+        Creates and saves processed mask files for the Jackson2020 dataset.
+
+        This method reads raw mask files, processes them to match image dimensions,
+        and saves the processed masks as TIFF files.
+        """
         clinical = pd.read_parquet(self.clinical_metadata_path)
 
         raw_masks_dir = self.raw_dir / 'ome_and_single_cell_masks/OMEnMasks/Basel_Zuri_masks/Basel_Zuri_masks'
@@ -120,6 +153,12 @@ class Jackson2020(BaseIMCDataset):
                 logger.warning(f"Mask file {mask_path} does not exist. Skipping.")
 
     def create_metadata(self):
+        """
+        Creates and saves processed metadata (cell cluster labels) for the Jackson2020 dataset.
+
+        This method reads raw metacluster labels from Basel and Zurich cohorts,
+        merges them, and saves the processed metadata as Parquet files, grouped by sample ID.
+        """
         bs_meta_clusters = pd.read_csv(
             self.raw_dir / 'single_cell_cluster_labels/Cluster_labels/Basel_metaclusters.csv')
         zh_meta_clusters = pd.read_csv(
@@ -206,7 +245,16 @@ class Jackson2020(BaseIMCDataset):
             save_path = save_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
-    def add_sample_id_and_object_id(self, data):
+    def add_sample_id_and_object_id(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Adds 'sample_id' and 'object_id' columns to the input DataFrame based on 'core' and 'CellId'.
+
+        Args:
+            data (pd.DataFrame): The input DataFrame containing 'core' and optionally 'CellId'.
+
+        Returns:
+            pd.DataFrame: The DataFrame with 'sample_id' and 'object_id' set as part of the index.
+        """
         sample_ids = data.core.str.replace('ZTMA208_slide_', '')
         sample_ids = sample_ids.str.replace('BaselTMA_SP', '')
 
@@ -221,6 +269,13 @@ class Jackson2020(BaseIMCDataset):
         return data
 
     def create_clinical_metadata(self):
+        """
+        Creates and saves the clinical metadata for the Jackson2020 dataset.
+
+        This method reads raw patient metadata from Basel and Zurich cohorts, merges them,
+        processes column names and values, and saves the consolidated clinical metadata
+        as a Parquet file.
+        """
 
         bs = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/BaselTMA/Basel_PatientMetadata.csv')
         zh = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/ZurichTMA/Zuri_PatientMetadata.csv')
@@ -293,6 +348,13 @@ class Jackson2020(BaseIMCDataset):
         metadata.to_parquet(self.clinical_metadata_path, engine='fastparquet')
 
     def create_features(self):
+        """
+        Creates and saves processed intensity and spatial features for the Jackson2020 dataset.
+
+        This method reads raw single-cell data, pivots it to create intensity and spatial features,
+        applies tidy naming conventions, and saves the processed features as Parquet files,
+        grouped by sample ID.
+        """
         logger.info(f'Creating `published` features')
 
         panel = pd.read_parquet(self.get_panel_path('published'))
@@ -359,6 +421,12 @@ class Jackson2020(BaseIMCDataset):
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_panel(self):
+        """
+        Creates and saves the panel (staining panel) for the Jackson2020 dataset.
+
+        This method reads raw staining panel data, processes it to align with target names,
+        and saves the consolidated panel as a Parquet file.
+        """
         panel = pd.read_csv(self.raw_dir / 'single_cell_and_metadata/Data_publication/Basel_Zuri_StainingPanel.csv')
 
         panel = panel.dropna(axis=0, how='all')
