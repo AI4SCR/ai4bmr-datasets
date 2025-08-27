@@ -4,7 +4,7 @@ import seaborn as sns
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import colorcet as cc
-from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_datasets.utils.tidy import tidy_name
 from ai4bmr_datasets import Keren2018
 
 

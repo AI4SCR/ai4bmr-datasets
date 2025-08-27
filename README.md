@@ -63,11 +63,45 @@ data are stored in Parquet format for fast access.
 
 ## ⚙️ Installation
 
-Both [python](https://www.python.org/downloads/) and [R](https://www.r-project.org) need to be installed on your system.
-The package can be installed via pip from GitHub:
+### Prerequisites
+
+- Python >= 3.10
+- R >= 4.4.1
+
+To install R, please visit the [R project website](https://www.r-project.org/) and follow the installation instructions for your operating system.
+
+### Environment Setup
+
+We recommend using a virtual environment to install the required dependencies.
+
+#### Using `venv`
 
 ```bash
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
+# Create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install the package
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
+```
+
+#### Using `conda`
+
+```bash
+# Create a conda environment
+conda create -n ai4bmr-datasets python=3.10
+conda activate ai4bmr-datasets
+
+# Install the package
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
+```
+
+### Stable Release
+
+The package can be installed via pip from the latest stable release:
+
+```bash
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
 ```
 
 ---
@@ -76,49 +110,52 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 
 ### 1. Load and prepare a dataset
 
+All datasets are initialized by passing the desired versions and data loading flags to the constructor.
+
 ```python
-from ai4bmr_datasets import Jackson2020
+from ai4bmr_datasets import Keren2018
 from pathlib import Path
 
 base_dir = Path("/path/to/storage")  # can be None, resolves to ~/.cache/ai4bmr_datasets by default
-dataset = Jackson2020(base_dir=None)
+dataset = Keren2018(
+    base_dir=base_dir,
+    image_version="published",
+    mask_version="published",
+    # optionally, load intensity features and metadata
+    feature_version="published", 
+    load_intensity=True,
+    metadata_version="published", 
+    load_metadata=True
+)
 dataset.prepare_data()  # Downloads and preprocesses data if needed, only needs to be run once
-dataset.setup(image_version="published", mask_version="published")
+dataset.setup()  # load the data
 ```
 
 ### 2. Access core components
 
 ```python
-print(dataset.sample_ids)     # List of sample IDs
-print(dataset.images.keys()) # Dictionary of images
+print(dataset.sample_ids)  # List of sample IDs
+print(dataset.images.keys())  # Dictionary of images
 print(dataset.masks.keys())  # Dictionary of masks
 ```
 
-### 3. Load optional cell-level features and metadata
-
-```python
-dataset.setup(
-    image_version="published",
-    mask_version="published",
-    feature_version="published", load_intensity=True,
-    metadata_version="published", load_metadata=True
-)
-
-print(dataset.intensity.shape)  # Cell x marker matrix
-print(dataset.metadata.shape)   # Cell x annotation matrix
-```
-
-### 4. Work with image and mask objects
+### 3. Work with image and mask objects
 
 ```python
 sample_id = dataset.sample_ids[0]  # get the first sample ID
 img = dataset.images[sample_id].data
-mask = dataset.masks[sample_id].data
-
 print("Image shape:", img.shape)
+
+mask = dataset.masks[sample_id].data
 print("Mask shape:", mask.shape)
 ```
 
+### 4. Access optional cell-level features and metadata
+
+```python
+print(dataset.intensity.shape)  # Cell x marker matrix
+print(dataset.metadata.shape)   # Cell x annotation matrix
+```
 ---
 
 ## 🤝 Contributing
