@@ -267,7 +267,7 @@ class Cords2024(BaseIMCDataset):
         This method reads channel information from raw acquisition JSON files, processes it,
         and saves the consolidated panel as a Parquet file.
         """
-        from ai4bmr_core.utils.tidy import tidy_name
+        from ai4bmr_datasets.utils.tidy import tidy_name
         import json
         import pandas as pd
         panel = None
@@ -415,7 +415,7 @@ class Cords2024(BaseIMCDataset):
         and saves the consolidated clinical metadata as a Parquet file.
         It also logs any samples for which clinical metadata or images are missing.
         """
-        from ai4bmr_core.utils.tidy import tidy_name
+        from ai4bmr_datasets.utils.tidy import tidy_name
         import re
 
         clinical_metadata = pd.read_csv(self.raw_clinical_metadata)
@@ -494,7 +494,7 @@ class Cords2024(BaseIMCDataset):
         """
         logger.info('Creating spatial features')
 
-        from ai4bmr_core.utils.tidy import tidy_name
+        from ai4bmr_datasets.utils.tidy import tidy_name
         path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/spatial.parquet'
         spatial = pd.read_parquet(path)
 

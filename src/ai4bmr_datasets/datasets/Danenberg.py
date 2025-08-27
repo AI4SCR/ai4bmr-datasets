@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
-from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_datasets.utils.tidy import tidy_name
 from loguru import logger
 from tifffile import imread, imwrite
 

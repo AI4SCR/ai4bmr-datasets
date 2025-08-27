@@ -14,7 +14,6 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "tqdm",
-    "torch",
     "numpy",
     "openpyxl",
     "pandas",

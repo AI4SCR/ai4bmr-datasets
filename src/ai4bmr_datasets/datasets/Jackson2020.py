@@ -6,7 +6,7 @@ from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import unzip_recursive
-from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_datasets.utils.tidy import tidy_name
 
 class Jackson2020(BaseIMCDataset):
     name = "Jackson2020"

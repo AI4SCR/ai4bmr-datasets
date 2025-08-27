@@ -4,8 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from ai4bmr_core.utils import io
-from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_datasets.utils import io
+from ai4bmr_datasets.utils.tidy import tidy_name
 from loguru import logger
 from tifffile import imread
 
