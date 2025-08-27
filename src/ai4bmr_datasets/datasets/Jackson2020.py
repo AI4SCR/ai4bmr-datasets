@@ -49,6 +49,7 @@ class Jackson2020(BaseIMCDataset):
         self.create_panel()
         self.create_images()
         self.create_masks()
+        self.create_metadata()
         self.create_features()
 
         self.create_annotated()
@@ -229,12 +230,14 @@ class Jackson2020(BaseIMCDataset):
         assert metadata.index.is_unique
         metadata = metadata.drop(columns=['id', 'core', 'metacluster'])
 
-        metadata = metadata.rename(columns={
-            'class': 'label0',
-            'cell_type': 'label'
-        })
-        metadata.loc[:, 'label'] = metadata['label'].str.replace('+', '_pos').map(tidy_name)
-        metadata.loc[:, 'label0'] = metadata['label0'].map(tidy_name)
+        # metadata = metadata.rename(columns={
+        #     'class': 'label0',
+        #     'cell_type': 'label'
+        # })
+
+        metadata.loc[:, 'cell_type'] = metadata['cell_type'].str.replace('+', '_pos').map(tidy_name)
+        metadata.loc[:, 'cell_type'] = metadata['cell_type'].map(tidy_name)
+        metadata.loc[:, 'class'] = metadata['class'].map(tidy_name)
         metadata.columns = metadata.columns.map(tidy_name)
 
         version_name = self.get_version_name(version='published')
@@ -355,6 +358,14 @@ class Jackson2020(BaseIMCDataset):
         applies tidy naming conventions, and saves the processed features as Parquet files,
         grouped by sample ID.
         """
+
+        version_name = self.get_version_name(version='published')
+        save_intensity_dir = self.intensity_dir / version_name
+        save_spatial_dir = self.spatial_dir / version_name
+        if save_intensity_dir.exists() and save_spatial_dir.exists():
+            logger.info(f"Feature in {save_intensity_dir} and {save_spatial_dir} already exist. Skipping.")
+            return
+
         logger.info(f'Creating `published` features')
 
         panel = pd.read_parquet(self.get_panel_path('published'))
@@ -404,20 +415,16 @@ class Jackson2020(BaseIMCDataset):
         spatial = x.loc[:, x.columns.isin(spatial_feat)]
         spatial.columns = spatial.columns.map(tidy_name)
 
-        version_name = self.get_version_name(version='published')
-
         # intensity
-        save_dir = self.intensity_dir / version_name
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_intensity_dir.mkdir(parents=True, exist_ok=True)
         for grp_name, grp_dat in intensity.groupby('sample_id'):
-            save_path = save_dir / f"{grp_name}.parquet"
+            save_path = save_intensity_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
         # spatial
-        save_dir = self.spatial_dir / version_name
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_spatial_dir.mkdir(parents=True, exist_ok=True)
         for grp_name, grp_dat in spatial.groupby('sample_id'):
-            save_path = save_dir / f"{grp_name}.parquet"
+            save_path = save_spatial_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_panel(self):

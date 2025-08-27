@@ -171,7 +171,7 @@ class Danenberg2022(BaseIMCDataset):
         # subprocess.run(["Rscript", "-e", r_script], check=True)
         # Wrap the command in a shell to load modules and run the R script
         shell_command = textwrap.dedent(f"""
-            module load r-light/4.4.1
+            # module load r-light/4.4.1
             Rscript -e '{r_script.strip()}'
         """)
 
@@ -188,7 +188,7 @@ class Danenberg2022(BaseIMCDataset):
         images_dir = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/Images'
         img_paths = [
             p for p in images_dir.rglob('*.tiff')
-            if not p.name.startswith('._')
+            if not p.name.startswith('.')
         ]
         img_paths = sorted(filter(lambda x: 'FullStack' in str(x), img_paths))
 
@@ -222,7 +222,7 @@ class Danenberg2022(BaseIMCDataset):
         """
         images_dir = self.raw_dir / 'corrected_public_masks' / 'correctedPublicMasks'
         img_paths = list(images_dir.rglob('*.tiff'))
-        img_paths = sorted(filter(lambda x: 'Mask' in str(x), img_paths))
+        img_paths = sorted(filter(lambda x: 'Mask' in str(x) and not x.name.startswith('.'), img_paths))
 
         for img_path in img_paths:
             sample_id = self.get_sample_id(str(img_path))

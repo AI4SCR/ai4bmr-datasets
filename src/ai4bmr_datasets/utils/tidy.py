@@ -1,4 +1,37 @@
 import re
+from pathlib import Path
+
+def filter_paths(
+    dir_path: Path,
+    include_files: bool = True,
+    include_dirs: bool = True,
+    exclude_hidden: bool = True,
+    to_str: bool = True
+) -> list[Path]:
+    """
+    List files and/or directories from dir_path, excluding items that match
+    any of the given predicates.
+
+    Args:
+        dir_path (Path): Directory to list.
+        include_files (bool): Include files if True.
+        include_dirs (bool): Include directories if True.
+        exclude_hidden (bool): If True, exclude hidden files and directories.
+
+    Returns:
+        list[Path]: Filtered list of paths.
+    """
+    paths = []
+    for f in dir_path.iterdir():
+        if exclude_hidden and f.name.startswith("."):
+            continue
+        if f.is_file() and include_files:
+            paths.append(f)
+        elif f.is_dir() and include_dirs:
+            paths.append(f)
+
+    return [str(i) for i in paths] if to_str else paths
+
 
 
 def tidy_name(name: str, to_lower: bool = True, split_camel_case: bool = True) -> str:

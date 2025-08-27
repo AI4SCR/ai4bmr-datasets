@@ -3,7 +3,7 @@ from loguru import logger
 import pandas as pd
 
 from ai4bmr_datasets.datamodels.Image import Image, Mask
-
+from ai4bmr_datasets.utils.tidy import filter_paths
 
 class BaseIMCDataset:
     name: str = None
@@ -174,6 +174,7 @@ class BaseIMCDataset:
                 [
                     pd.read_parquet(i, engine="fastparquet")
                     for i in intensity_dir.glob("*.parquet")
+                    if not i.name.startswith(".")
                 ]
             )
 
@@ -188,6 +189,7 @@ class BaseIMCDataset:
                 [
                     pd.read_parquet(i, engine="fastparquet")
                     for i in spatial_dir.glob("*.parquet")
+                    if not i.name.startswith(".")
                 ]
             )
 
@@ -197,7 +199,7 @@ class BaseIMCDataset:
         # load images
         images_dir = self.get_image_version_dir(image_version=self.image_version)
         images = {}
-        for image_path in images_dir.glob("*.tiff"):
+        for image_path in [p for p in images_dir.glob("*.tiff") if not p.name.startswith('.')]:
             images[image_path.stem] = Image(
                 id=image_path.stem,
                 data_path=image_path,
@@ -208,7 +210,7 @@ class BaseIMCDataset:
         # load masks
         masks_dir = self.get_mask_version_dir(mask_version=self.mask_version)
         masks = {}
-        for mask_path in masks_dir.glob("*.tiff"):
+        for mask_path in [p for p in masks_dir.glob("*.tiff") if not p.name.startswith('.')]:
             masks[mask_path.stem] = Mask(id=mask_path.stem, data_path=mask_path, metadata_path=None)
         ids_from_masks = set(masks.keys())
 
@@ -219,6 +221,7 @@ class BaseIMCDataset:
                 [
                     pd.read_parquet(i, engine="fastparquet")
                     for i in metadata_dir.glob("*.parquet")
+                    if not i.name.startswith(".")
                 ]
             )
             ids_from_metadata = set(metadata.index.get_level_values("sample_id"))
@@ -282,16 +285,16 @@ class BaseIMCDataset:
         logger.info(f'Creating new data version: `{version_name}`')
 
         metadata_version = 'published'
-        metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
-        intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
+        metadata = pd.read_parquet(filter_paths(self.metadata_dir / metadata_version), engine='fastparquet')
+        intensity = pd.read_parquet(filter_paths(self.intensity_dir / metadata_version), engine='fastparquet')
 
         # mask_version = 'published_cell'
         masks_dir = self.masks_dir / mask_version
-        mask_paths = list(masks_dir.glob("*.tiff"))
+        mask_paths = [p for p in masks_dir.glob("*.tiff") if not p.name.startswith('.')]
 
         image_version = 'published'
         images_dir = self.images_dir / image_version
-        image_paths = list(images_dir.glob("*.tiff"))
+        image_paths = [p for p in images_dir.glob("*.tiff") if not p.name.startswith('.')]
 
         # collect sample ids
         sample_ids = set(metadata.index.get_level_values('sample_id').unique()) \
@@ -342,7 +345,7 @@ class BaseIMCDataset:
             objs = np.asarray(sorted(objs), dtype=mask.dtype)
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
             assert len(np.unique(mask_filtered)) == len(objs) + 1
-            imsave(save_path, mask_filtered)
+            imsave(save_path, mask_filtered, check_contrast=False)
 
             idx = pd.IndexSlice[:, objs]
 
@@ -507,8 +510,8 @@ class BaseIMCDataset:
         panel = pd.read_parquet(panel_path, engine="fastparquet")
         panel = panel.reset_index().set_index("target")
 
-        image_ids = set([i.stem for i in img_dir.glob("*.tiff")])
-        mask_ids = set([i.stem for i in mask_dir.glob("*.tiff")])
+        image_ids = set([i.stem for i in img_dir.glob("*.tiff") if not i.name.startswith('.')])
+        mask_ids = set([i.stem for i in mask_dir.glob("*.tiff") if not i.name.startswith('.')])
         sample_ids = image_ids.intersection(mask_ids)
 
         for i, sample_id in enumerate(sample_ids):

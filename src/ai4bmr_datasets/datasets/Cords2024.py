@@ -1,14 +1,16 @@
 import json
 import re
+import shutil
 from pathlib import Path
-from tqdm import tqdm
-import numpy as np
+
 import pandas as pd
 from loguru import logger
 from tifffile import imread, imwrite
+from tqdm import tqdm
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-from ai4bmr_datasets.utils.download import unzip_recursive
+from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
+from ai4bmr_datasets.utils.tidy import filter_paths
 
 
 class Cords2024(BaseIMCDataset):
@@ -96,9 +98,6 @@ class Cords2024(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import shutil
-        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
-
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
@@ -189,7 +188,7 @@ class Cords2024(BaseIMCDataset):
 
         num_failed_reads = 0
 
-        mcd_paths = [i for i in self.raw_dir.rglob("*.mcd") if i.is_file()]
+        mcd_paths = [i for i in self.raw_dir.rglob("*.mcd") if i.is_file() and not i.name.startswith(".")]
         for mcd_path in mcd_paths:
             logger.info(f"Processing {mcd_path.name}")
             mcd_id = re.search(r".+_TMA_(\d+_\w+).mcd", mcd_path.name).group(1)
@@ -675,11 +674,9 @@ class Cords2024(BaseIMCDataset):
             write_parquet(intensity, "{save_intensity_path}")
         """)
 
-        # TODO: this will run only on slurm
-        # subprocess.run(["Rscript", "-e", r_script], check=True)
         # Wrap the command in a shell to load modules and run the R script
         shell_command = textwrap.dedent(f"""
-            module load r-light/4.4.1
+            # module load r-light/4.4.1
             Rscript -e '{r_script.strip()}'
         """)
         subprocess.run(shell_command, shell=True, check=True)
@@ -699,12 +696,12 @@ class Cords2024(BaseIMCDataset):
         logger.info(f'Creating new data version: `annotated`')
 
         metadata_version = 'published'
-        metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
-        intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
+        metadata = pd.read_parquet(filter_paths(self.metadata_dir / metadata_version), engine='fastparquet')
+        intensity = pd.read_parquet(filter_paths(self.intensity_dir / metadata_version), engine='fastparquet')
 
         # mask_version = 'published_cell'
         masks_dir = self.masks_dir / mask_version
-        mask_paths = list(masks_dir.glob("*.tiff"))
+        mask_paths = [p for p in masks_dir.glob("*.tiff") if not p.name.startswith('.')]
 
         image_version = 'published'
         images_dir = self.images_dir / image_version
@@ -774,4 +771,4 @@ class Cords2024(BaseIMCDataset):
             intensity_.to_parquet(save_intensity_dir / f"{sample_id}.parquet", engine='fastparquet')
 
             metadata_ = metadata_.loc[idx, :]
-            metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
+            metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')quet')
