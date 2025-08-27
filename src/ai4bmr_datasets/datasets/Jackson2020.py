@@ -1,12 +1,14 @@
+import shutil
 from pathlib import Path
-
+import numpy as np
 import pandas as pd
 from loguru import logger
-from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-from ai4bmr_datasets.utils.download import unzip_recursive
+from ai4bmr_datasets.utils import io
+from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 from ai4bmr_datasets.utils.tidy import tidy_name
+
 
 class Jackson2020(BaseIMCDataset):
     name = "Jackson2020"
@@ -61,10 +63,6 @@ class Jackson2020(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import requests
-        import shutil
-        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
-
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
@@ -113,10 +111,12 @@ class Jackson2020(BaseIMCDataset):
                 else:
                     logger.info(f"Creating image {save_path}")
 
-                img = imread(img_path)
+                img = io.imread(img_path)
                 img = img[panel.page.values]
 
-                imwrite(save_path, img)
+                img = img.astype(np.float32)
+
+                io.imsave(imp=img, save_path=save_path)
             else:
                 logger.warning(f"Image file {img_path} does not exist. Skipping.")
 
@@ -147,9 +147,9 @@ class Jackson2020(BaseIMCDataset):
                 else:
                     logger.info(f"Creating mask {save_path}")
 
-                mask = imread(mask_path)
+                mask = io.imread(mask_path)
 
-                imwrite(save_path, mask)
+                io.save_mask(mask=mask, save_path=save_path)
             else:
                 logger.warning(f"Mask file {mask_path} does not exist. Skipping.")
 

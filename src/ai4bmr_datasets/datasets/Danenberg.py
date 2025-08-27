@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pandas as pd
 from ai4bmr_datasets.utils.tidy import tidy_name
+from ai4bmr_datasets.utils import io
+import numpy as np
 from loguru import logger
-from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import unzip_recursive
@@ -222,12 +223,12 @@ class Danenberg2022(BaseIMCDataset):
         """
         images_dir = self.raw_dir / 'corrected_public_masks' / 'correctedPublicMasks'
         img_paths = list(images_dir.rglob('*.tiff'))
-        img_paths = sorted(filter(lambda x: 'Mask' in str(x) and not x.name.startswith('.'), img_paths))
+        mask_paths = sorted(filter(lambda x: 'Mask' in str(x) and not x.name.startswith('.'), img_paths))
 
-        for img_path in img_paths:
-            sample_id = self.get_sample_id(str(img_path))
+        for mask_path in mask_paths:
+            sample_id = self.get_sample_id(str(mask_path))
 
-            version = self.get_mask_version(str(img_path)).strip().lower()
+            version = self.get_mask_version(str(mask_path)).strip().lower()
             version = f'published_{version}'
             save_dir = self.masks_dir / self.get_version_name(version=version)
             save_dir.mkdir(parents=True, exist_ok=True)
@@ -239,10 +240,10 @@ class Danenberg2022(BaseIMCDataset):
             else:
                 logger.info(f"Creating mask {save_path}")
 
-            img = imread(img_path)
-            assert img.ndim == 2
+            mask = io.imread(mask_path)
+            assert mask.ndim == 2
 
-            imwrite(save_path, img)
+            io.save_mask(save_path=save_path, mask=mask)
 
     def create_metadata_and_intensity(self):
         """
@@ -391,4 +392,5 @@ class Danenberg2022(BaseIMCDataset):
         panel_path = self.get_panel_path("published")
         panel_path.parent.mkdir(parents=True, exist_ok=True)
         panel.to_parquet(panel_path)
+
 

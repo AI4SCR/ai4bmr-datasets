@@ -197,7 +197,8 @@ class Keren2018(BaseIMCDataset):
             stack = np.stack(stack, axis=0)
             assert len(stack) == 36
 
-            io.imsave(stack, save_path)
+            stack = stack.astype(np.float32)
+            io.imsave(img=stack, save_path=save_path)
 
 
     def create_masks(self):

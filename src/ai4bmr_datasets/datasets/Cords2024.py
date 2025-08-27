@@ -690,7 +690,7 @@ class Cords2024(BaseIMCDataset):
             version_name (str): The name for the new annotated version (default: 'annotated').
             mask_version (str): The mask version to use for annotation (default: 'published').
         """
-        from skimage.io import imread, imsave
+        from ai4bmr_datasets.utils import io
         import numpy as np
 
         logger.info(f'Creating new data version: `annotated`')
@@ -763,7 +763,7 @@ class Cords2024(BaseIMCDataset):
             objs = np.asarray(sorted(objs), dtype=mask.dtype)
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
             assert len(np.unique(mask_filtered)) == len(objs) + 1
-            imsave(save_path, mask_filtered)
+            io.save_mask(save_path=save_path, mask=mask_filtered)
 
             idx = pd.IndexSlice[:, objs.astype(str)]
 

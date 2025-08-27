@@ -4,6 +4,7 @@ import pandas as pd
 
 from ai4bmr_datasets.datamodels.Image import Image, Mask
 from ai4bmr_datasets.utils.tidy import filter_paths
+from ai4bmr_datasets.utils import io
 
 class BaseIMCDataset:
     name: str = None
@@ -328,7 +329,7 @@ class BaseIMCDataset:
 
             logger.info(f"Saving annotated mask {save_path}")
 
-            mask = imread(mask_path)
+            mask = io.imread(mask_path)
             intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
             metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
 
@@ -345,7 +346,7 @@ class BaseIMCDataset:
             objs = np.asarray(sorted(objs), dtype=mask.dtype)
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
             assert len(np.unique(mask_filtered)) == len(objs) + 1
-            imsave(save_path, mask_filtered, check_contrast=False)
+            io.save_mask(mask=mask_filtered, save_path=save_path)
 
             idx = pd.IndexSlice[:, objs]
 
