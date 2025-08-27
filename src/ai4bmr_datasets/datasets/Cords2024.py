@@ -3,12 +3,13 @@ import re
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from loguru import logger
-from tifffile import imread, imwrite
 from tqdm import tqdm
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
+from ai4bmr_datasets.utils import io
 from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 from ai4bmr_datasets.utils.tidy import filter_paths
 
@@ -88,6 +89,7 @@ class Cords2024(BaseIMCDataset):
         self.create_images()
         self.create_masks()
         self.create_metadata()
+        self.create_features()
 
         self.create_annotated()
 
@@ -208,9 +210,7 @@ class Cords2024(BaseIMCDataset):
                             metal_names=acq.channel_metals,
                         )
 
-                        image_name = (
-                            f"{mcd_id}_{acq.id}"  # should be equivalent to 'Tma_ac'
-                        )
+                        image_name = f"{mcd_id}_{acq.id}"  # should be equivalent to 'Tma_ac'
                         metadata_path = acquisitions_dir / f"{image_name}.json"
                         image_path = acquisitions_dir / f"{image_name}.tiff"
 
@@ -221,7 +221,8 @@ class Cords2024(BaseIMCDataset):
                         try:
                             logger.info(f"Reading acquisition of image {image_name}")
                             img = f.read_acquisition(acq)
-                            imwrite(image_path, img)
+                            img = img.astype(np.float32)
+                            io.imsave(save_path=image_path, img=img)
                             with open(metadata_path, "w") as f_json:
                                 json.dump(item, f_json)
                         except OSError:
@@ -229,7 +230,8 @@ class Cords2024(BaseIMCDataset):
                             num_failed_reads += 1
                             continue
 
-    def validate_masks(self):
+    @classmethod
+    def validate_masks(cls):
         """
         Validates the consistency between mask objects and metadata objects.
 
@@ -239,11 +241,11 @@ class Cords2024(BaseIMCDataset):
         """
         import numpy as np
         version_name = 'published'
-        self.setup(image_version=version_name, mask_version=version_name, metadata_version=version_name,
-                   load_metadata=True, load_spatial=False, load_intensity=False)
+        ds = cls(image_version=version_name, mask_version=version_name, metadata_version=version_name,
+                 load_metadata=True, load_spatial=False, load_intensity=False)
 
         mismatches = []
-        for sample_id, mask in self.masks.items():
+        for sample_id, mask in ds.masks.items():
             uniq_mask_objs = set(map(int, np.unique(mask.data))) - {0}
             meta = self.metadata.loc[sample_id]
             uniq_meta_objs = set(meta.index.astype(int))
@@ -274,7 +276,8 @@ class Cords2024(BaseIMCDataset):
         import pandas as pd
         panel = None
 
-        for img_metadata_path in self.raw_acquisitions_dir.glob("*.json"):
+        img_metadata_paths = [p for p in self.raw_acquisitions_dir.glob("*.json") if not p.name.startswith('.')]
+        for img_metadata_path in img_metadata_paths:
             with open(img_metadata_path, "r") as f:
                 img_metadata = json.load(f)
                 df = pd.DataFrame(img_metadata)
@@ -323,21 +326,22 @@ class Cords2024(BaseIMCDataset):
         panel = pd.read_parquet(panel_path)
 
         acquisitions_dir = self.raw_acquisitions_dir
-        acquisition_paths = list(acquisitions_dir.glob("*.tiff"))
+        acquisition_paths = [p for p in acquisitions_dir.glob("*.tiff") if not p.name.startswith('.')]
 
+        logger.info(f'Creating images...')
         save_dir = self.get_image_version_dir("published")
         save_dir.mkdir(parents=True, exist_ok=True)
-        for img_path in acquisition_paths:
+        for img_path in tqdm(acquisition_paths):
             save_path = save_dir / f"{img_path.name}"
 
             if save_path.exists():
                 logger.info(f"Skipping image {img_path}. Already exists.")
                 continue
 
-            img = imread(img_path)
+            img = io.imread(img_path)
             img = img[panel.page.values]
-
-            imwrite(save_path, img)
+            img = img.astype(np.float32)
+            io.imsave(save_path=save_path, img=img)
 
     def create_masks(self):
         """
@@ -347,11 +351,9 @@ class Cords2024(BaseIMCDataset):
         naming conventions and potential mismatches), and saves the processed masks as TIFF files.
         """
         import tifffile
-        import shutil
-        from loguru import logger
 
         raw_masks_dir = self.raw_dir / 'cell_masks_google_drive'
-        mask_paths = list(raw_masks_dir.rglob("*.tiff"))
+        mask_paths = [p for p in raw_masks_dir.rglob("*.tiff") if not p.name.startswith('.')]
 
         # note:
         # - 86_B_mask also contains 86_C masks
@@ -375,7 +377,7 @@ class Cords2024(BaseIMCDataset):
         save_dir = self.get_mask_version_dir('published')
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        image_ids = [i.stem for i in self.get_image_version_dir('published').glob('*.tiff')]
+        image_ids = [i.stem for i in self.get_image_version_dir('published').glob('*.tiff') if not i.name.startswith('.')]
         image_ids = set(image_ids)
 
         mask_ids = [i[0] for i in mask_paths_with_ids]
@@ -746,7 +748,7 @@ class Cords2024(BaseIMCDataset):
 
             # logger.info(f"Saving annotated mask {save_path}")
 
-            mask = imread(mask_path)
+            mask = io.imread(mask_path)
             intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
             metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
 
@@ -772,3 +774,8 @@ class Cords2024(BaseIMCDataset):
 
             metadata_ = metadata_.loc[idx, :]
             metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
+
+self = Cords2024(base_dir=Path('/Volumes/T7/ai4bmr-datasets/Cords2024'), image_version='published', mask_version='published')
+# self.prepare_data()
+self.create_features()
+self.create_annotated()
