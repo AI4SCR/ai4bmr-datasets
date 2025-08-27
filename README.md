@@ -89,11 +89,11 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
 
 ```bash
 # Create a conda environment
-conda create -n ai4bmr-datasets python=3.10
+conda create -n ai4bmr-datasets python=3.12 -y
 conda activate ai4bmr-datasets
 
-# Install the package
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
+# install development version (latest) of the package
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 ```
 
 ### Stable Release
@@ -101,7 +101,7 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
 The package can be installed via pip from the latest stable release:
 
 ```bash
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.0
 ```
 
 ---
