@@ -32,7 +32,7 @@ def prepare_dataset(base_dir: Path, dataset_name: str):
     assert isinstance(ds.metadata, pd.DataFrame)
     assert isinstance(ds.intensity, pd.DataFrame)
 
-# @pytest.mark.skip(reason="Only run when downloading changes")
+@pytest.mark.skip(reason="Only run when downloading changes. This will trigger the whole end-to-end runs.")
 @pytest.mark.parametrize("dataset_name", ["Jackson2020", "Danenberg2022", "Cords2024", "Keren2018"])
 def test_prepare_data(dataset_name):
     tmpdir = Path(f'/Volumes/T7/ai4bmr-datasets/{dataset_name}')
