@@ -82,7 +82,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install the package
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.1
 ```
 
 #### Using `conda`
@@ -92,15 +92,7 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v1.0.0
 conda create -n ai4bmr-datasets python=3.12 -y
 conda activate ai4bmr-datasets
 
-# install development version (latest) of the package
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
-```
-
-### Stable Release
-
-The package can be installed via pip from the latest stable release:
-
-```bash
+# Install the package
 pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.1
 ```
 
