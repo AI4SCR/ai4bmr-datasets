@@ -101,7 +101,7 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 The package can be installed via pip from the latest stable release:
 
 ```bash
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.0
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.1
 ```
 
 ---
