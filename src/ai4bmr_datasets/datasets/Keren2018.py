@@ -1,14 +1,16 @@
 import re
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from ai4bmr_core.utils import io
 from ai4bmr_core.utils.tidy import tidy_name
-from tifffile import imread
 from loguru import logger
-from ai4bmr_datasets.utils.download import unzip_recursive
+from tifffile import imread
+
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
+from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
 
 class Keren2018(BaseIMCDataset):
@@ -47,10 +49,6 @@ class Keren2018(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import requests
-        import shutil
-        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
-
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
@@ -213,7 +211,6 @@ class Keren2018(BaseIMCDataset):
         #   - 0: cell boarders
         #   - 1: background
         #   - 2..N: cells
-        from PIL import Image
 
         save_masks_dir = self.masks_dir / 'published'
         save_masks_dir.mkdir(exist_ok=True, parents=True)
