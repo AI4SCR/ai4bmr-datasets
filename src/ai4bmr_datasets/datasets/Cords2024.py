@@ -771,4 +771,4 @@ class Cords2024(BaseIMCDataset):
             intensity_.to_parquet(save_intensity_dir / f"{sample_id}.parquet", engine='fastparquet')
 
             metadata_ = metadata_.loc[idx, :]
-            metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')quet')
+            metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
