@@ -132,7 +132,10 @@ class Danenberg2022(BaseIMCDataset):
         import subprocess
         import textwrap
 
+        clinical_fst_path = self.raw_dir / "mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst"
         clinical_path = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet'
+
+        sc_fst_path = self.raw_dir / "mbtme_imc_public/MBTMEIMCPublic/SingleCells.fst"
         sc_path = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/SingleCells.parquet'
 
         if sc_path.exists() and clinical_path.exists():
@@ -160,11 +163,11 @@ class Danenberg2022(BaseIMCDataset):
         library(fst)
         library(arrow)
         
-        df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst")
-        write_parquet(df, "{clinical_path}")
+        df <- read.fst("{clinical_fst_path.as_posix()}")
+        write_parquet(df, "{clinical_path.as_posix()}")
         
-        df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/SingleCells.fst")
-        write_parquet(df, "{sc_path}")
+        df <- read.fst("{sc_fst_path.as_posix()}")
+        write_parquet(df, "{sc_path.as_posix()}")
         """
         r_script = textwrap.dedent(r_script)
 
