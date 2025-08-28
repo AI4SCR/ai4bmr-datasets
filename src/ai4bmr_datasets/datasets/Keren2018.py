@@ -7,7 +7,6 @@ import pandas as pd
 from ai4bmr_datasets.utils import io
 from ai4bmr_datasets.utils.tidy import tidy_name
 from loguru import logger
-from tifffile import imread
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
@@ -191,7 +190,7 @@ class Keren2018(BaseIMCDataset):
 
             stack = []
             for channel in panel.target_original_name:
-                img = imread(sample_dir / f"{channel}.tif")
+                img = io.imread(sample_dir / f"{channel}.tif")
                 stack.append(img)
 
             stack = np.stack(stack, axis=0)
@@ -230,11 +229,11 @@ class Keren2018(BaseIMCDataset):
 
             logger.info(f"Creating mask {sample_id}")
 
-            mask = imread(mask_path)
+            mask = io.imread(mask_path)
 
             # load segmentation mask from raw data
             segm_path = raw_images_dir / f"Point{sample_id}" / "SegmentationInterior.tif"
-            segm = imread(segm_path)
+            segm = io.imread(segm_path)
 
             # note: set region with no segmentation to background
             # filter masks by objects in data

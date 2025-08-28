@@ -775,7 +775,3 @@ class Cords2024(BaseIMCDataset):
             metadata_ = metadata_.loc[idx, :]
             metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
 
-self = Cords2024(base_dir=Path('/Volumes/T7/ai4bmr-datasets/Cords2024'), image_version='published', mask_version='published')
-# self.prepare_data()
-self.create_features()
-self.create_annotated()

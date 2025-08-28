@@ -209,10 +209,10 @@ class Danenberg2022(BaseIMCDataset):
             else:
                 logger.info(f"Creating image {save_path}")
 
-            img = imread(img_path)
+            img = io.imread(img_path)
             assert len(img) == 39
 
-            imwrite(save_path, img)
+            io.imsave(save_path=save_path, img=img)
 
     def create_masks(self):
         """
