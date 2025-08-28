@@ -78,7 +78,11 @@ class Jackson2020(BaseIMCDataset):
 
         # Extract zip files
         for target_path in file_map.values():
-            unzip_recursive(target_path)
+            try:
+                unzip_recursive(target_path)
+            except Exception as e:
+                logger.error(f"Failed to unzip {target_path}: {e}. Try deleting the zip file and re-downloading.")
+                raise e
 
         shutil.rmtree(self.raw_dir / '__MACOSX', ignore_errors=True)
 
