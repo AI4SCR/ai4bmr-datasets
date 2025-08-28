@@ -1,14 +1,13 @@
 import re
 from pathlib import Path
 
-import pandas as pd
-from ai4bmr_datasets.utils.tidy import tidy_name
-from ai4bmr_datasets.utils import io
 import numpy as np
+import pandas as pd
 from loguru import logger
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-from ai4bmr_datasets.utils.download import unzip_recursive
+from ai4bmr_datasets.utils import io
+from ai4bmr_datasets.utils.tidy import tidy_name
 
 
 class Danenberg2022(BaseIMCDataset):
@@ -16,7 +15,7 @@ class Danenberg2022(BaseIMCDataset):
     id = "Danenberg2022"
     doi = "10.1038/s41588-022-01041-y"
 
-    def __init__(self, 
+    def __init__(self,
                  base_dir: Path | None = None,
                  image_version: str | None = None,
                  mask_version: str | None = None,
@@ -64,7 +63,6 @@ class Danenberg2022(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import requests
         import shutil
         from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
@@ -144,40 +142,48 @@ class Danenberg2022(BaseIMCDataset):
 
         logger.info('Converting fts files to Parquet format')
 
-        r_script = f"""
-        options(repos = c(CRAN = "https://cloud.r-project.org"))
+        shell_command = f'''Rscript -e "options(repos=c(CRAN='https://cloud.r-project.org')); \
+if (!requireNamespace('BiocManager', quietly=TRUE)) install.packages('BiocManager', quiet=TRUE); \
+install_if_missing_cran <- function(pkg){{ if (!requireNamespace(pkg, quietly=TRUE)) install.packages(pkg, dependencies=TRUE, quiet=TRUE) }}; \
+install_if_missing_cran('arrow'); \
+install_if_missing_cran('fst'); \
+library(fst); library(arrow); \
+df <- fst::read.fst('{clinical_fst_path.as_posix()}'); \
+arrow::write_parquet(df, '{clinical_path.as_posix()}'); \
+df <- fst::read.fst('{sc_fst_path.as_posix()}'); \
+arrow::write_parquet(df, '{sc_path.as_posix()}')"'''
 
-        if (!requireNamespace("BiocManager", quietly = TRUE)) {{
-            install.packages("BiocManager", quiet = TRUE)
-        }}
-
-        install_if_missing_cran <- function(pkg) {{
-            if (!requireNamespace(pkg, quietly = TRUE)) {{
-                install.packages(pkg, dependencies = TRUE, quiet = TRUE)
-            }}
-        }}
-
-        install_if_missing_cran("arrow")
-        install_if_missing_cran("fst")
-        
-        library(fst)
-        library(arrow)
-        
-        df <- read.fst("{clinical_fst_path.as_posix()}")
-        write_parquet(df, "{clinical_path.as_posix()}")
-        
-        df <- read.fst("{sc_fst_path.as_posix()}")
-        write_parquet(df, "{sc_path.as_posix()}")
-        """
-        r_script = textwrap.dedent(r_script)
+        # r_script = f"""
+        # options(repos = c(CRAN = 'https://cloud.r-project.org'))
+        #
+        # if (!requireNamespace("BiocManager", quietly = TRUE)) {{
+        #     install.packages("BiocManager", quiet = TRUE)
+        # }}
+        #
+        # install_if_missing_cran <- function(pkg) {{
+        #     if (!requireNamespace(pkg, quietly = TRUE)) {{
+        #         install.packages(pkg, dependencies = TRUE, quiet = TRUE)
+        #     }}
+        # }}
+        #
+        # install_if_missing_cran("arrow")
+        # install_if_missing_cran("fst")
+        #
+        # library(fst)
+        # library(arrow)
+        #
+        # df <- read.fst("{clinical_fst_path.as_posix()}")
+        # write_parquet(df, "{clinical_path.as_posix()}")
+        #
+        # df <- read.fst("{sc_fst_path.as_posix()}")
+        # write_parquet(df, "{sc_path.as_posix()}")
+        # """
+        # r_script = textwrap.dedent(r_script)
 
         # TODO: this will run only on slurm
         # subprocess.run(["Rscript", "-e", r_script], check=True)
         # Wrap the command in a shell to load modules and run the R script
-        shell_command = textwrap.dedent(f"""
-            # module load r-light/4.4.1
-            Rscript -e '{r_script.strip()}'
-        """)
+        # shell_command = textwrap.dedent(f"Rscript -e '{r_script.strip()}'")
 
         # Run using bash shell to ensure module environment is available
         subprocess.run(["bash", "-c", shell_command], check=True)
@@ -398,3 +404,4 @@ class Danenberg2022(BaseIMCDataset):
         panel.to_parquet(panel_path)
 
 
+self = Danenberg2022()
