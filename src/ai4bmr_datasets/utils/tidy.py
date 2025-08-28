@@ -6,7 +6,7 @@ def filter_paths(
     include_files: bool = True,
     include_dirs: bool = True,
     exclude_hidden: bool = True,
-    to_str: bool = True
+    as_posix: bool = True
 ) -> list[Path]:
     """
     List files and/or directories from dir_path, excluding items that match
@@ -30,7 +30,7 @@ def filter_paths(
         elif f.is_dir() and include_dirs:
             paths.append(f)
 
-    return [str(i) for i in paths] if to_str else paths
+    return [i.as_posix() for i in paths] if as_posix else paths
 
 
 
