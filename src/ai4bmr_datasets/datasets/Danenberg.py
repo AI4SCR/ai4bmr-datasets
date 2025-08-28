@@ -212,6 +212,7 @@ class Danenberg2022(BaseIMCDataset):
             img = io.imread(img_path)
             assert len(img) == 39
 
+            img = img.astype(np.float32)
             io.imsave(save_path=save_path, img=img)
 
     def create_masks(self):

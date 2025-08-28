@@ -280,7 +280,6 @@ class BaseIMCDataset:
             version_name (str): The name for the new annotated version (default: 'annotated').
             mask_version (str): The mask version to use for annotation (default: 'published').
         """
-        from skimage.io import imread, imsave
         import numpy as np
 
         logger.info(f'Creating new data version: `{version_name}`')
@@ -484,7 +483,6 @@ class BaseIMCDataset:
             force (bool): If True, recomputes features even if they already exist.
         """
         from ai4bmr_datasets.utils.imc.features import intensity_features, spatial_features
-        from tifffile import imread
 
         version_name = self.get_version_name(image_version=image_version, mask_version=mask_version)
         save_intensity_dir = self.intensity_dir / version_name
@@ -524,8 +522,8 @@ class BaseIMCDataset:
             mask_path = mask_dir / f"{sample_id}.tiff"
             assert mask_path.exists()
 
-            img = imread(img_path)
-            mask = imread(mask_path)
+            img = io.imread(img_path)
+            mask = io.imread(mask_path)
             assert img.shape[1:] == mask.shape
 
             intensity = intensity_features(img=img, mask=mask, panel=panel)

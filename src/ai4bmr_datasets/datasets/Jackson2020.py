@@ -116,7 +116,7 @@ class Jackson2020(BaseIMCDataset):
 
                 img = img.astype(np.float32)
 
-                io.imsave(imp=img, save_path=save_path)
+                io.imsave(img=img, save_path=save_path)
             else:
                 logger.warning(f"Image file {img_path} does not exist. Skipping.")
 
