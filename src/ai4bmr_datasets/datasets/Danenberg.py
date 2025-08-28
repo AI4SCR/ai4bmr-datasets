@@ -1,4 +1,5 @@
 import re
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -140,53 +141,41 @@ class Danenberg2022(BaseIMCDataset):
             logger.info("Clinical and SingleCells data already processed. Skipping.")
             return
 
-        logger.info('Converting fts files to Parquet format')
+        logger.info('Converting fst files to Parquet format')
 
-        shell_command = f'''Rscript -e "options(repos=c(CRAN='https://cloud.r-project.org')); \
-if (!requireNamespace('BiocManager', quietly=TRUE)) install.packages('BiocManager', quiet=TRUE); \
-install_if_missing_cran <- function(pkg){{ if (!requireNamespace(pkg, quietly=TRUE)) install.packages(pkg, dependencies=TRUE, quiet=TRUE) }}; \
-install_if_missing_cran('arrow'); \
-install_if_missing_cran('fst'); \
-library(fst); library(arrow); \
-df <- fst::read.fst('{clinical_fst_path.as_posix()}'); \
-arrow::write_parquet(df, '{clinical_path.as_posix()}'); \
-df <- fst::read.fst('{sc_fst_path.as_posix()}'); \
-arrow::write_parquet(df, '{sc_path.as_posix()}')"'''
+        r_script = f"""
+        options(repos = c(CRAN = 'https://cloud.r-project.org'))
 
-        # r_script = f"""
-        # options(repos = c(CRAN = 'https://cloud.r-project.org'))
-        #
-        # if (!requireNamespace("BiocManager", quietly = TRUE)) {{
-        #     install.packages("BiocManager", quiet = TRUE)
-        # }}
-        #
-        # install_if_missing_cran <- function(pkg) {{
-        #     if (!requireNamespace(pkg, quietly = TRUE)) {{
-        #         install.packages(pkg, dependencies = TRUE, quiet = TRUE)
-        #     }}
-        # }}
-        #
-        # install_if_missing_cran("arrow")
-        # install_if_missing_cran("fst")
-        #
-        # library(fst)
-        # library(arrow)
-        #
-        # df <- read.fst("{clinical_fst_path.as_posix()}")
-        # write_parquet(df, "{clinical_path.as_posix()}")
-        #
-        # df <- read.fst("{sc_fst_path.as_posix()}")
-        # write_parquet(df, "{sc_path.as_posix()}")
-        # """
-        # r_script = textwrap.dedent(r_script)
+        if (!requireNamespace("BiocManager", quietly = TRUE)) {{
+            install.packages("BiocManager", quiet = TRUE)
+        }}
 
-        # TODO: this will run only on slurm
-        # subprocess.run(["Rscript", "-e", r_script], check=True)
-        # Wrap the command in a shell to load modules and run the R script
-        # shell_command = textwrap.dedent(f"Rscript -e '{r_script.strip()}'")
+        install_if_missing_cran <- function(pkg) {{
+            if (!requireNamespace(pkg, quietly = TRUE)) {{
+                install.packages(pkg, dependencies = TRUE, quiet = TRUE)
+            }}
+        }}
+
+        install_if_missing_cran("arrow")
+        install_if_missing_cran("fst")
+        
+        library(fst)
+        library(arrow)
+        
+        df <- read.fst("{clinical_fst_path.as_posix()}")
+        write_parquet(df, "{clinical_path.as_posix()}")
+        
+        df <- read.fst("{sc_fst_path.as_posix()}")
+        write_parquet(df, "{sc_path.as_posix()}")
+        """
+        r_script = textwrap.dedent(r_script)
+
+        r_script_path = Path(self.raw_dir) / "script.R"
+        r_script_path.write_text(r_script)
+        logger.info(f"R script written to: {r_script_path}")
 
         # Run using bash shell to ensure module environment is available
-        subprocess.run(["bash", "-c", shell_command], check=True)
+        subprocess.run(["Rscript", str(r_script_path)], check=True)
 
     def create_images(self):
         """
