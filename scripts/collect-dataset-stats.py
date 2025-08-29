@@ -1,22 +1,21 @@
 import pandas as pd
+from dotenv import load_dotenv
 
 from ai4bmr_datasets import Danenberg2022, Cords2024, Jackson2020, Keren2018
-from pathlib import Path
 
-datasets_dir = Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets')
+assert load_dotenv(), "Failed to load .env file"
+
 cont = []
 for ds_cls in [Danenberg2022, Cords2024, Jackson2020, Keren2018]:
-    base_dir = datasets_dir / ds_cls.name
-    assert base_dir.exists()
 
-    ds = ds_cls(base_dir=base_dir)
     image_version = mask_version = feature_version = metadata_version = 'published'
-    if ds.name == 'Danenberg2022':
+    if ds_cls.name == 'Danenberg2022':
         mask_version = 'published_cell'
 
-    ds.setup(image_version=image_version, mask_version=mask_version,
-             feature_version=feature_version, load_intensity=True,
-             metadata_version=metadata_version, load_metadata=True)
+    ds = ds_cls(base_dir=None, image_version=image_version, mask_version=mask_version,
+                feature_version=feature_version, load_intensity=True,
+                metadata_version=metadata_version, load_metadata=True)
+    ds.setup()
 
     stats = dict(
         name=ds.name,

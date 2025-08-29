@@ -1,8 +1,10 @@
 # SpatialProteomicsNet
 
-**SpatialProteomicsNet** is an open-source Python package providing a unified interface to access, prepare, and load spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
+**SpatialProteomicsNet** is an open-source Python package providing a unified interface to access, prepare, and load
+spatial proteomics datasets (e.g., Imaging Mass Cytometry and MIBI) for machine learning workflows.
 
-For a detailed description, motivation, and full list of supported technologies and use cases, please refer to [paper.md](./paper.md).
+For a detailed description, motivation, and full list of supported technologies and use cases, please refer
+to [paper.md](./paper.md).
 
 ---
 
@@ -15,12 +17,12 @@ The package supports the following public spatial proteomics datasets:
 - **Danenberg et al. 2022** – IMC of breast cancer [@danenbergBreastTumorMicroenvironment2022]
 - **Cords et al. 2024** – IMC of NSCLC [@cordsCancerassociatedFibroblastPhenotypes2024]
 
-|  | name          |  images |  masks |  markers | annotated cells | clinical samples |
-|-:|:--------------|--------:|-------:|---------:|----------------:|-----------------:|
-|  | Danenberg2022 |     794 |    794 |       39 |         1123466 |              794 |
-|  | Cords2024     |    2070 |   2070 |       43 |         5984454 |             2072 |
-|  | Jackson2020   |     735 |    735 |       35 |         1224411 |              735 |
-|  | Keren2018     |      41 |     41 |       36 |          201656 |               41 |
+|  | name          | images | masks | markers | annotated cells | clinical samples |
+|-:|:--------------|-------:|------:|--------:|----------------:|-----------------:|
+|  | Danenberg2022 |    794 |   794 |      39 |         1123466 |              794 |
+|  | Cords2024     |   2070 |  2070 |      43 |         5984454 |             2072 |
+|  | Jackson2020   |    735 |   735 |      35 |         1224411 |              735 |
+|  | Keren2018     |     41 |    41 |      36 |          201656 |               41 |
 
 <figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
@@ -44,18 +46,20 @@ datasets. After preparing and setting up the dataset instance, the following att
 These components are enforced and standardized across datasets.
 
 ### Data Versions
-A dataset can have different versions of images, masks, features, and metadata, allowing for flexibility in data access.  
-To load the data *as published*, use `{image,mask,metadata,feature}_version="published"`. Be aware that for most 
+
+A dataset can have different versions of images, masks, features, and metadata, allowing for flexibility in data
+access.  
+To load the data *as published*, use `{image,mask,metadata,feature}_version="published"`. Be aware that for most
 datasets, this means the loaded data is not harmonized. You may encounter inconsistencies such as:
 
-  - objects present in the masks that are not listed in the metadata,
-  - images without matching annotations,
-  - or cells in the metadata with no corresponding segmentation.
+- objects present in the masks that are not listed in the metadata,
+- images without matching annotations,
+- or cells in the metadata with no corresponding segmentation.
 
 To work with a cleaned and more consistent dataset, some datasets offer an `annotated` version. This version:
 
-  - has cleaned masks to include only objects found in both the segmentation and the metadata,
-  - only contains images that have corresponding metadata.
+- has cleaned masks to include only objects found in both the segmentation and the metadata,
+- only contains images that have corresponding metadata.
 
 **Efficient Data Loading:** Images and masks are **lazily loaded** from disk to avoid unnecessary memory use. Tabular
 data are stored in Parquet format for fast access.
@@ -69,7 +73,9 @@ data are stored in Parquet format for fast access.
 - Python >= 3.10
 - R >= 4.4.1
 
-To install R, please visit the [R project website](https://www.r-project.org/) and follow the installation instructions for your operating system.
+To install R, please visit the [R project website](https://www.r-project.org/) and follow the installation instructions
+for your operating system.
+Alternatively, you can install R using conda.
 
 ### Environment Setup
 
@@ -83,7 +89,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install the package
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.5
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
 ```
 
 #### Using `conda`
@@ -94,99 +100,139 @@ conda create -n ai4bmr-datasets python=3.12 -y
 conda activate ai4bmr-datasets
 
 # Install the package
-pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.5
+pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git
+#conda install conda-forge::r-base  # optional, if R is not already installed
 ```
 
 ---
 
 ## 🚀 Quickstart
 
-### 1. Load and prepare a dataset
+This section provides a brief guide to get started with the package.
 
-All datasets are initialized by passing the desired versions and data loading flags to the constructor.
+> **Note on Memory Requirements**
+>
+> Please be aware that storing the datasets can consume a significant amount of memory. The approximate requirements are
+> as follows:
+> - **Keren2018:** ~10GB
+> - **Jackson2020:** ~180GB
+> - **Danenberg2022:** ~66GB
+> - **Cords2024:** ~785GB
+
+### 1. Initialize and Prepare a Dataset
+
+First, import the desired dataset and initialize it. You can specify a `base_dir` to control where the data is stored.
+If not provided, it defaults to `~/.cache/ai4bmr-datasets` or the path set in the `AI4BMR_DATASETS_DIR` environment
+variable.
+We recommend configuring the environment variables in a `.env` file for convenience.
 
 ```python
-# Memory requirements for different datasets:
-# Keren2018: ~10GB
-# Jackson2020: ~50GB
-# Danenberg2022: ~100GB
-# Cords2024: ~1TB
-
 from ai4bmr_datasets import Keren2018
 from pathlib import Path
 
-# base_dir can be `None` and resolves to ~/.cache/ai4bmr_datasets by default
-# alternatively one can set the env variable `AI4BMR_DATASETS_DIR`
-base_dir = Path("<path/to/storage>")
-base_dir = Path('/Volumes/T7/ai4bmr-datasets/Keren2018')
+# Define the base directory for storing the dataset
+base_dir = None  # use defaults
+base_dir = Path('path/to/data/')  # define your own path
 
-dataset = Keren2018(base_dir=base_dir)
-dataset.prepare_data()  # Downloads and preprocesses data if needed, only needs to be run once
+# Initialize the dataset
+dataset = Keren2018(base_dir=base_dir,
+                  image_version="published",
+                  mask_version="published",
+                  feature_version="published",
+                  load_intensity=True,
+                  metadata_version="published",
+                  load_metadata=True
+                  )
 
-# list available versions of the data (see section: Data Versions)
+# Download and preprocess the data. This only needs to be run once.
+dataset.prepare_data()
+```
+
+### 2. Setup and Access Data
+
+After preparing the data, use the `setup()` method to load the data. By setting `load_intensity` and `load_metadata` to
+`True`, you can access cell-level features and clinical data. You can list the available data versions using 
+`list_{image, mask, metadata, features}_versions()`.
+
+```python
+# List available data versions
 dataset.list_image_versions()
 dataset.list_mask_versions()
 dataset.list_metadata_versions()
 dataset.list_features_versions()
 
-# define a specific data version
-dataset = Keren2018(
-    base_dir=base_dir,
-    image_version="published",
-    mask_version="published",
-    # optionally, load intensity features and metadata
-    feature_version="published", 
-    load_intensity=True,
-    metadata_version="published", 
-    load_metadata=True
-)
+# Setup the dataset with a specific version and load features
 dataset.setup()
+
+# Access core components of the dataset
+print("Sample IDs:", dataset.sample_ids)
+print("Available images:", list(dataset.images.keys()))
+print("Available masks:", list(dataset.masks.keys()))
 ```
 
-### 2. Access core components
+### 3. Work with Image and Mask Objects
+
+Image and mask objects are loaded lazily. The data is only loaded into memory when you access the `.data` attribute.
 
 ```python
-print(dataset.sample_ids)  # list of sample IDs
-print(dataset.images.keys())  # Dictionary of images
-print(dataset.masks.keys())  # Dictionary of masks
-```
+import matplotlib.pyplot as plt
 
-### 3. Work with image and mask objects
+# Get the first sample ID
+sample_id = dataset.sample_ids[0]
 
-Image and Mask objects are not loaded into memory. They are loaded on demand when accessing the `.data` attribute.
-
-```python
-sample_id = dataset.sample_ids[0]  # get the first sample ID
+# Access the image and mask data
 img = dataset.images[sample_id].data
-print("Image shape:", img.shape)
-
 mask = dataset.masks[sample_id].data
-print("Mask shape:", mask.shape)
+
+print(f"Image shape for sample {sample_id}: {img.shape}")
+print(f"Mask shape for sample {sample_id}: {mask.shape}")
+
+panel = dataset.panel
+idx = panel.target == 'ds_dna'
+
+# Visualize the image and mask for the DNA channel
+fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+axs[0].imshow(img[idx].squeeze())
+axs[1].imshow(mask > 0)
+for ax, title in zip(axs, ['channel', 'masks']):
+    ax.set_title(title)
+    ax.set_axis_off()
+ax.figure.tight_layout()
+ax.figure.show()
+
 ```
 
-### 4. Access optional cell-level features and metadata
+### 4. Access Cell-Level Features and Metadata
+
+Once loaded, you can directly access the dataframes for intensity, metadata, and clinical data.
 
 ```python
-print(dataset.intensity.shape)  # Cell x marker matrix
-print(dataset.metadata.shape)   # Cell x annotation matrix
-print(dataset.clinical.shape)   # patients / observations x annotation matrix
+# Access the intensity matrix (cells x markers)
+print("Intensity matrix shape:", dataset.intensity.shape)
+
+# Access the metadata (cells x annotations)
+print("Metadata shape:", dataset.metadata.shape)
+
+# Access the clinical data (patients x annotations)
+print("Clinical data shape:", dataset.clinical.shape)
 ```
+
 ---
 
 ## 🤝 Contributing
 
 We welcome contributions to improve the project, including:
 
-- Adding new datasets  
-- Fixing bugs  
+- Adding new datasets
+- Fixing bugs
 - Improving performance or usability
 
 ### 📌 Contribution Guidelines
 
 If you'd like to contribute:
 
-1. **Fork the repository** and create a feature branch.   
-2. Add or update relevant tests if applicable.  
+1. **Fork the repository** and create a feature branch.
+2. Add or update relevant tests if applicable.
 3. Submit a **pull request** with a clear description of your changes.
 
 Please open a discussion or issue before implementing large features to ensure alignment with project goals.
@@ -195,7 +241,7 @@ Please open a discussion or issue before implementing large features to ensure a
 
 If you encounter bugs, incorrect behavior, or missing functionality:
 
-- [Open an issue](https://github.com/AI4SCR/ai4bmr-datasets/issues) with a clear title and minimal reproducible example.  
+- [Open an issue](https://github.com/AI4SCR/ai4bmr-datasets/issues) with a clear title and minimal reproducible example.
 - Include relevant error messages and version information if possible.
 
 We monitor issues regularly and appreciate detailed, constructive reports.
@@ -204,8 +250,10 @@ We monitor issues regularly and appreciate detailed, constructive reports.
 
 If you need help using the software:
 
-- Check the existing [issues](https://github.com/AI4SCR/ai4bmr-datasets/issues) and [discussions](https://github.com/AI4SCR/ai4bmr-datasets/discussions) first.  
-- For general questions or usage advice, feel free to open a [discussion topic](https://github.com/AI4SCR/ai4bmr-datasets/discussions/new).  
+- Check the existing [issues](https://github.com/AI4SCR/ai4bmr-datasets/issues)
+  and [discussions](https://github.com/AI4SCR/ai4bmr-datasets/discussions) first.
+- For general questions or usage advice, feel free to open
+  a [discussion topic](https://github.com/AI4SCR/ai4bmr-datasets/discussions/new).
 - For dataset-specific problems, include dataset identifiers and loading code if applicable.
 
 We aim to foster a welcoming and respectful community. Please be kind and collaborative in your interactions.
