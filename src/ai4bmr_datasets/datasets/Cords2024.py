@@ -676,12 +676,12 @@ class Cords2024(BaseIMCDataset):
             write_parquet(intensity, "{save_intensity_path}")
         """)
 
-        # Wrap the command in a shell to load modules and run the R script
-        shell_command = textwrap.dedent(f"""
-            # module load r-light/4.4.1
-            Rscript -e '{r_script.strip()}'
-        """)
-        subprocess.run(shell_command, shell=True, check=True)
+        r_script_path = Path(self.raw_dir) / "script.R"
+        r_script_path.write_text(r_script)
+        logger.info(f"R script written to: {r_script_path}")
+
+        # Run using bash shell to ensure module environment is available
+        subprocess.run(["Rscript", str(r_script_path)], check=True)
 
     def create_annotated(self, version_name: str = 'annotated', mask_version: str = "published"):
         """

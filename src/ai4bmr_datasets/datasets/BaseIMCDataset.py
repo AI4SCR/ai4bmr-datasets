@@ -539,3 +539,47 @@ class BaseIMCDataset:
             intensity.to_parquet(save_intensity_dir / f'{sample_id}.parquet', engine="fastparquet")
             spatial.to_parquet(save_spatial_dir / f'{sample_id}.parquet', engine="fastparquet")
 
+
+    def list_image_versions(self) -> list[str]:
+        """
+        Lists all available image versions in the images directory.
+
+        Returns:
+            list[str]: A list of available image version names.
+        """
+        if not self.images_dir.exists():
+            return []
+        return [p.name for p in self.images_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+
+    def list_mask_versions(self) -> list[str]:
+        """
+        Lists all available mask versions in the images directory.
+
+        Returns:
+            list[str]: A list of available mask version names.
+        """
+        if not self.masks_dir.exists():
+            return []
+        return [p.name for p in self.masks_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+
+    def list_metadata_versions(self) -> list[str]:
+        """
+        Lists all available metadata versions in the images directory.
+
+        Returns:
+            list[str]: A list of available metadata version names.
+        """
+        if not self.metadata_dir.exists():
+            return []
+        return [p.name for p in self.metadata_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+
+    def list_features_versions(self) -> list[str]:
+        """
+        Lists all available features versions in the images directory.
+
+        Returns:
+            list[str]: A list of available features version names.
+        """
+        if not self.intensity_dir.exists():
+            return []
+        return [p.name for p in self.intensity_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]

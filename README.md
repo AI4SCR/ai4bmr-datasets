@@ -43,6 +43,7 @@ datasets. After preparing and setting up the dataset instance, the following att
 
 These components are enforced and standardized across datasets.
 
+### Data Versions
 A dataset can have different versions of images, masks, features, and metadata, allowing for flexibility in data access.  
 To load the data *as published*, use `{image,mask,metadata,feature}_version="published"`. Be aware that for most 
 datasets, this means the loaded data is not harmonized. You may encounter inconsistencies such as:
@@ -105,10 +106,30 @@ pip install git+https://github.com/AI4SCR/ai4bmr-datasets.git@v2.0.5
 All datasets are initialized by passing the desired versions and data loading flags to the constructor.
 
 ```python
+# Memory requirements for different datasets:
+# Keren2018: ~10GB
+# Jackson2020: ~50GB
+# Danenberg2022: ~100GB
+# Cords2024: ~1TB
+
 from ai4bmr_datasets import Keren2018
 from pathlib import Path
 
-base_dir = Path("/path/to/storage")  # can be None, resolves to ~/.cache/ai4bmr_datasets by default
+# base_dir can be `None` and resolves to ~/.cache/ai4bmr_datasets by default
+# alternatively one can set the env variable `AI4BMR_DATASETS_DIR`
+base_dir = Path("<path/to/storage>")
+base_dir = Path('/Volumes/T7/ai4bmr-datasets/Keren2018')
+
+dataset = Keren2018(base_dir=base_dir)
+dataset.prepare_data()  # Downloads and preprocesses data if needed, only needs to be run once
+
+# list available versions of the data (see section: Data Versions)
+dataset.list_image_versions()
+dataset.list_mask_versions()
+dataset.list_metadata_versions()
+dataset.list_features_versions()
+
+# define a specific data version
 dataset = Keren2018(
     base_dir=base_dir,
     image_version="published",
@@ -119,8 +140,7 @@ dataset = Keren2018(
     metadata_version="published", 
     load_metadata=True
 )
-dataset.prepare_data()  # Downloads and preprocesses data if needed, only needs to be run once
-dataset.setup()  # load the data
+dataset.setup()
 ```
 
 ### 2. Access core components
@@ -132,6 +152,8 @@ print(dataset.masks.keys())  # Dictionary of masks
 ```
 
 ### 3. Work with image and mask objects
+
+Image and Mask objects are not loaded into memory. They are loaded on demand when accessing the `.data` attribute.
 
 ```python
 sample_id = dataset.sample_ids[0]  # get the first sample ID
@@ -147,6 +169,7 @@ print("Mask shape:", mask.shape)
 ```python
 print(dataset.intensity.shape)  # Cell x marker matrix
 print(dataset.metadata.shape)   # Cell x annotation matrix
+print(dataset.clinical.shape)   # patients / observations x annotation matrix
 ```
 ---
 

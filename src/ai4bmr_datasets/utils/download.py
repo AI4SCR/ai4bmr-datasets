@@ -62,23 +62,28 @@ def download_file_map(file_map: dict[str, Path], force: bool = False):
 
     for url, target_path in file_map.items():
         if not target_path.exists() or force:
-            logger.info(f"Downloading {url} → {target_path}")
-            headers = {"User-Agent": "Mozilla/5.0"}
-            with requests.get(url, headers=headers, stream=True) as r:
-                r.raise_for_status()
-                total_size = int(r.headers.get('Content-Length', 0))
-                chunk_size = 8192
+            try:
+                logger.info(f"Downloading {url} → {target_path}")
+                headers = {"User-Agent": "Mozilla/5.0"}
+                with requests.get(url, headers=headers, stream=True) as r:
+                    r.raise_for_status()
+                    total_size = int(r.headers.get('Content-Length', 0))
+                    chunk_size = 8192
 
-                with open(target_path, 'wb') as f, tqdm(
-                        desc=target_path.name,
-                        total=total_size,
-                        unit='B',
-                        unit_scale=True,
-                        unit_divisor=1024,
-                ) as pbar:
-                    for chunk in r.iter_content(chunk_size=chunk_size):
-                        if chunk:  # filter out keep-alive chunks
-                            f.write(chunk)
-                            pbar.update(len(chunk))
+                    with open(target_path, 'wb') as f, tqdm(
+                            desc=target_path.name,
+                            total=total_size,
+                            unit='B',
+                            unit_scale=True,
+                            unit_divisor=1024,
+                    ) as pbar:
+                        for chunk in r.iter_content(chunk_size=chunk_size):
+                            if chunk:  # filter out keep-alive chunks
+                                f.write(chunk)
+                                pbar.update(len(chunk))
+            except Exception as e:
+                logger.error(f"Failed to download {url}. Network connection might have been interrupted. Error: {e}")
+                if target_path.exists():
+                    target_path.unlink()
         else:
             logger.info(f"Skipping download of {target_path.name}, already exists.")
