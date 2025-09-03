@@ -148,7 +148,7 @@ class Meyer2025(BaseIMCDataset):
     def prepare_data(self):
         print('prepare data')
 
-        #self.download()
+        self.download()
 
         self.process_acquisitions()
 
@@ -162,10 +162,10 @@ class Meyer2025(BaseIMCDataset):
 
         file_map = {
             'https://zenodo.org/records/10942609/files/ZTMA174_raw.zip?download=1': download_dir / 'ZTMA174_raw.zip',
-            #'https://zenodo.org/records/10942609/files/ZTMA249_raw.zip?download=1': download_dir / 'ZTMA249_raw.zip',
+            'https://zenodo.org/records/10942609/files/ZTMA249_raw.zip?download=1': download_dir / 'ZTMA249_raw.zip',
         }
 
-        #download_file_map(file_map, force=force)
+        download_file_map(file_map, force=force)
 
         # Extract zip files
         for target_path in file_map.values():
@@ -188,17 +188,18 @@ class Meyer2025(BaseIMCDataset):
         channel_names_labels = {}
 
         for acquisitions_folder_i in acquisitions_dir.iterdir():
+            print('acquisitions_folder_i ', acquisitions_folder_i)
 
             if acquisitions_folder_i.suffix == '.zip':
                 continue
 
-            print(acquisitions_folder_i)
-
             for acquisitions_folder_i_j in acquisitions_folder_i.iterdir():
+                print('-------- acquisitions_folder_i_j ', acquisitions_folder_i_j)
 
                 from tqdm import tqdm
 
                 for acquisition_file in tqdm(acquisitions_folder_i_j.iterdir(), desc="Processing acquisitions"):
+                    print('---------------- acquisition_file ', acquisition_file)
                     if acquisition_file.suffix.lower() == '.txt':
 
                         with TXTFile(acquisition_file) as f:
@@ -219,10 +220,26 @@ class Meyer2025(BaseIMCDataset):
                             io.imsave(save_path=img_path / img_name, img=img)
 
 
+        # check if images have different channel_names and channel_labels
+        first_key = next(iter(channel_names_labels))
+        ref_names = channel_names_labels[first_key]['channel_names']
+        ref_labels = channel_names_labels[first_key]['channel_labels']
+
+        for key, values in channel_names_labels.items():
+            assert values['channel_names'] == ref_names, f"❌ channel_names mismatch found in: {key}"
+            assert values['channel_labels'] == ref_labels, f"❌ channel_labels mismatch found in: {key}"
+
+            if values['channel_names'] != ref_names or values['channel_labels'] != ref_labels:
+                print(f"❌ Mismatch found in: {key}")
+
+        # generate panel , selecting a random sample (give all channels are the same)
+        import random
+        import pandas as pd
+        random_key = random.choice(list(channel_names_labels.keys()))
+        panel_df = pd.DataFrame(channel_names_labels[random_key])
+        panel_df.to_parquet(img_path / 'panel.csv')
+
         import pdb; pdb.set_trace()
-
-
-
 
 
 
