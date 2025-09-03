@@ -3,11 +3,16 @@ from pathlib import Path
 from readimc import MCDFile, TXTFile
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
+from ai4bmr_datasets.utils import io
+from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
 
 from pathlib import Path
+import numpy as np
 
 from loguru import logger
 
+
+'''
 def unzip_recursive(zip_path: Path, extract_dir: Path = None):
     """
     Recursively unzips a given zip file to a specified directory.
@@ -94,6 +99,7 @@ def download_file_map(file_map: dict[str, Path], force: bool = False):
         else:
             logger.info(f"Skipping download of {target_path.name}, already exists.")
 
+'''
 
 '''
 import sys
@@ -179,6 +185,8 @@ class Meyer2025(BaseIMCDataset):
 
         acquisitions_dir = self.raw_acquisitions_dir 
 
+        channel_names_labels = {}
+
         for acquisitions_folder_i in acquisitions_dir.iterdir():
 
             if acquisitions_folder_i.suffix == '.zip':
@@ -188,16 +196,30 @@ class Meyer2025(BaseIMCDataset):
 
             for acquisitions_folder_i_j in acquisitions_folder_i.iterdir():
 
-                for acquisition_file in acquisitions_folder_i_j.iterdir():
+                from tqdm import tqdm
+
+                for acquisition_file in tqdm(acquisitions_folder_i_j.iterdir(), desc="Processing acquisitions"):
                     if acquisition_file.suffix.lower() == '.txt':
 
                         with TXTFile(acquisition_file) as f:
-                            print(f.channel_names)  # metals
-                            print(f.channel_labels)  # targets
+                            #print(f.channel_names)  # metals
+                            #print(f.channel_labels)  # targets
+
+                            channel_names_labels[acquisition_file.stem] = {
+                                'channel_names': f.channel_names,
+                                'channel_labels': f.channel_labels
+                            }
+
+                            img_path = self.raw_dir / 'images/raw/'
+                            img_name = acquisition_file.stem + '.tiff'
+
 
                             img = f.read_acquisition()
+                            img = img.astype(np.float32)
+                            io.imsave(save_path=img_path / img_name, img=img)
 
-                            import pdb; pdb.set_trace()
+
+        import pdb; pdb.set_trace()
 
 
 
