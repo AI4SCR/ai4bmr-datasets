@@ -104,25 +104,13 @@ class Keren2018(BaseIMCDataset):
         panel = panel.assign(target=panel.target.replace(target_map))
 
         panel = panel.sort_values("mass_channel", ascending=True)
+        panel = panel.reset_index(drop=True)
+        panel.index.name = "channel_index"
+
         panel = panel.assign(
             target_original_name=panel.target, target=panel.target.map(tidy_name)
         )
 
-        # extract original page numbers for markers
-        # raw_images_dir = self.raw_dir / "tnbc"
-        # img_path = sorted(
-        #     filter(
-        #         lambda f: not f.name.startswith("."), raw_images_dir.glob("*.tiff")
-        #     )
-        # )[0]
-        # metadata = self.get_tiff_metadata(img_path)
-        # metadata = metadata.rename(columns={"target": "target_from_tiff"}).reset_index()
-
-        # panel = panel.merge(metadata, on="mass_channel", how="left")
-        # assert panel.isna().any().any() == False
-        # panel = panel.sort_values("page").reset_index(drop=True)
-
-        panel.index.name = "channel_index"
         panel = panel.convert_dtypes()
 
         panel_path = self.get_panel_path(image_version='published')
