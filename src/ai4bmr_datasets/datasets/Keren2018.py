@@ -106,6 +106,7 @@ class Keren2018(BaseIMCDataset):
         panel = panel.assign(target=panel.target.replace(target_map))
 
         panel = panel.sort_values("mass_channel", ascending=True)
+        panel = panel.reset_index(drop=True)
         panel = panel.assign(
             target_original_name=panel.target, target=panel.target.map(tidy_name)
         )
@@ -125,6 +126,7 @@ class Keren2018(BaseIMCDataset):
         # panel = panel.sort_values("page").reset_index(drop=True)
 
         panel.index.name = "channel_index"
+        assert panel.index.is_unique
         panel = panel.convert_dtypes()
 
         panel_path = self.get_panel_path(image_version='published')
