@@ -29,22 +29,23 @@ from ai4bmr_learn.plotting.umap import plot_umap
 
 class BEAT:
     INVALID_SAMPLE_IDS = {
-        '1GUG.0M.2',  # barcode
-        '1GVQ.06.2',  # barcode
-        '1GUG.0M.0',  # mpp_x != mpp_y
-        '1GVQ.06.1',  # mpp_x != mpp_y
+        # '1GUG.0M.2',  # barcode
+        # '1GVQ.06.2',  # barcode
+        # '1GUG.0M.0',  # mpp_x != mpp_y
+        # '1GVQ.06.1',  # mpp_x != mpp_y
     }
+    PATH_TO_TRIDENT = Path("/users/mensmeng/workspace/dermatology/TRIDENT_pipeline/new_install/trident/trident")
 
     def __init__(self, base_dir: Path | None = None):
-        self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat')
-        self.raw_dir = self.base_dir / '01_raw'
+        self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned')
+        self.raw_dir = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/mesothelioma/HnE/BEAT-MESO_rescan_40x_preXenium')
         self.processed_dir = self.base_dir / '02_processed'
         self.dataset_dir = self.processed_dir / 'datasets' / 'beat'
         self.tools_dir = self.base_dir / '03_tools'
 
         # GLOBAL PARAMS
         # self.target_mpp = 0.8624999831542972
-        self.target_mpp = 0.862515094
+        self.target_mpp = 0.
         self.overlap = 0.25
 
     def prepare_tools(self):
@@ -67,75 +68,26 @@ class BEAT:
         subprocess.run(install_cmd, shell=True, check=True)
 
     def prepare_metadata(self):
-        """Questions
-        Is this n=12 or n=14? I assume -14 can be ignored
-        2024-05-24_n.1 - n.14/malexan3-24-05-2024-012-14.czi
+        def filter_metadata(df: pd.DataFrame) -> pd.DataFrame:
+            df = df[df['tech_id'] == 'HE']
+            df = df[df['include'] == True]
 
-        What are the corresponding numbers for `2024-05-31_n98-n100`
+            ## remove columns where all values are NA
+            df = df.dropna(axis=1, how='all')
+            assert df.index.is_unique
+            assert df.sample_path.is_unique
+            assert df.sample_path.isna().sum() == 0
+            return df
+        
 
-        """
 
-        clinical = pd.read_excel(self.raw_dir / 'H_E_Images/Image_ID_vs_patient_blockIDs.xlsx')
-        clinical.columns = clinical.columns.map(tidy_name)
-        clinical = clinical.convert_dtypes()
-
-        assert clinical.sample_barcode.value_counts().max() == 1
-
-        dir_to_range = {
-            '2024-05-28 slide n.15 - n.50': list(range(15, 50 + 1)),
-            'Slide N°130-222': list(range(130, 222 + 1)),
-            '2024-05-24_n.1 - n.14': list(range(1, 14 + 1)),
-            '2024-05-30_n51 - n.97': list(range(51, 97 + 1)),
-            '2024-06-05_n101-n129': list(range(101, 129 + 1)),
-            '2024-05-31_n98-n100': list(range(98, 100 + 1))
-        }
-
-        import re
-        wsi_paths = list(self.base_dir.rglob('*.ndpi')) + list(self.base_dir.rglob('*.czi'))
-        records = []
-        for wsi_path in wsi_paths:
-
-            match = re.search(r'malexan3-31-05-2024-(\d{3})', str(wsi_path))
-            if match is not None:
-                index = int(match.group(1)) - 60
-                n = dir_to_range[wsi_path.parent.name][index]
-                records.append({'wsi_path': wsi_path, 'n': n})
-                continue
-
-            match = re.search(r'malexan3-\d{2}-\d{2}-\d{4}-(\d{3})\.czi$', str(wsi_path))
-            if match is not None:
-                index = int(match.group(1))
-                if wsi_path.parent.name == '2024-06-05_n101-n129':
-                    index -= 31
-                n = dir_to_range[wsi_path.parent.name][index]
-                records.append({'wsi_path': wsi_path, 'n': n})
-                continue
-
-            match = re.search(r'malexan3-\d{2}-\d{2}-\d{4}-(\d{3})-\d{1,2}\.czi$', str(wsi_path))
-            if match is not None:
-                index = int(match.group(1))
-                n = dir_to_range[wsi_path.parent.name][index]
-                records.append({'wsi_path': wsi_path, 'n': n})
-                continue
-
-            match = re.search(r'beat-meso (\d+) -', str(wsi_path).lower())
-            match = match or re.search(r'best-meso (\d+) -', str(wsi_path).lower())
-            n = int(match.group(1))
-            records.append({'wsi_path': wsi_path, 'n': n})
-
-        assert len(wsi_paths) == len(records)
-        assert len(wsi_paths) == 183
-
-        metadata = pd.DataFrame.from_records(records)
-        metadata = metadata.merge(clinical)
-        metadata['sample_id'] = metadata['sample_barcode'].str.strip() + '.' + metadata.groupby(
-            'sample_barcode').cumcount().astype(str)
-        metadata = metadata.convert_dtypes().astype({'wsi_path': str})
-        metadata = metadata.set_index('sample_id')
+        clinical = pd.read_csv('/users/mensmeng/workspace/beat_meso/metadata_beat_meso_final_rescanned.csv')
+        clinical = filter_metadata(clinical)
+        clinical = clinical.set_index('sample_id')
 
         save_path = self.dataset_dir / 'metadata.parquet'
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        metadata.to_parquet(save_path, engine='fastparquet')
+        clinical.to_parquet(save_path, engine='fastparquet')
 
     def get_metadata(self):
         return pd.read_parquet(self.dataset_dir / 'metadata.parquet', engine='fastparquet')
@@ -147,160 +99,55 @@ class BEAT:
 
     def get_wsi_path(self, sample_id: str):
         clinical = self.get_metadata()
-        wsi_path = clinical[clinical.index == sample_id].wsi_path.item()
+        wsi_path = clinical[clinical.index == sample_id].sample_path.item()
         assert Path(wsi_path).exists()
         return wsi_path
+    
+    def get_wsi_name(self, sample_id: str):
+        clinical = self.get_metadata()
+        wsi_name = clinical[clinical.index == sample_id].block_id.item()
+        return wsi_name
 
-    def prepare_wsi(self, sample_id: str, force: bool = False):
-
-        if sample_id in self.INVALID_SAMPLE_IDS:
-            return
-
-        dataset_dir = self.dataset_dir
-        dataset_dir.mkdir(parents=True, exist_ok=True)
-
-        bfconvert = self.tools_dir / "bftools" / "bfconvert"
-        assert bfconvert.exists()
-
-        wsi_path = self.get_wsi_path(sample_id)
-
-        intermediate_path = dataset_dir / sample_id / 'intermediate.tiff'
-        save_path = dataset_dir / sample_id / 'wsi.tiff'
-
-        if save_path.exists() and not force:
-            logger.info(f"File {save_path} already exists. Skipping conversion.")
-            return
-        else:
-            logger.info(f'Converting {wsi_path} to {sample_id}.')
-
-        assert False, 'this should not run'
-        # Convert NDPI/other WSI to intermediate TIFF
-        if not intermediate_path.exists():
-            cmd1 = f'/usr/bin/time -v "{bfconvert}" -nogroup -bigtiff -series 0 "{wsi_path}" "{intermediate_path}"'
-            logger.info(f"Running command: {cmd1}")
-            subprocess.run(cmd1, shell=True, check=True)
-
-        # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
-        cmd2 = f'/usr/bin/time -v vips tiffsave "{intermediate_path}" "{save_path}" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw'
-        logger.info(f"Running command: {cmd2}")
-        subprocess.run(cmd2, shell=True, check=True)
-
-        # Remove intermediate file
-        intermediate_path.unlink()
-
-    def prepare_wsi_with_slurm(self, sample_id: str, force: bool = False):
+    def check_wsi(self, sample_id: str, force: bool = False):
 
         if sample_id in self.INVALID_SAMPLE_IDS:
             return
-
-        dataset_dir = self.dataset_dir
-        dataset_dir.mkdir(parents=True, exist_ok=True)
-
-        bfconvert = self.tools_dir / "bftools" / "bfconvert"
-        assert bfconvert.exists()
-
-        wsi_path = self.get_wsi_path(sample_id)
-
-        intermediate_path = dataset_dir / sample_id / 'intermediate.tiff'
-        save_path = dataset_dir / sample_id / 'wsi.tiff'
-
-        if save_path.exists() and not force:
-            logger.info(f"File {save_path} already exists. Skipping conversion.")
-            return
-        else:
-            logger.info(f'Converting {wsi_path} to {sample_id}.')
-
-        # assert False
-        job_name = f"{sample_id}-wsi2tiff"
-        logger.info(f"Converting {wsi_path} to {save_path} using Bio-Formats (job_name={job_name})")
-        num_cpus = 16
-
-        sbatch_command = f"""
-        sbatch \\
-        --job-name={job_name} \\
-        --output=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.log \\
-        --error=/work/FAC/FBM/DBC/mrapsoma/prometex/logs/adrianom/{job_name}-%j.err \\
-        --time=24:00:00 \\
-        --mem=128G \\
-        --cpus-per-task={num_cpus} \\
-        <<'EOF'
-        #!/bin/bash
         
-        source /users/amarti51/miniconda3/bin/activate
-        conda activate omics
-        
-        INPUT="{wsi_path}"
-        INTERMEDIATE="{intermediate_path}"
-        OUTPUT="{save_path}"
-        BFCONVERT="{bfconvert}"
-        
-        mkdir -p "$(dirname "{save_path}")"
-
-        # Convert NDPI/other WSI to intermediate TIFF
-        # /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -compression LZW -tilex 512 -tiley 512 -series 0 -pyramid-resolutions 4 -pyramid-scale 2 "$INPUT" "$INTERMEDIATE"
-        echo "* Exporting full-res TIFF..."
-        /usr/bin/time -v "$BFCONVERT" -nogroup -bigtiff -series 0 "$INPUT" "$INTERMEDIATE"
-
-        # Convert intermediate TIFF to OpenSlide-compatible pyramid TIFF
-        echo "* Building OpenSlide-compatible pyramid TIFF..."
-        export VIPS_CONCURRENCY={num_cpus - 1}
-        /usr/bin/time -v vips tiffsave "$INTERMEDIATE" "$OUTPUT" --pyramid --tile --tile-width 512 --tile-height 512 --bigtiff --compression lzw
-        
-        rm "$INTERMEDIATE"
-        
-        EOF
-        """
-        sbatch_command = textwrap.dedent(sbatch_command).strip()
-
-        subprocess.run(sbatch_command, shell=True, check=True)
-
-    def post_process_tiff_flags(self, sample_id: str):
-        # NOTE: extracting the mpp from some slides does lead to wrong conversion for some reason.
-        #   to be investigated. For now we set the resolution ourselves.
-        logger.info(f'Setting tiff flags for {sample_id}')
-
-        wsi_path = self.dataset_dir / sample_id / 'wsi.tiff'
-        slide = openslide.OpenSlide(wsi_path)
+        wsi_path = self.get_wsi_path(sample_id=sample_id)
 
         try:
-            mpp = get_mpp(slide)
-            logger.info(f'tiff file has an mpp={mpp}')
-        except AssertionError as e:
-            logger.error(f'Error retrieving slide mpp for {wsi_path}')
-            raise e
+            slide = openslide.OpenSlide(wsi_path)
+            mpp_x, mpp_y = get_mpp_and_resolution(slide)
+            assert np.isclose(mpp_x, mpp_y), f'mpp_x={mpp_x} != mpp_y={mpp_y}'
+            logger.info(f'{sample_id} has mpp={mpp_x:.4f}')
+        except Exception as e:
+            logger.error(f'Error opening {wsi_path} for {sample_id}: {e}')
+            self.INVALID_SAMPLE_IDS.add(sample_id)
+            return
+        
 
-        if str(mpp).startswith('4.422'):
-            logger.info(f'Setting mpp to 0.4422')
+    def prepare_wsi_trident(self, sample_id: str, force: bool = False):
 
-            cmd = f"""
-            # set XResolution (tag 282) to 22611
-            tiffset -s 282 22611 "{wsi_path}"
-            
-            # set YResolution (tag 283) to 22611
-            tiffset -s 283 22611 "{wsi_path}"
-            
-            # set ResolutionUnit (tag 296) to 3 (centimeter)
-            tiffset -s 296 3 "{wsi_path}"
-            """
-            cmd = textwrap.dedent(cmd).strip()
-            subprocess.run(cmd, shell=True, check=True)
+        wsi_path = self.get_wsi_path(sample_id=sample_id)
+        wsi_name = self.get_wsi_name(sample_id=sample_id)
+        ### call job script and pass parameters
 
-        if str(mpp).startswith('0.08624'):
-            logger.info(f'Setting mpp to 0.862515094')
 
-            cmd = f"""
-            # set XResolution (tag 282) to 11594
-            tiffset -s 282 11594 "{wsi_path}"
+        ###### segmentation
+        from utils.wsi.segment import segment_wsi
+        seg_dir = self.dataset_dir / sample_id / 'contours' / 'trident'
+        seg_dir.mkdir(parents=True, exist_ok=True)
+        segment_wsi(wsi_path=wsi_path, wsi_name=wsi_name, seg_model='hest', seg_dir=seg_dir, force_rerun=force)
 
-            # set YResolution (tag 283) to 11594
-            tiffset -s 283 11594 "{wsi_path}"
 
-            # set ResolutionUnit (tag 296) to 3 (centimeter)
-            tiffset -s 296 3 "{wsi_path}"
-            """
-            cmd = textwrap.dedent(cmd).strip()
-            subprocess.run(cmd, shell=True, check=True)
+        ###### patching
+        
 
+        pass
+
+
+        
+    ### legacy code, for custom segmentation
     def segment(self, sample_id: str, model_name: str = 'grandqc', target_mpp: float = 4.0):
         logger.info(f'🧩 Segmenting {sample_id} with {model_name}')
 
@@ -339,6 +186,7 @@ class BEAT:
                       save_contours_path=save_contours_path,
                       save_coords_path=save_coords_path)
 
+    ### legacy code, for custom segmentation
     def create_thumbnail(self, sample_id: str):
 
         img_path = self.dataset_dir / sample_id / 'wsi.tiff'
@@ -353,6 +201,7 @@ class BEAT:
         save_path = img_path.parent / 'thumbnail.png'
         imsave(str(save_path), thumbnail)
 
+    ### legacy code, for custom segmentation
     def filter_contours(self):
         # TODO: potentially post-process contours or improve filtering during segmentation.
         # NOTE: we only use contours that are larger than the median area of all found contours
@@ -361,7 +210,9 @@ class BEAT:
         # import matplotlib.pyplot as plt
         # plt.imshow(visualize_contours(contours=contours[filter_], slide=slide)).figure.show()
         pass
+    
 
+    ### legacy code, for custom patching
     def create_coords(self, sample_id: str, patch_size: int = 512, model_name: str = 'hest'):
         patch_stride = patch_size
         target_mpp = self.target_mpp
@@ -444,6 +295,7 @@ class BEAT:
         img = visualize_coords(coords=coords, slide=slide)
         imsave(coords_path.with_suffix('.png'), img)
 
+    ### legacy code, for custom patch embedding
     def create_patch_embeddings(self, sample_id: str, coords_version: str, model_name: str = 'uni_v1',
                                 batch_size: int = 64, num_workers: int = 12):
         logger.info(f'Computing embeddings for {sample_id}')
@@ -487,6 +339,8 @@ class BEAT:
                 save_path = save_embeddings_dir / f'batch_idx={batch_idx}.pt'
                 torch.save(x, save_path)
 
+
+    ### legacy code, for custom slide embedding
     def create_slide_embedding(self, sample_id: str, coords_version: str, model_name: str = 'uni_v1',
                                batch_size: int = 64, num_workers: int = 12):
         import h5py
@@ -510,6 +364,7 @@ class BEAT:
         ax.figure.tight_layout()
         ax.figure.savefig(save_path, dpi=300)
 
+    ### legacy code, for custom slide embedding
     def get_sample_embeddings(self, sample_id: str, model_name: str, coords_version: str, max_patches: int = 1000):
         embeddings_dir = self.dataset_dir / sample_id / 'embeddings' / 'patch' / f'model={model_name}' / coords_version
         assert embeddings_dir.exists(), f'`embeddings_dir` {embeddings_dir} does not exist.'
@@ -523,7 +378,7 @@ class BEAT:
         data = data[idc]
 
         return data
-
+    ### legacy code, for custom slide embedding
     def create_wsi_umap(self, sample_id: str, model_name: str, coords_version: str, max_patches: int = 1000):
         logger.info(f'Computing UMAP for {sample_id}')
 

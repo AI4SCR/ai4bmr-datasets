@@ -1,4 +1,4 @@
-name: omics
+name: wsi_omics
 channels:
   - bioconda
   - conda-forge
@@ -249,9 +249,9 @@ dependencies:
   - zstd=1.5.7
   - pip:
       - aenum==3.1.16
-      - ai4bmr-core==0.0.post60+g2a6c246e7.d20250822
-      - ai4bmr-datasets==1.0.0.post80+gd024ec973.d20250821
-      - ai4bmr-learn==0.1.0
+     # - ai4bmr-core==0.0.post60+g2a6c246e7.d20250822
+     # - ai4bmr-datasets==1.0.0.post80+gd024ec973.d20250821
+     # - ai4bmr-learn==0.1.0
       - aiohappyeyeballs==2.6.1
       - aiohttp==3.12.15
       - aiosignal==1.4.0
@@ -394,7 +394,7 @@ dependencies:
       - tornado==6.5.2
       - tqdm==4.67.1
       - transformers==4.55.4
-      - trident==0.2.0
+      #- trident==0.2.0
       - triton==3.4.0
       - typeshed-client==2.8.2
       - uc-micro-py==1.0.3
