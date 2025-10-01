@@ -50,8 +50,8 @@ def patch_slide(wsi_name, wsi_path, seg_dir, patch_dir, target_mag=20, patch_siz
         ### create patch dir and check if already exists
         
         ## check if exists and not empty
-        if os.path.exists(patch_dir) and os.listdir(patch_dir):
-            print(f"Patch directory {patch_dir} already exists.")
+        if (Path(patch_dir) / 'patches' / f"{wsi_name}_patches.h5").exists() :
+            print(f"Patch file for {wsi_name} already exists in {patch_dir}. Skipping patching.")
             return
         else:
             os.makedirs(patch_dir, exist_ok=True)
@@ -71,7 +71,7 @@ def patch_slide(wsi_name, wsi_path, seg_dir, patch_dir, target_mag=20, patch_siz
         coords_path = wsi_to_process.extract_tissue_coords(
         target_mag=target_magnification,
         patch_size=patch_size,
-        save_coords=patch_dir,
+        save_coords=str(patch_dir),
         overlap=overlap,
         min_tissue_proportion=min_tissue_proportion,
         )
@@ -87,4 +87,4 @@ def patch_slide(wsi_name, wsi_path, seg_dir, patch_dir, target_mag=20, patch_siz
 
         
 
-        
+    
