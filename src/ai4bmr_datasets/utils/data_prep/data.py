@@ -38,8 +38,8 @@ def coords_to_df(coords_dir, ext = ".h5"):
 
 
     df_coords = pd.concat(dataframes, ignore_index=True)
-    #df_coords.rename(columns={'name': 'section_id'}, inplace=True)
-    df_coords.set_index(['slide_id', 'section_id', 'patch_id'], inplace=True)
+    df_coords.rename(columns={'name': 'block_id'}, inplace=True)
+    df_coords.set_index(['block_id', 'patch_id'], inplace=True)
     assert df_coords.index.is_unique, "Coordinates index is not unique."
 
     return df_coords
@@ -59,13 +59,13 @@ def features_to_df(feats_dir, ext = ".h5"):
 
     df_features = pd.concat(dataframes, ignore_index=True)
     df_features.drop(columns=['savetodir'], inplace=True)
-    df_features['slide_id'] = df_features['name'].str.split('_', expand=True)[0]
-
-    df_features.rename(columns={'name': 'section_id'}, inplace=True)
-    df_features.set_index(['slide_id', 'section_id', 'patch_id'], inplace=True)
-
+    df_features.rename(columns={'name': 'block_id'}, inplace=True)
+    df_features.set_index(['block_id', 'patch_id'], inplace=True)
+    encoder_col = df_features.columns[-1]
+    encoder = df_features[encoder_col].iloc[0]
+    df_features.drop(columns=['encoder'], inplace=True)
     ## rename all remaining columns to be feat_*
-    df_features.columns = [f"feat_{col}" for col in df_features.columns]
+    df_features.columns = [f"{encoder}_{col}" for col in df_features.columns]
 
     assert df_features.index.is_unique, "Features index is not unique."
     return df_features

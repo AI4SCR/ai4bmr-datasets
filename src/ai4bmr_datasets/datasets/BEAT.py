@@ -38,6 +38,10 @@ class BEAT:
         # self.target_mpp = 0.8624999831542972
         self.target_mpp = 0.2211
 
+        self.feature_path = None
+        self.coords_path = None
+        self.metadata_path = None
+
         import sys
         sys.path.append("/users/mensmeng/workspace/ai4bmr-datasets/src/ai4bmr_datasets")
 
@@ -63,6 +67,8 @@ class BEAT:
         save_path = self.dataset_dir / 'metadata.parquet'
         save_path.parent.mkdir(parents=True, exist_ok=True)
         clinical.to_parquet(save_path, engine='fastparquet')
+        print(f"Saved metadata to {save_path}")
+        self.metadata_path = save_path
 
     def get_metadata(self):
         return pd.read_parquet(self.dataset_dir / 'metadata.parquet', engine='fastparquet')
@@ -377,25 +383,34 @@ class BEAT:
         metadata = pd.concat([metadata, stats], axis=1)
         metadata.to_parquet(metadata_path)
 
-    def prepare_data(self, sample_id: str, force: bool = False):
-        self.prepare_tools()
-        self.prepare_metadata()
+    ############ DATA PREPARATION ##############
 
-        self.prepare_wsi(sample_id=sample_id, force=force)
-        self.post_process_tiff_flags(sample_id=sample_id)
-        self.create_thumbnail(sample_id=sample_id)
+    def prepare_data(self, save_dir, feats_dir, coords_dir, force_rerun=False):
+        from utils.data_prep.data import features_to_df, coords_to_df
 
-        self.segment(sample_id=sample_id, model_name='hest', target_mpp=4.0)
-        self.segment(sample_id=sample_id, model_name='grandqc', target_mpp=4.0)
+        df_features = features_to_df(feats_dir)
+        df_coords = coords_to_df(coords_dir)
 
-        for patch_size in [224, 448]:
-            self.create_coords(sample_id=sample_id, patch_size=patch_size)
-            self.visualize_coords(sample_id=sample_id, patch_size=patch_size)
-            self.visualize_patches(sample_id=sample_id, patch_size=patch_size)
+        df_coords, df_features = df_coords.align(df_features, join='inner', axis=0)
+        print(f"Coordinates shape: {df_coords.shape}, Features shape: {df_features.shape}")
 
-        patch_size = patch_stride = 448
-        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={self.target_mpp:.4f}-overlap={self.overlap:.2f}'
-        self.create_patch_embeddings(sample_id=sample_id, coords_version=coords_version, model_name='uni_v1')
+        
+        save_dir.mkdir(parents=True, exist_ok=True)
+        ## check if file exists
+        if (save_dir / 'feats.parquet').exists() and not force_rerun:
+            print(f"Features file already exists at {save_dir / 'feats.parquet'}. Skipping.")
+        else:
+            df_features.to_parquet(save_dir / 'feats.parquet', engine='fastparquet')
+            print(f"Saved features to {save_dir / 'feats.parquet'}")
+            self.feature_path = save_dir / 'feats.parquet'
+        if (save_dir / 'coords.parquet').exists() and not force_rerun:
+            print(f"Coordinates file already exists at {save_dir / 'coords.parquet'}. Skipping.")
+        else:
+            df_coords.to_parquet(save_dir / 'coords.parquet', engine='fastparquet')
+            print(f"Saved coordinates to {save_dir / 'coords.parquet'}")
+            self.coords_path = save_dir / 'coords.parquet'
+    
+        return df_coords, df_features
 
 
 #%%
@@ -411,9 +426,9 @@ if __name__ == '__main__':
     sample_ids = metadata.index.tolist()
 
     ### save sample_ids to txt file
-    with open(self.processed_dir / 'sample_ids.txt', 'w') as f:
-        for sample_id in sample_ids:
-            f.write(f"{sample_id}\n")
+    # with open(self.processed_dir / 'sample_ids.txt', 'w') as f:
+    #     for sample_id in sample_ids:
+    #         f.write(f"{sample_id}\n")
     #%%
     sample_id = sample_ids[100]
 
@@ -439,5 +454,30 @@ if __name__ == '__main__':
     #%%
     self.create_patch_embeddings(sample_id=sample_id, patch_dir=patch_dir, feature_dir=feature_dir,
                                  patch_extractor=patch_extractor, target_mag=target_mag, patch_size=patch_size, overlap=overlap)
+
+    # %%
+    save_dir = self.processed_dir / 'embeddings' / 'uni_v2'
+    coords_dir = feats_dir = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/datasets/beat_hne/trident/patch_features/features_uni_v2')
+    df_coords, df_features = self.prepare_data(save_dir=save_dir, feats_dir=feats_dir, coords_dir=coords_dir, force_rerun=True)
+
+
+# %%
+    from utils.data_prep.anndata_interface import create_anndata
+    adata = create_anndata(X=df_features, obs=df_coords)
+    import scanpy as sc
+
+    # adata: your AnnData object with raw features in adata.X
+
+    # 1. Scale the features (optional but recommended)
+    sc.pp.scale(adata)
+
+    # 2. PCA (optional, helps UMAP performance for high-dimensional data)
+    sc.tl.pca(adata, svd_solver='arpack')
+
+    # 3. Compute neighborhood graph
+    sc.pp.neighbors(adata, n_neighbors=15, n_pcs=40)  # adjust n_pcs to your data
+    sc.tl.umap(adata)
+
+    sc.pl.umap(adata, color=["block_id"])  # replace with relevant metadata
 
 # %%
