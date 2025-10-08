@@ -174,7 +174,7 @@ def extract_slide_features(wsi_path, wsi_name, feature_dir, slide_feature_dir, s
     assert patch_encoder == feature_extractor, f"Patch encoder {feature_extractor} does not match the expected patch encoder {patch_encoder} for slide encoder {slide_encoder.enc_name}. Please extract patch features using {patch_encoder} first."
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    slide_extractor.to(device)
+    slide_encoder.to(device)
 
     patch_features_path = os.path.join(feature_dir, f"{wsi_name}.h5")
     print(f"Reading patch features from: {patch_features_path}")

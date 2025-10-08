@@ -1,25 +1,26 @@
 #!/bin/bash
 
 #SBATCH -c 8
-#SBATCH --mem 50G
+#SBATCH --mem 60G
 #SBATCH --partition gpu
-#SBATCH --time 00:30:00
+#SBATCH --time 00:50:00
 #SBATCH --gres gpu:1
 
-#SBATCH --job-name=rerun_beat_embeddings
+#SBATCH --job-name=beat_embeddings_conch
 #SBATCH --output=/users/mensmeng/logs/%x-%A-%a.out
 #SBATCH --error=/users/mensmeng/logs/%x-%A-%a.err
-#SBATCH --array=17-17
+#SBATCH --array=0-23
 
 
-SAMPLE_LIST="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/sample_ids.txt"
+#SAMPLE_LIST="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/sample_ids.txt"
+SAMPLE_LIST="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/missing_files_conch.txt"
 SAMPLE_ID=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" $SAMPLE_LIST)
 echo "Processing sample ID: $SAMPLE_ID"
 
 
 conda activate wsi_trident
 
-PATH_TO_SCRIPT="/users/mensmeng/workspace/ai4bmr-datasets/slurm/scripts/compute-beat-embeddings.py"
+PATH_TO_SCRIPT="/users/mensmeng/workspace/ai4bmr-datasets/scripts/BEAT/compute-beat-embeddings.py"
 
 python $PATH_TO_SCRIPT --sample_id $SAMPLE_ID
 

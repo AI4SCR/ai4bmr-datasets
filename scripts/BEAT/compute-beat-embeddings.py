@@ -16,19 +16,19 @@ sample_id = args.sample_id
 ######## PARAMETERS ##########
 #%%
 target_mag = 20
-patch_size = 256
+patch_size = 512
 overlap = 0
-patch_extractor = 'uni_v2'
+patch_extractor = 'conch_v15'
 
 ##### WORKFLOW ######
 
-dm = BEAT()
+dm = BEAT(id_col = 'block_id')
 
 
 
 #%%
 seg_dir = dm.dataset_dir / 'segmentation'
-dm.segment(sample_id=sample_id, seg_dir=seg_dir, seg_model='hest')
+#dm.segment(sample_id=sample_id, seg_dir=seg_dir, seg_model='hest')
 
 
 
@@ -44,3 +44,5 @@ dm.create_coords(sample_id=sample_id, seg_dir=seg_dir, patch_dir=patch_dir,
 dm.create_patch_embeddings(sample_id=sample_id, patch_dir=patch_dir, feature_dir=feature_dir,
                                 patch_extractor=patch_extractor, target_mag=target_mag, patch_size=patch_size, overlap=overlap)
 
+
+# %%

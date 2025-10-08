@@ -25,13 +25,15 @@ class BEAT:
     
     PATH_TO_TRIDENT = Path("/users/mensmeng/workspace/dermatology/TRIDENT_pipeline/new_install/trident/trident")
 
-    def __init__(self, base_dir: Path | None = None):
+    def __init__(self, base_dir: Path | None = None, id_col: str = 'sample_id'):
 
         self.base_dir = base_dir or Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned')
         self.raw_dir = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/mesothelioma/HnE/BEAT-MESO_rescan_40x_preXenium')
         self.processed_dir = self.base_dir / '02_processed'
         self.dataset_dir = self.processed_dir / 'datasets' / 'beat_hne' / 'trident'
         print(f"Dataset directory: {self.dataset_dir}")
+
+        self.id_col = id_col
 
         self.dataset_dir.mkdir(parents=True, exist_ok=True)
         # GLOBAL PARAMS
@@ -41,6 +43,7 @@ class BEAT:
         self.feature_path = None
         self.coords_path = None
         self.metadata_path = None
+        self.anndata_path = None
 
         import sys
         sys.path.append("/users/mensmeng/workspace/ai4bmr-datasets/src/ai4bmr_datasets")
@@ -81,13 +84,19 @@ class BEAT:
 
     def get_wsi_path(self, sample_id: str):
         clinical = self.get_metadata()
+        assert sample_id in clinical.index, f"{sample_id} not in metadata index."
         wsi_path = clinical[clinical.index == sample_id].sample_path.item()
         assert Path(wsi_path).exists()
         return wsi_path
     
-    def get_wsi_name(self, sample_id: str):
+    def get_wsi_name(self, sample_id: str, id_col: str = 'sample_id'):
         clinical = self.get_metadata()
-        wsi_name = clinical[clinical.index == sample_id].block_id.item()
+        assert sample_id in clinical.index, f"{sample_id} not in metadata index."
+        if id_col == 'sample_id':
+            wsi_name = sample_id
+        else:
+            assert id_col in clinical.columns, f"{id_col} not in metadata columns."
+            wsi_name = clinical[clinical.index == sample_id][id_col].item()
         return wsi_name
 
     def get_mpp_and_resolution(self, slide: openslide.OpenSlide):
@@ -129,7 +138,7 @@ class BEAT:
                             slide_extractor: str | None = None):
 
         wsi_path = self.get_wsi_path(sample_id=sample_id)
-        wsi_name = self.get_wsi_name(sample_id=sample_id)
+        wsi_name = self.get_wsi_name(sample_id=sample_id, id_col=self.id_col)
         ### call job script and pass parameters
 
         ## check wsi
@@ -189,7 +198,7 @@ class BEAT:
         ### separate segmentation
     def segment(self, sample_id: str, seg_dir, seg_model: str = 'hest'):
         wsi_path = self.get_wsi_path(sample_id=sample_id)
-        wsi_name = self.get_wsi_name(sample_id=sample_id)
+        wsi_name = self.get_wsi_name(sample_id=sample_id, id_col=self.id_col)
         ### call job script and pass parameters
 
         ## check wsi
@@ -217,7 +226,7 @@ class BEAT:
     ### legacy code, for custom patching
     def create_coords(self, sample_id: str, seg_dir, patch_dir, target_mag: int = 20, patch_size: int = 256, overlap: int = 0):
         wsi_path = self.get_wsi_path(sample_id=sample_id)
-        wsi_name = self.get_wsi_name(sample_id=sample_id)
+        wsi_name = self.get_wsi_name(sample_id=sample_id, id_col=self.id_col)
         ### call job script and pass parameters
 
         ## check wsi
@@ -236,9 +245,9 @@ class BEAT:
     ### legacy code, for custom patch embedding
     def create_patch_embeddings(self, sample_id: str, patch_dir, feature_dir, patch_extractor: str = 'uni_v2',
                                  target_mag: int = 20, patch_size: int = 256, overlap: int = 0):
-        
+
         wsi_path = self.get_wsi_path(sample_id=sample_id)
-        wsi_name = self.get_wsi_name(sample_id=sample_id)
+        wsi_name = self.get_wsi_name(sample_id=sample_id, id_col=self.id_col)
         ### call job script and pass parameters
 
         ## check wsi
@@ -263,7 +272,7 @@ class BEAT:
 
 
         wsi_path = self.get_wsi_path(sample_id=sample_id)
-        wsi_name = self.get_wsi_name(sample_id=sample_id)
+        wsi_name = self.get_wsi_name(sample_id=sample_id, id_col=self.id_col)
         ### call job script and pass parameters
 
         ## check wsi
@@ -388,8 +397,8 @@ class BEAT:
     def prepare_data(self, save_dir, feats_dir, coords_dir, force_rerun=False):
         from utils.data_prep.data import features_to_df, coords_to_df
 
-        df_features = features_to_df(feats_dir)
-        df_coords = coords_to_df(coords_dir)
+        df_features = features_to_df(feats_dir, id_col=self.id_col)
+        df_coords = coords_to_df(coords_dir, id_col=self.id_col)
 
         df_coords, df_features = df_coords.align(df_features, join='inner', axis=0)
         print(f"Coordinates shape: {df_coords.shape}, Features shape: {df_features.shape}")
@@ -412,6 +421,65 @@ class BEAT:
     
         return df_coords, df_features
 
+    def update_coords(self, id_col='sample_id'):
+        metadata = self.get_metadata()
+        if self.coords_path is None:
+            raise ValueError("Coordinates path is not set. Please run prepare_data first.")
+        coords = pd.read_parquet(self.coords_path, engine='fastparquet')
+
+        print(f"Initial coords shape: {coords.shape}")
+
+        idx_cols = coords.index.names
+        coords = coords.reset_index()
+        assert id_col in coords.columns, f"{id_col} not in coordinates columns."
+        assert id_col in metadata.index.names, f"{id_col} not in metadata index."
+        coords = coords.merge(metadata, on=id_col, how='left')
+        coords.set_index(idx_cols, inplace=True)
+        assert coords.index.is_unique, "Coordinates index is not unique."
+
+
+        
+        import utils.qc.patch_qc as patch_qc
+        patch_features = patch_qc.extract_patch_features(coords, base_dir=None, name_col=None)
+
+        coords = coords.join(patch_features, how='left')
+        ## no NAs in patch_feature columns
+        assert not coords[patch_features.columns].isna().any().any(), "There are NaNs in the patch features after joining."
+        assert coords.index.is_unique, "Coordinates index is not unique after joining features."
+        print(f"Final patch features shape: {coords.shape}")
+
+        coords_path = self.coords_path.parent / f"{self.coords_path.stem}_processed.parquet"
+        coords.to_parquet(coords_path, engine='fastparquet')
+        print(f"Saved updated coordinates to {coords_path}")
+        self.coords_path = coords_path
+        return coords
+    
+    def construct_anndata(self, anndata_dir: Path | None = None):
+        if self.feature_path is None or self.coords_path is None:
+            raise ValueError("Feature path or Coordinates path is not set. Please run prepare_data first.")
+        
+        from utils.data_prep.anndata_interface import create_anndata
+        df_features = pd.read_parquet(self.feature_path, engine='fastparquet')
+        df_coords = pd.read_parquet(self.coords_path, engine='fastparquet')
+
+
+        adata = create_anndata(X=df_features, obs=df_coords)
+        metadata = self.get_metadata()
+        object_cols = metadata.select_dtypes(include=['object']).columns
+        for col in object_cols:
+            metadata[col] = metadata[col].astype(str)
+        adata.uns['metadata'] = metadata
+        
+        
+        if anndata_dir is not None:
+            anndata_dir.parent.mkdir(parents=True, exist_ok=True)
+            anndata_path = anndata_dir / 'anndata.h5ad'
+            adata.write_h5ad(anndata_path)
+            print(f"Saved AnnData to {anndata_path}")
+            self.anndata_path = anndata_path
+
+        return adata
+
 
 #%%
 if __name__ == '__main__':
@@ -419,7 +487,7 @@ if __name__ == '__main__':
     #%%
     self = BEAT()
     #%%
-    self.prepare_metadata()
+    #self.prepare_metadata()
 
     #%%
     metadata = self.get_metadata()
@@ -439,45 +507,47 @@ if __name__ == '__main__':
 
     #%%
     target_mag = 20
-    patch_size = 256
+    patch_size = 512
     overlap = 0
-    patch_extractor = 'uni_v2'
+    patch_extractor = 'conch_v15'
 
     patch_dir = self.dataset_dir / 'patches' / f"{target_mag}x_{patch_size}px_{overlap}px_overlap"
     feature_dir = self.dataset_dir / 'patch_features' / f"features_{patch_extractor}"
 
 
     #%%
-    self.create_coords(sample_id=sample_id, seg_dir=seg_dir, patch_dir=patch_dir,
-                       target_mag=target_mag, patch_size=patch_size, overlap=overlap)
+    # self.create_coords(sample_id=sample_id, seg_dir=seg_dir, patch_dir=patch_dir,
+    #                    target_mag=target_mag, patch_size=patch_size, overlap=overlap)
 
-    #%%
-    self.create_patch_embeddings(sample_id=sample_id, patch_dir=patch_dir, feature_dir=feature_dir,
-                                 patch_extractor=patch_extractor, target_mag=target_mag, patch_size=patch_size, overlap=overlap)
+    # #%%
+    # self.create_patch_embeddings(sample_id=sample_id, patch_dir=patch_dir, feature_dir=feature_dir,
+    #                              patch_extractor=patch_extractor, target_mag=target_mag, patch_size=patch_size, overlap=overlap)
 
     # %%
-    save_dir = self.processed_dir / 'embeddings' / 'uni_v2'
-    coords_dir = feats_dir = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/datasets/beat_hne/trident/patch_features/features_uni_v2')
+    save_dir = self.processed_dir / 'embeddings' / 'conch_v15'
+    coords_dir = feats_dir = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/datasets/beat_hne/trident/patch_features/features_conch_v15')
+
+    #%%
     df_coords, df_features = self.prepare_data(save_dir=save_dir, feats_dir=feats_dir, coords_dir=coords_dir, force_rerun=True)
 
 
-# %%
-    from utils.data_prep.anndata_interface import create_anndata
-    adata = create_anndata(X=df_features, obs=df_coords)
-    import scanpy as sc
+    # %%
+    coords_path = save_dir / 'coords.parquet'
+    self.coords_path = coords_path
+    feature_path = save_dir / 'feats.parquet'
+    self.feature_path = feature_path
 
-    # adata: your AnnData object with raw features in adata.X
 
-    # 1. Scale the features (optional but recommended)
-    sc.pp.scale(adata)
+    #%%
+    df_coords = self.update_coords(id_col='block_id')
 
-    # 2. PCA (optional, helps UMAP performance for high-dimensional data)
-    sc.tl.pca(adata, svd_solver='arpack')
 
-    # 3. Compute neighborhood graph
-    sc.pp.neighbors(adata, n_neighbors=15, n_pcs=40)  # adjust n_pcs to your data
-    sc.tl.umap(adata)
+    #%%
+    anndata_dir = self.processed_dir / 'embeddings' / 'uni_v2'
+    adata = self.construct_anndata(anndata_dir=anndata_dir)
 
-    sc.pl.umap(adata, color=["block_id"])  # replace with relevant metadata
 
 # %%
+## open anndata from h5ad
+# import anndata as ad
+# adata = ad.read_h5ad(self.anndata_path)
