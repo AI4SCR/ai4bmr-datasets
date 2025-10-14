@@ -485,7 +485,7 @@ class BEAT:
 if __name__ == '__main__':
     
     #%%
-    self = BEAT()
+    self = BEAT(id_col='block_id')
     #%%
     #self.prepare_metadata()
 
@@ -524,8 +524,9 @@ if __name__ == '__main__':
     #                              patch_extractor=patch_extractor, target_mag=target_mag, patch_size=patch_size, overlap=overlap)
 
     # %%
-    save_dir = self.processed_dir / 'embeddings' / 'conch_v15'
-    coords_dir = feats_dir = Path('/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/datasets/beat_hne/trident/patch_features/features_conch_v15')
+    fm_model = 'resnet50'
+    save_dir = self.processed_dir / 'embeddings' / 'resnet50'
+    coords_dir = feats_dir = Path(f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/datasets/beat_hne/trident/patch_features/features_{fm_model}')
 
     #%%
     df_coords, df_features = self.prepare_data(save_dir=save_dir, feats_dir=feats_dir, coords_dir=coords_dir, force_rerun=True)

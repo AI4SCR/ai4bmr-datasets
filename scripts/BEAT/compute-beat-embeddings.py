@@ -16,9 +16,9 @@ sample_id = args.sample_id
 ######## PARAMETERS ##########
 #%%
 target_mag = 20
-patch_size = 512
+patch_size = 256
 overlap = 0
-patch_extractor = 'conch_v15'
+patch_extractor = 'resnet50'
 
 ##### WORKFLOW ######
 
@@ -37,8 +37,8 @@ feature_dir = dm.dataset_dir / 'patch_features' / f"features_{patch_extractor}"
 
 
 #%%
-dm.create_coords(sample_id=sample_id, seg_dir=seg_dir, patch_dir=patch_dir,
-                    target_mag=target_mag, patch_size=patch_size, overlap=overlap)
+# dm.create_coords(sample_id=sample_id, seg_dir=seg_dir, patch_dir=patch_dir,
+#                     target_mag=target_mag, patch_size=patch_size, overlap=overlap)
 
 #%%
 dm.create_patch_embeddings(sample_id=sample_id, patch_dir=patch_dir, feature_dir=feature_dir,

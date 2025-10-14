@@ -5,7 +5,7 @@
 #SBATCH --partition cpu
 #SBATCH --time 12:50:00
 
-#SBATCH --job-name=uni_umap
+#SBATCH --job-name=resnet_umap
 #SBATCH --output=/users/mensmeng/logs/%x-%A-%a.out
 #SBATCH --error=/users/mensmeng/logs/%x-%A-%a.err
 

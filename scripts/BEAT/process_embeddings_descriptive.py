@@ -13,7 +13,7 @@ import seaborn as sns
 import anndata as ad
 
 #%%
-fm_model = 'conch_v15'
+fm_model = 'resnet50'
 downsample = False
 results_dir = Path("/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/beat_rescanned/02_processed/embeddings")
 coords_file = results_dir / fm_model / "coords.parquet"
