@@ -10,15 +10,51 @@ class PCa(BaseIMCDataset):
     id = "PCa"
     doi = "unpublished"
 
-    def __init__(self, base_dir: Path | None = None):
-        super().__init__(base_dir)
+    def __init__(self,
+                 base_dir: Path | None = None,
+                 image_version: str | None = None,
+                 mask_version: str | None = None,
+                 feature_version: str | None = None,
+                 metadata_version: str | None = None,
+                 load_intensity: bool = False,
+                 load_spatial: bool = False,
+                 load_metadata: bool = False,
+                 align: bool = False,
+                 join: str = "outer",
+                 ):
+        """
+        Initializes the Cords2024 dataset.
+
+        Args:
+            base_dir (Path | None): Base directory for the dataset.
+            image_version (str | None): Version of the images to load.
+            mask_version (str | None): Version of the masks to load.
+            feature_version (str | None): Version of the features to load.
+            metadata_version (str | None): Version of the metadata to load.
+            load_intensity (bool): Whether to load intensity features.
+            load_spatial (bool): Whether to load spatial features.
+            load_metadata (bool): Whether to load metadata.
+            align (bool): Whether to align sample IDs across modalities.
+            join (str): Type of join for alignment (e.g., 'outer').
+        """
+
+        super().__init__(base_dir=base_dir,
+                         image_version=image_version,
+                         mask_version=mask_version,
+                         feature_version=feature_version,
+                         metadata_version=metadata_version,
+                         load_intensity=load_intensity,
+                         load_spatial=load_spatial,
+                         load_metadata=load_metadata,
+                         align=align,
+                         join=join)
 
         # raw paths
         self.raw_clinical_metadata_path = (
                 self.base_dir / "01_raw" / "metadata" / "ROI_matching_blockID.xlsx"
         )
         self.raw_tma_annotations_path = (
-                self.base_dir / "01_raw" / "metadata" / "tma-annotations-v2.xlsx"
+                self.base_dir / "01_raw" / "metadata" / "tma-annotations-v3.xlsx"
         )
 
         self.raw_tma_tidy_path = self.base_dir / "01_raw" / "metadata" / "TMA_tidy.txt"
@@ -491,7 +527,7 @@ class PCa(BaseIMCDataset):
         mapping = mapping[~filter_]
 
         sample_ids = set([i.stem for i in (self.raw_dir / 'acquisitions').glob('*.tiff')])
-        file_name_to_sample_id = {re.sub(r'\d+$', '', i) + ".tiff": i for i in sample_ids}
+        file_name_to_sample_id = {re.sub(r'_\d+$', '', i) + ".tiff": i for i in sample_ids}
         assert len(file_name_to_sample_id) == len(sample_ids)
         assert set(mapping.file_name_tidy) == set(file_name_to_sample_id.keys())
 
@@ -613,7 +649,7 @@ class PCa(BaseIMCDataset):
         )
 
         mapping = self.get_napari_file_name_to_sample_id_mapping()
-        sample_ids = roi_match_blockId.file_name_napari.map(mapping).to_list()
+        sample_ids = roi_match_blockId.file_name_napari.map(mapping)
 
         roi_match_blockId = roi_match_blockId.assign(
             sample_id=sample_ids,
@@ -622,14 +658,12 @@ class PCa(BaseIMCDataset):
             tma_coordinates=tma_coordinates,
         )
 
-        roi_match_blockId.loc[
-            roi_match_blockId.tma_sample_id == "150 - split", "tma_sample_id"
-        ] = "150"
+        # NOTE: we drop the corrupted acquisition, and simplify the name of the rescued split
+        roi_match_blockId = roi_match_blockId[roi_match_blockId.sample_id.notna()]  # this is tma_id "150"
+        roi_match_blockId.loc[roi_match_blockId.tma_sample_id == "150 - split", "tma_sample_id"] = "150"
         assert roi_match_blockId.tma_sample_id.str.contains("split").sum() == 0
 
-        patient_ids = (
-            roi_match_blockId["Original block number"].str.split("_").str[0].str.strip()
-        )
+        patient_ids = roi_match_blockId["Original block number"].str.split("_").str[0].str.strip()
         roi_match_blockId = roi_match_blockId.assign(PAT_ID=patient_ids)
 
         # NOTE: these are the LP samples (i.e. test runs)
@@ -639,8 +673,7 @@ class PCa(BaseIMCDataset):
         assert not roi_match_blockId.slide_code.isna().any()
         assert not roi_match_blockId.tma_coordinates.isna().any()
         assert not roi_match_blockId.tma_sample_id.isna().any()
-        # NOTE: this is the corrupted acquisition, IIIBL_X3Y15_150  240210_001.tiff
-        assert roi_match_blockId.sample_id.isna().sum() == 1
+        assert roi_match_blockId.sample_id.isna().sum() == 0
 
         tma_id = roi_match_blockId.slide_code + "_" + roi_match_blockId.tma_coordinates
         roi_match_blockId["tma_id"] = tma_id
@@ -703,7 +736,6 @@ class PCa(BaseIMCDataset):
         ]
 
         metadata["date_of_surgery"] = pd.to_datetime(metadata["date_of_surgery"])
-
         metadata["age_at_surgery"] = metadata["age_at_surgery"].astype(int)
 
         mapping = {
@@ -712,9 +744,7 @@ class PCa(BaseIMCDataset):
             "Only 1 Gleason pattern": "only_1",
             "unkown": "unknown",
         }
-        metadata["gleason_pattern_tma_core"] = metadata.gleason_pattern_tma_core.map(
-            mapping
-        )
+        metadata["gleason_pattern_tma_core"] = metadata.gleason_pattern_tma_core.map(mapping)
 
         metadata["psa_at_surgery"] = metadata.psa_at_surgery.astype(float)
         assert metadata["psa_at_surgery"].isna().sum() == 0
@@ -722,9 +752,7 @@ class PCa(BaseIMCDataset):
         metadata["last_fu"] = metadata["last_fu"].astype(int)
         assert metadata.last_fu.isna().sum() == 0
 
-        metadata["cause_of_death"] = metadata.cause_of_death.map(
-            {"0": "alive", "1": "non-PCa_death", "2": "PCa_death"}
-        )
+        metadata["cause_of_death"] = metadata.cause_of_death.map({"0": "alive", "1": "non-PCa_death", "2": "PCa_death"})
         assert metadata.cause_of_death.isna().sum() == 0
 
         metadata["os_status"] = metadata.os_status.map({"0": "alive", "1": "dead"})
@@ -784,14 +812,10 @@ class PCa(BaseIMCDataset):
         metadata["ln_status"] = metadata.ln_status.astype(int)
         assert metadata.ln_status.isna().sum() == 0
 
-        metadata["surgical_margin_status"] = metadata.surgical_margin_status.astype(
-            float
-        )
+        metadata["surgical_margin_status"] = metadata.surgical_margin_status.astype(float)
         assert metadata.surgical_margin_status.astype(float).isna().sum() == 87
 
-        metadata["d_amico_risk"] = metadata["d_amico"].map(
-            {"Intermediate Risk": "intermediate", "High Risk": "high"}
-        )
+        metadata["d_amico_risk"] = metadata["d_amico"].map({"Intermediate Risk": "intermediate", "High Risk": "high"})
         metadata = metadata.drop("d_amico", axis=1)
 
         # %%
@@ -803,6 +827,8 @@ class PCa(BaseIMCDataset):
         # %%
         metadata = metadata.convert_dtypes()
         metadata = metadata.set_index("sample_id")
+        assert not metadata.index.isna().any()
+        assert not metadata.index.isin(['nan', None, 'na']).any()
 
         # %%
         cat_cols = [
@@ -906,11 +932,13 @@ class PCa(BaseIMCDataset):
             "glandular_atrophy_pin",
             "cribriform",
         ]
+
+        df = df.convert_dtypes()
         for col in tidy_col_vals:
             df[col] = df[col].astype(str).map(tidy_name)
-
+        df = df.replace({'na': 'nan'})
         # note: ensure all values are in the expected set of values
-        assert df[tidy_col_vals].isin([
+        vals = [
             # assessment not possible
             'no_tissue',
             'too_much_loss',
@@ -923,13 +951,15 @@ class PCa(BaseIMCDataset):
             'unclear_annotation',
             # valid cores
             'nan',
+            # 'na',
             'no_tumor',
             'yes',
             'no',
             '3',
             '4',
             '5',
-        ]).all().all()
+        ]
+        assert df[tidy_col_vals].isin(vals).all().all()
 
         filter_ = df.gs_pat_1.isin(
             [
@@ -1044,6 +1074,31 @@ class PCa(BaseIMCDataset):
         ]
 
         df = df.astype({k: "category" for k in cat_cols})
-        samples = pd.concat([samples, df], axis=1)
+
+        # NOTE: with this we remove all samples for which we do not have Eva's annotations
+        samples = pd.concat([samples, df], axis=1, join='outer')
+        # samples[samples.description.str.contains('X3Y15_150')]
+        assert 'nan' not in samples.index
         samples = samples.convert_dtypes()
         samples.to_parquet(self.clinical_metadata_path, engine="fastparquet")
+
+    def apply_fixes_to_clinical_metadata(self):
+        # TODO: apply this
+        clinical = pd.read_parquet(self.clinical_metadata_path)
+
+        # SET CLINICAL PROGR OF PATIENTS THAT DIED
+        filter_ = (clinical.cause_of_death == "PCa_death") & (clinical.clinical_progr == 0)
+        clinical[filter_].pat_id
+        clinical.loc[filter_, 'clinical_progr'] = 1
+
+        filter_ = (clinical.cause_of_death == "PCa_death") & (clinical.psa_progr == 0)
+        clinical[filter_].pat_id
+
+        filter_ = (clinical.cause_of_death == "PCa_death") & (clinical.disease_progr == 0)
+        clinical[filter_].pat_id
+
+        clinical.loc[clinical.pat_id == '01.338', ['disease_progr', 'psa_progr']] = 1
+
+        clinical.to_parquet(self.clinical_metadata_path, engine="fastparquet")
+
+# self = PCa()
