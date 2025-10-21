@@ -1081,3 +1081,24 @@ class PCa(BaseIMCDataset):
         assert 'nan' not in samples.index
         samples = samples.convert_dtypes()
         samples.to_parquet(self.clinical_metadata_path, engine="fastparquet")
+
+    def apply_fixes_to_clinical_metadata(self):
+        # TODO: apply this
+        clinical = pd.read_parquet(self.clinical_metadata_path)
+
+        # SET CLINICAL PROGR OF PATIENTS THAT DIED
+        filter_ = (clinical.cause_of_death == "PCa_death") & (clinical.clinical_progr == 0)
+        clinical[filter_].pat_id
+        clinical.loc[filter_, 'clinical_progr'] = 1
+
+        filter_ = (clinical.cause_of_death == "PCa_death") & (clinical.psa_progr == 0)
+        clinical[filter_].pat_id
+
+        filter_ = (clinical.cause_of_death == "PCa_death") & (clinical.disease_progr == 0)
+        clinical[filter_].pat_id
+
+        clinical.loc[clinical.pat_id == '01.338', ['disease_progr', 'psa_progr']] = 1
+
+        clinical.to_parquet(self.clinical_metadata_path, engine="fastparquet")
+
+# self = PCa()
