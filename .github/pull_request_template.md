@@ -19,6 +19,5 @@
 List the commands you executed to validate the change, for example:
 - `pytest tests/datasets -k NewDataset`
 - `pytest`
-- `ruff check`
 
 If automated tests are not available, explain the manual validation that was performed.
