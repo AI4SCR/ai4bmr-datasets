@@ -237,6 +237,34 @@ If you'd like to contribute:
 
 Please open a discussion or issue before implementing large features to ensure alignment with project goals.
 
+### 🧬 Adding a New Dataset
+
+The community is encouraged to contribute additional spatial proteomics datasets. When preparing a pull request:
+
+1. **Check the expected data assets**
+   - **Required**: multiplexed images in OME-TIFF, TIFF, or another lossless format.
+   - **Strongly recommended**: matching segmentation masks and any preprocessed (filtered or transformed) intensity tables published with the dataset.
+   - Optional but helpful: spatial features, clinical metadata, or annotation tables that appeared in the associated publication.
+
+2. **Stage the data for download**
+   - Host the files at a stable location such as [Figshare](https://figshare.com/) or [Zenodo](https://zenodo.org/); both services provide persistent DOIs and long-term access.
+   - Verify that public download links work without authentication and document any required access steps in your dataset class docstring.
+
+3. **Create the dataset implementation**
+   - Add a new module under `src/ai4bmr_datasets/datasets/<YourDataset>.py` that subclasses [`BaseIMCDataset`](./src/ai4bmr_datasets/datasets/BaseIMCDataset.py).
+   - Implement a `prepare_data()` pipeline that downloads the raw assets into `01_raw/`, processes them into the standardized structure inside `02_processed/`, and saves panel, metadata, images, masks, and features using the helper utilities in `ai4bmr_datasets.utils`.
+   - Register the dataset in `src/ai4bmr_datasets/datasets/__init__.py` and expose it from `src/ai4bmr_datasets/__init__.py` so it can be imported via `from ai4bmr_datasets import YourDataset`.
+
+4. **Document dataset-specific details**
+   - Include module-level docstrings describing the source publication, licensing, and any preprocessing decisions.
+   - Update this README or the documentation to list the new dataset with a short summary of its contents.
+
+5. **Add regression tests**
+   - Mirror the style of the existing tests in `tests/datasets/` to cover download stubs, preprocessing helpers, and the `prepare_data()` + `setup()` flow.
+   - Run `pytest tests/datasets -k YourDataset` locally (or simply `pytest`) to confirm that the end-to-end processing succeeds using the provided sample files or fixtures.
+
+Pull requests that add datasets should include the DOI or URL for the hosted files, describe the available modalities (images, masks, intensities), and enumerate any deviations from the shared data model.
+
 ### 🐛 Reporting Issues
 
 If you encounter bugs, incorrect behavior, or missing functionality:
