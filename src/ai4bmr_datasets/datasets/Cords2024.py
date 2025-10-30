@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils import io
-from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
+from ai4bmr_datasets.utils.download import DownloadRecord, download_file_map, unzip_recursive
 from ai4bmr_datasets.utils.tidy import filter_paths
 
 
@@ -103,55 +103,102 @@ class Cords2024(BaseIMCDataset):
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        file_map = {
-            "https://zenodo.org/records/7961844/files/2020115_LC_NSCLC_TMA_86_A.mcd.zip?download=1": download_dir
-                                                                                                     / "2020115_LC_NSCLC_TMA_86_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/2020117_LC_NSCLC_TMA_86_B.mcd.zip?download=1": download_dir
-                                                                                                     / "2020117_LC_NSCLC_TMA_86_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/2020120_LC_NSCLC_TMA_86_C.mcd.zip?download=1": download_dir
-                                                                                                     / "2020120_LC_NSCLC_TMA_86_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201219_LC_NSCLC_TMA_178_A.mcd.zip?download=1": download_dir
-                                                                                                       / "20201219_LC_NSCLC_TMA_178_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201222_LC_NSCLC_TMA_178_B_2.mcd.zip?download=1": download_dir
-                                                                                                         / "20201222_LC_NSCLC_TMA_178_B_2.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201224_LC_NSCLC_TMA_178_C.mcd.zip?download=1": download_dir
-                                                                                                       / "20201224_LC_NSCLC_TMA_178_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201226_LC_NSCLC_TMA_175_A.mcd.zip?download=1": download_dir
-                                                                                                       / "20201226_LC_NSCLC_TMA_175_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201228_LC_NSCLC_TMA_175_B.mcd.zip?download=1": download_dir
-                                                                                                       / "20201228_LC_NSCLC_TMA_175_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210101_LC_NSCLC_TMA_175_C.mcd.zip?download=1": download_dir
-                                                                                                       / "20210101_LC_NSCLC_TMA_175_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210104_LC_NSCLC_TMA_176_A.mcd.zip?download=1": download_dir
-                                                                                                       / "20210104_LC_NSCLC_TMA_176_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210109_LC_NSCLC_TMA_176_C.mcd.zip?download=1": download_dir
-                                                                                                       / "20210109_LC_NSCLC_TMA_176_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210112_LC_NSCLC_TMA_176_B.mcd.zip?download=1": download_dir
-                                                                                                       / "20210112_LC_NSCLC_TMA_176_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/2020121_LC_NSCLC_TMA_87_A.mcd.zip?download=1": download_dir
-                                                                                                     / "2020121_LC_NSCLC_TMA_87_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210123_LC_NSCLC_TMA_87_B.mcd.zip?download=1": download_dir
-                                                                                                      / "20210123_LC_NSCLC_TMA_87_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210126_LC_NSCLC_TMA_87_C.mcd.zip?download=1": download_dir
-                                                                                                      / "20210126_LC_NSCLC_TMA_87_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_A.mcd.zip?download=1": download_dir
-                                                                                                      / "20210129_LC_NSCLC_TMA_88_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_B.mcd.zip?download=1": download_dir
-                                                                                                      / "20210129_LC_NSCLC_TMA_88_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_C.mcd.zip?download=1": download_dir
-                                                                                                      / "20210129_LC_NSCLC_TMA_88_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/comp_csv_files.zip?download=1": download_dir
-                                                                                      / "comp_csv_files.zip",
-            "https://zenodo.org/records/7961844/files/Cell%20masks.zip?download=1": download_dir / "cell_masks_zenodo.zip",
-            "https://drive.usercontent.google.com/download?id=1wXboMZpkLzk7ZP1Oib1q4NBwvFGK_h7G&confirm=xxx": download_dir
-                                                                                                              / "cell_masks_google_drive.zip",
-            "https://zenodo.org/records/7961844/files/SingleCellExperiment%20Objects.zip?download=1": download_dir / 'single_cell_experiment_objects.zip'
-        }
+        files = [
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020115_LC_NSCLC_TMA_86_A.mcd.zip?download=1",
+                file_name="2020115_LC_NSCLC_TMA_86_A.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020117_LC_NSCLC_TMA_86_B.mcd.zip?download=1",
+                file_name="2020117_LC_NSCLC_TMA_86_B.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020120_LC_NSCLC_TMA_86_C.mcd.zip?download=1",
+                file_name="2020120_LC_NSCLC_TMA_86_C.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201219_LC_NSCLC_TMA_178_A.mcd.zip?download=1",
+                file_name="20201219_LC_NSCLC_TMA_178_A.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201222_LC_NSCLC_TMA_178_B_2.mcd.zip?download=1",
+                file_name="20201222_LC_NSCLC_TMA_178_B_2.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201224_LC_NSCLC_TMA_178_C.mcd.zip?download=1",
+                file_name="20201224_LC_NSCLC_TMA_178_C.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201226_LC_NSCLC_TMA_175_A.mcd.zip?download=1",
+                file_name="20201226_LC_NSCLC_TMA_175_A.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201228_LC_NSCLC_TMA_175_B.mcd.zip?download=1",
+                file_name="20201228_LC_NSCLC_TMA_175_B.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210101_LC_NSCLC_TMA_175_C.mcd.zip?download=1",
+                file_name="20210101_LC_NSCLC_TMA_175_C.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210104_LC_NSCLC_TMA_176_A.mcd.zip?download=1",
+                file_name="20210104_LC_NSCLC_TMA_176_A.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210109_LC_NSCLC_TMA_176_C.mcd.zip?download=1",
+                file_name="20210109_LC_NSCLC_TMA_176_C.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210112_LC_NSCLC_TMA_176_B.mcd.zip?download=1",
+                file_name="20210112_LC_NSCLC_TMA_176_B.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020121_LC_NSCLC_TMA_87_A.mcd.zip?download=1",
+                file_name="2020121_LC_NSCLC_TMA_87_A.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210123_LC_NSCLC_TMA_87_B.mcd.zip?download=1",
+                file_name="20210123_LC_NSCLC_TMA_87_B.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210126_LC_NSCLC_TMA_87_C.mcd.zip?download=1",
+                file_name="20210126_LC_NSCLC_TMA_87_C.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_A.mcd.zip?download=1",
+                file_name="20210129_LC_NSCLC_TMA_88_A.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_B.mcd.zip?download=1",
+                file_name="20210129_LC_NSCLC_TMA_88_B.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_C.mcd.zip?download=1",
+                file_name="20210129_LC_NSCLC_TMA_88_C.mcd.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/comp_csv_files.zip?download=1",
+                file_name="comp_csv_files.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/Cell%20masks.zip?download=1",
+                file_name="cell_masks_zenodo.zip",
+            ),
+            DownloadRecord(
+                url="https://drive.usercontent.google.com/download?id=1wXboMZpkLzk7ZP1Oib1q4NBwvFGK_h7G&confirm=xxx",
+                file_name="cell_masks_google_drive.zip",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/SingleCellExperiment%20Objects.zip?download=1",
+                file_name="single_cell_experiment_objects.zip",
+            ),
+        ]
 
-        download_file_map(file_map, force=force)
+        download_file_map(files, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for target_path in file_map.values():
+        for record in files:
+            target_path = download_dir / record.file_name
             try:
                 unzip_recursive(target_path)
             except Exception as e:
