@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import hashlib
 
@@ -82,7 +81,7 @@ class DownloadRecord:
 
 
 def download_file_map(
-        file_map: Iterable[DownloadRecord],
+        file_map: list[DownloadRecord],
         download_dir: Path,
         force: bool = False,
 ):
