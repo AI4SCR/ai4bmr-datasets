@@ -150,7 +150,7 @@ def download_file_map(
             ).lower()
 
             if actual_checksum != expected_checksum:
-                target_path.unlink(missing_ok=True)
+                # target_path.unlink(missing_ok=True)
                 raise ValueError(
                     f"Checksum mismatch for {target_path} (expected {expected_checksum}, got {actual_checksum})."
                 )
