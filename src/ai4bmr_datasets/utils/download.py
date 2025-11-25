@@ -1,4 +1,7 @@
+from dataclasses import dataclass
 from pathlib import Path
+
+import hashlib
 
 from loguru import logger
 
@@ -44,23 +47,69 @@ def unzip_recursive(zip_path: Path, extract_dir: Path = None):
                 unzip_recursive(extracted_path)
 
 
-def download_file_map(file_map: dict[str, Path], force: bool = False):
-    """
-    Downloads multiple files specified in a dictionary from URLs to target paths.
+def _compute_checksum(path: Path, algorithm: str = "sha256") -> str:
+    """Compute the checksum for ``path`` using ``algorithm``.
 
-    This function iterates through the `file_map`, downloading each file.
-    It includes a progress bar for each download and checks if a file already exists
-    at the target path to skip re-downloading, unless `force` is set to True.
+    Parameters
+    ----------
+    path:
+        File to hash.
+    algorithm:
+        Hash algorithm supported by :mod:`hashlib` (defaults to ``sha256``).
+
+    Returns
+    -------
+    str
+        Hex digest of the file contents.
+    """
+
+    hasher = hashlib.new(algorithm)
+    with path.open("rb") as file_handle:
+        for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+@dataclass(frozen=True)
+class DownloadRecord:
+    """Metadata describing a downloadable artifact."""
+
+    url: str
+    file_name: str
+    checksum: str | None = None
+    checksum_algorithm: str = "sha256"
+
+
+def download_file_map(
+        file_map: list[DownloadRecord],
+        download_dir: Path,
+        force: bool = False,
+):
+    """
+    Download multiple files described by :class:`DownloadRecord` instances.
+
+    This function iterates through the ``file_map`` records, downloading each file to
+    ``download_dir``. It includes a progress bar for each download and checks if a file
+    already exists at the target path to skip re-downloading, unless ``force`` is set
+    to ``True``. When checksum information is provided the downloaded (or existing)
+    file is validated before being reused.
 
     Args:
-        file_map (dict[str, Path]): A dictionary where keys are URLs (str) and values
-                                    are the target file paths (Path) for the downloads.
+        file_map (Iterable[DownloadRecord]): An iterable of download records describing
+            the remote URLs and metadata for each artifact.
+        download_dir (Path): Base directory where files will be stored. The final
+            target path for each record is constructed from this directory and the
+            record's ``file_name``.
         force (bool): If True, forces re-download of files even if they already exist.
     """
     from tqdm import tqdm
     import requests
 
-    for url, target_path in file_map.items():
+    download_dir.mkdir(parents=True, exist_ok=True)
+
+    for record in file_map:
+        target_path = download_dir / record.file_name
+        url = record.url
         if not target_path.exists() or force:
             try:
                 logger.info(f"Downloading {url} → {target_path}")
@@ -87,3 +136,21 @@ def download_file_map(file_map: dict[str, Path], force: bool = False):
                     target_path.unlink()
         else:
             logger.info(f"Skipping download of {target_path.name}, already exists.")
+
+        if record.checksum:
+            if not target_path.exists():
+                raise FileNotFoundError(
+                    f"Expected downloaded file {target_path} for checksum verification"
+                )
+
+            expected_checksum = record.checksum.lower()
+            actual_checksum = _compute_checksum(
+                target_path,
+                algorithm=record.checksum_algorithm,
+            ).lower()
+
+            if actual_checksum != expected_checksum:
+                # target_path.unlink(missing_ok=True)
+                raise ValueError(
+                    f"Checksum mismatch for {target_path} (expected {expected_checksum}, got {actual_checksum})."
+                )

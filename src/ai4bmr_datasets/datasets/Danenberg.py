@@ -64,21 +64,29 @@ class Danenberg2022(BaseIMCDataset):
             force (bool): If True, forces re-download even if files already exist.
         """
         import shutil
-        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
+        from ai4bmr_datasets.utils.download import DownloadRecord, download_file_map, unzip_recursive
 
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        file_map = {
-            "https://zenodo.org/records/6036188/files/MBTMEStrIMCPublic.zip?download=1": download_dir / 'mbtme_imc_public.zip',
-            'https://zenodo.org/records/15615709/files/correctedPublicMasks.zip?download=1': download_dir / 'corrected_public_masks.zip',
-        }
+        files = [
+            DownloadRecord(
+                url="https://zenodo.org/records/6036188/files/MBTMEStrIMCPublic.zip?download=1",
+                file_name='mbtme_imc_public.zip',
+                checksum="53f03887ebe3c8532f442efb50eb883689c44f67d98cc138501bee8bdfa03666",
+            ),
+            DownloadRecord(
+                url='https://zenodo.org/records/15615709/files/correctedPublicMasks.zip?download=1',
+                file_name='corrected_public_masks.zip',
+                checksum="0c39d56dd47215d01045e6e73f399d42a1aa42b851d38f29d63211d0e0de631e",
+            ),
+        ]
 
-        download_file_map(file_map, force=force)
+        download_file_map(files, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for target_path in file_map.values():
-            unzip_recursive(target_path)
+        for record in files:
+            unzip_recursive(download_dir / record.file_name)
 
         shutil.rmtree(self.raw_dir / '__MACOSX', ignore_errors=True)
 

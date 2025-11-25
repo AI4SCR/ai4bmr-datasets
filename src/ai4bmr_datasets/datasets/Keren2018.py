@@ -1,4 +1,5 @@
 import re
+
 import shutil
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from ai4bmr_datasets.utils.tidy import tidy_name
 from loguru import logger
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
+from ai4bmr_datasets.utils.download import DownloadRecord, download_file_map, unzip_recursive
 
 
 class Keren2018(BaseIMCDataset):
@@ -51,17 +52,32 @@ class Keren2018(BaseIMCDataset):
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        file_map = {
-            "https://www.dropbox.com/scl/fo/wgytss4wnubn05hnp69jg/ADMhoNHgJTpxAbEE9PQn1zY?rlkey=g79sa4b50hkx2nyjksgmqzrhl&e=1&st=nsaw5cbr&dl=1": download_dir / "tnbc.zip",
-            "https://www.angelolab.com/_files/archives/302cbc_72cbeda2c99342c0a1b3940d6bac144f.zip?dn=TNBC_shareCellData.zip": download_dir / "tnbc_processed_data.zip",
-            "https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc1.xlsx": download_dir / "1-s2.0-S0092867418311000-mmc1.xlsx",
-            "https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc2.xlsx": download_dir / "1-s2.0-S0092867418311000-mmc2.xlsx",
-        }
+        file_map = [
+            DownloadRecord(
+                url="https://www.dropbox.com/scl/fo/wgytss4wnubn05hnp69jg/ADMhoNHgJTpxAbEE9PQn1zY?rlkey=g79sa4b50hkx2nyjksgmqzrhl&e=1&st=nsaw5cbr&dl=1",
+                file_name="tnbc.zip",
+                checksum="aa884867979b8eb8c74e7d64b446571d762abd1eeb0d6425a1036c974c4ba649",
+            ),
+            DownloadRecord(
+                url="https://www.angelolab.com/_files/archives/302cbc_72cbeda2c99342c0a1b3940d6bac144f.zip?dn=TNBC_shareCellData.zip",
+                file_name="tnbc_processed_data.zip",
+                checksum="5ccb0a52ca8686490ce8c9a36900eefa77f2942a456bfe856f4e4aeb32bbe633",
+            ),
+            DownloadRecord(
+                url="https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc1.xlsx",
+                file_name="1-s2.0-S0092867418311000-mmc1.xlsx",
+            ),
+            DownloadRecord(
+                url="https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc2.xlsx",
+                file_name="1-s2.0-S0092867418311000-mmc2.xlsx",
+            ),
+        ]
 
-        download_file_map(file_map, force=force)
+        download_file_map(file_map=file_map, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for target_path in file_map.values():
+        for record in file_map:
+            target_path = download_dir / record.file_name
             if target_path.suffix == '.zip':
                 unzip_recursive(target_path)
 

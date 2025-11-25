@@ -6,7 +6,7 @@ from loguru import logger
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
 from ai4bmr_datasets.utils import io
-from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
+from ai4bmr_datasets.utils.download import DownloadRecord, download_file_map, unzip_recursive
 from ai4bmr_datasets.utils.tidy import tidy_name
 
 
@@ -66,18 +66,39 @@ class Jackson2020(BaseIMCDataset):
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        file_map = {
-            "https://zenodo.org/records/4607374/files/OMEandSingleCellMasks.zip?download=1": download_dir / 'ome_and_single_cell_masks.zip',
-            "https://zenodo.org/records/4607374/files/singlecell_locations.zip?download=1": download_dir / 'single_cell_locations.zip',
-            "https://zenodo.org/records/4607374/files/singlecell_cluster_labels.zip?download=1": download_dir / 'single_cell_cluster_labels.zip',
-            "https://zenodo.org/records/4607374/files/SingleCell_and_Metadata.zip?download=1": download_dir / 'single_cell_and_metadata.zip',
-            "https://zenodo.org/records/4607374/files/TumorStroma_masks.zip?download=1": download_dir / 'tumor_stroma_masks.zip',
-        }
+        files = [
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/OMEandSingleCellMasks.zip?download=1",
+                file_name='ome_and_single_cell_masks.zip',
+                checksum="93708da338fb28a473d209d1cfecbbec03a7aac0b5d53fffcf9bd975177fbab9",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/singlecell_locations.zip?download=1",
+                file_name='single_cell_locations.zip',
+                checksum="8b7a42c373840983dd1c768512dbb2a651a5009e0e2964cd722119be23cedc24",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/singlecell_cluster_labels.zip?download=1",
+                file_name='single_cell_cluster_labels.zip',
+                checksum="c026694a83f28dc5081d7ac05558ea904df072d16ebe73feb3f967ae71ed4984",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/SingleCell_and_Metadata.zip?download=1",
+                file_name='single_cell_and_metadata.zip',
+                checksum="04c5ffb7037105b829ea8d413e844f415d166a58ae85e3668a2c0b46bc37db42",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/TumorStroma_masks.zip?download=1",
+                file_name='tumor_stroma_masks.zip',
+                checksum="268d266d5cd958707ddd1480620fc8c5100a2dc37b969bd98f47dba316d7abb8",
+            ),
+        ]
 
-        download_file_map(file_map, force=force)
+        download_file_map(files, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for target_path in file_map.values():
+        for record in files:
+            target_path = download_dir / record.file_name
             try:
                 unzip_recursive(target_path)
             except Exception as e:
