@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 
-def prepare_dataset(base_dir: Path, dataset_name: str):
+def prepare_dataset(base_dir: Path | None, dataset_name: str):
     match dataset_name:
         case "Jackson2020":
             from ai4bmr_datasets import Jackson2020 as Dataset
@@ -39,16 +39,10 @@ def prepare_dataset(base_dir: Path, dataset_name: str):
     assert isinstance(ds.intensity, pd.DataFrame)
 
 
-@pytest.mark.skip(reason="Only run when downloading changes. This will trigger the whole end-to-end runs.")
+# @pytest.mark.skip(reason="Only run when downloading changes. This will trigger the whole end-to-end runs.")
 @pytest.mark.parametrize("dataset_name", ["Keren2018", "Jackson2020", "Danenberg2022", "Cords2024"])
-def test_prepare_data(dataset_name):
-    tmpdir = None
-    if tmpdir is None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            base_dir = Path(tmpdir)
-            prepare_dataset(base_dir=base_dir, dataset_name=dataset_name)
-    else:
-        prepare_dataset(base_dir=tmpdir, dataset_name=dataset_name)
+def test_prepare_data(dataset_name, tmp_path):
+    prepare_dataset(base_dir=tmp_path, dataset_name=dataset_name)
 
 @pytest.mark.skip(reason="Only run when downloading changes. This will trigger the whole end-to-end runs.")
 @pytest.mark.parametrize("dataset_name", ["Keren2018", "Jackson2020", "Danenberg2022", "Cords2024"])
