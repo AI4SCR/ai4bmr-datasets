@@ -4,6 +4,7 @@ assert load_dotenv()
 import hashlib
 from pathlib import Path
 import os
+import pandas as pd
 
 dataset_dirs = [i for i in Path(os.getenv("AI4BMR_DATASETS_DIR")).iterdir() if i.is_dir()]
 
@@ -23,3 +24,6 @@ for dir_ in dataset_dirs:
             'file_name': str(zip_file.name),
             'checksum': checksum
         })
+
+df = pd.DataFrame.from_records(records)
+print(df.to_markdown())
