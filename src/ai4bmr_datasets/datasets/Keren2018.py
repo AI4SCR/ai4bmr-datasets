@@ -1,4 +1,5 @@
 import re
+
 import shutil
 from pathlib import Path
 
@@ -51,7 +52,7 @@ class Keren2018(BaseIMCDataset):
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        files = [
+        file_map = [
             DownloadRecord(
                 url="https://www.dropbox.com/scl/fo/wgytss4wnubn05hnp69jg/ADMhoNHgJTpxAbEE9PQn1zY?rlkey=g79sa4b50hkx2nyjksgmqzrhl&e=1&st=nsaw5cbr&dl=1",
                 file_name="tnbc.zip",
@@ -72,10 +73,10 @@ class Keren2018(BaseIMCDataset):
             ),
         ]
 
-        download_file_map(files, download_dir=download_dir, force=force)
+        download_file_map(file_map=file_map, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for record in files:
+        for record in file_map:
             target_path = download_dir / record.file_name
             if target_path.suffix == '.zip':
                 unzip_recursive(target_path)

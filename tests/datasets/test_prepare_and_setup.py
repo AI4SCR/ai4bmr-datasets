@@ -50,9 +50,10 @@ def test_prepare_data(dataset_name):
     else:
         prepare_dataset(base_dir=tmpdir, dataset_name=dataset_name)
 
-
+@pytest.mark.skip(reason="Only run when downloading changes. This will trigger the whole end-to-end runs.")
 @pytest.mark.parametrize("dataset_name", ["Keren2018", "Jackson2020", "Danenberg2022", "Cords2024"])
 def test_checksums(dataset_name):
+    dataset_name = 'Keren2018'
     match dataset_name:
         case "Jackson2020":
             from ai4bmr_datasets import Jackson2020 as Dataset
@@ -65,7 +66,5 @@ def test_checksums(dataset_name):
         case _:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
 
-    base_dir = os.getenv('')
-    ds = Dataset(base_dir=base_dir,
-                 image_version='',
-                 mask_version='')
+    ds = self = Dataset(base_dir=None, image_version='', mask_version='')
+    ds.download()
