@@ -26,8 +26,6 @@ The package supports the following public spatial proteomics datasets:
 
 <figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
-Dummy datasets are also included for development and testing purposes.
-
 ---
 
 ## 🧱 Data Model
@@ -259,7 +257,7 @@ The community is encouraged to contribute additional spatial proteomics datasets
    - Include module-level docstrings describing the source publication, licensing, and any preprocessing decisions.
    - Update this README or the documentation to list the new dataset with a short summary of its contents.
 
-5. **Add regression tests**
+sts**
    - Mirror the style of the existing tests in `tests/datasets/` to cover download stubs, preprocessing helpers, and the `prepare_data()` + `setup()` flow.
    - Run `pytest tests/datasets -k YourDataset` locally (or simply `pytest`) to confirm that the end-to-end processing succeeds using the provided sample files or fixtures.
 
