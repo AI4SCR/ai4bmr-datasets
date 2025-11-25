@@ -73,10 +73,12 @@ class Danenberg2022(BaseIMCDataset):
             DownloadRecord(
                 url="https://zenodo.org/records/6036188/files/MBTMEStrIMCPublic.zip?download=1",
                 file_name='mbtme_imc_public.zip',
+                checksum="53f03887ebe3c8532f442efb50eb883689c44f67d98cc138501bee8bdfa03666",
             ),
             DownloadRecord(
                 url='https://zenodo.org/records/15615709/files/correctedPublicMasks.zip?download=1',
                 file_name='corrected_public_masks.zip',
+                checksum="0c39d56dd47215d01045e6e73f399d42a1aa42b851d38f29d63211d0e0de631e",
             ),
         ]
 

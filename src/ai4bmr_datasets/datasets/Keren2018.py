@@ -55,10 +55,12 @@ class Keren2018(BaseIMCDataset):
             DownloadRecord(
                 url="https://www.dropbox.com/scl/fo/wgytss4wnubn05hnp69jg/ADMhoNHgJTpxAbEE9PQn1zY?rlkey=g79sa4b50hkx2nyjksgmqzrhl&e=1&st=nsaw5cbr&dl=1",
                 file_name="tnbc.zip",
+                checksum="aa884867979b8eb8c74e7d64b446571d762abd1eeb0d6425a1036c974c4ba649",
             ),
             DownloadRecord(
                 url="https://www.angelolab.com/_files/archives/302cbc_72cbeda2c99342c0a1b3940d6bac144f.zip?dn=TNBC_shareCellData.zip",
                 file_name="tnbc_processed_data.zip",
+                checksum="5ccb0a52ca8686490ce8c9a36900eefa77f2942a456bfe856f4e4aeb32bbe633",
             ),
             DownloadRecord(
                 url="https://ars.els-cdn.com/content/image/1-s2.0-S0092867418311000-mmc1.xlsx",
