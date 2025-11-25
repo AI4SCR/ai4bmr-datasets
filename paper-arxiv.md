@@ -119,8 +119,6 @@ The package supports the following public spatial proteomics datasets:
 
 <figcaption><strong>Table 1:</strong> Summary statistics of supported spatial proteomics datasets in the package.</figcaption>
 
-Additionally, dummy datasets are provided to mimic real data structure for development and testing purposes.
-
 Each dataset is accessible through a standardized class interface that mimics the pytorch
 lightning [@falcon2019pytorchlightning]
 philosophy and includes methods for downloading, preparing, and accessing processed components (images, masks, features
