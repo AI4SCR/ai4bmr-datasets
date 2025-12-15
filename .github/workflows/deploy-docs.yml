@@ -1,0 +1,49 @@
+name: Build and deploy documentation
+
+# Trigger the workflow on every push to the main branch.
+on:
+  push:
+    branches: [v1.1.0]
+
+# Allow the workflow to read the repository (for building) and write to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Check out your repository source code.
+    - uses: actions/checkout@v4
+
+    # Set up a Python environment (choose the version you use for docs).
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # Install your project and documentation dependencies.
+    # docs/requirements.txt should list Sphinx, themes and any extensions.
+    - name: Install dependencies
+      run: |
+        pip install -r docs/requirements.txt
+        pip install .
+
+    # Build the HTML documentation into docs/build/html using the Makefile.
+    - name: Build documentation
+      run: make -C docs html
+
+    # Prepare GitHub Pages deployment (creates the gh-pages branch and sets up authentication).
+    - uses: actions/configure-pages@v5
+
+    # Upload the generated HTML as an artifact for deployment.
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        # The directory of the built documentation.
+        path: docs/build/html
+
+    # Deploy the artifact to GitHub Pages.
+    - uses: actions/deploy-pages@v4
+      id: deploy

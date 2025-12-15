@@ -1,0 +1,145 @@
+from ai4bmr_datasets.datasets.BEAT import BEAT
+
+# Initialize the BEAT class
+beat = BEAT()
+beat.prepare_metadata()
+SAMPLES = set(sorted(beat.get_sample_ids()))
+SEGMENTATION_MODELS = ['hest', 'grandqc']
+
+rule all:
+    input:
+        "checkpoints/tools.done",
+        # "checkpoints/samples/{sample}/wsi.done",
+        # expand("checkpoints/samples/{sample}/segment_{model_name}.done", sample=SAMPLES, model_name=SEGMENTATION_MODELS),
+        # expand("checkpoints/samples/{sample}/coords_{patch_size}.done", sample=SAMPLES, patch_size=[448])
+        expand("checkpoints/samples/{sample}/embeddings.done", sample=SAMPLES),
+        expand("checkpoints/samples/{sample}/visualize_coords_{patch_size}.done", sample=SAMPLES, patch_size=448),
+        expand("checkpoints/samples/{sample}/visualize_patches_{patch_size}.done", sample=SAMPLES, patch_size=448),
+
+rule prepare_tools:
+    output:
+        touch("checkpoints/tools.done")
+    log:
+        "logs/tools.log"
+    run:
+        beat.prepare_tools()
+
+rule prepare_wsi:
+    input:
+        "checkpoints/tools.done",
+    output:
+        touch("checkpoints/samples/{sample}/wsi.done")
+    params:
+        sample_id="{sample}"
+    log:
+        "logs/samples/{sample}/prepare_wsi.log"
+    run:
+        beat.prepare_wsi(sample_id=wildcards.sample)
+
+rule create_thumbnail:
+    input:
+        "checkpoints/samples/{sample}/wsi.done",
+    output:
+        touch("checkpoints/samples/{sample}/thumbnail.done")
+    params:
+        sample_id="{sample}"
+    log:
+        "logs/samples/{sample}/create_thumbnail.log"
+    run:
+        beat.create_thumbnail(sample_id=wildcards.sample)
+
+rule post_process_tiff_flags:
+    input:
+        "checkpoints/samples/{sample}/wsi.done"
+    output:
+        touch("checkpoints/samples/{sample}/tiff_flags.done")
+    params:
+        sample_id="{sample}"
+    log:
+        "logs/samples/{sample}/post_process_tiff_flags.log"
+    run:
+        beat.post_process_tiff_flags(sample_id=wildcards.sample)
+
+# rule update_metadata:
+#     input:
+#         "checkpoints/samples/{sample}/wsi.done",
+#         "checkpoints/samples/{sample}/tiff_flags.done"
+#     output:
+#         touch("checkpoints/update_metadata.done")
+#     log:
+#         "logs/update_metadata.log"
+#     run:
+#         beat.add_mpp_to_metadata()
+
+rule segment:
+    input:
+        "checkpoints/samples/{sample}/wsi.done",
+        "checkpoints/samples/{sample}/tiff_flags.done",
+    output:
+        touch("checkpoints/samples/{sample}/segment_{model_name}.done")
+    params:
+        sample_id="{sample}",
+        model_name="{model_name}"
+    log:
+        "logs/samples/{sample}/segment_{model_name}.log"
+    run:
+        beat.segment(sample_id=wildcards.sample,
+                     model_name=wildcards.model_name,
+                     target_mpp=4.0)
+
+rule create_coords:
+    input:
+        "checkpoints/samples/{sample}/segment_hest.done"
+    output:
+        touch("checkpoints/samples/{sample}/coords_{patch_size}.done")
+    params:
+        patch_size=lambda wildcards: int(wildcards.patch_size)
+    log:
+        "logs/samples/{sample}/create_coords_{patch_size}.log"
+    run:
+        beat.create_coords(sample_id=wildcards.sample,
+                           patch_size=params.patch_size)
+
+rule visualize_coords:
+    input:
+        "checkpoints/samples/{sample}/coords_{patch_size}.done"
+    output:
+        touch("checkpoints/samples/{sample}/visualize_coords_{patch_size}.done")
+    params:
+        patch_size=lambda wildcards: int(wildcards.patch_size)
+    log:
+        "logs/samples/{sample}/visualize_coords_{patch_size}.log"
+    run:
+        beat.visualize_coords(sample_id=wildcards.sample,
+                              patch_size=params.patch_size)
+
+rule visualize_patches:
+    input:
+        "checkpoints/samples/{sample}/coords_{patch_size}.done"
+    output:
+        touch("checkpoints/samples/{sample}/visualize_patches_{patch_size}.done")
+    params:
+        patch_size=lambda wildcards: int(wildcards.patch_size)
+    log:
+        "logs/samples/{sample}/visualize_patches_{patch_size}.log"
+    run:
+        beat.visualize_patches(sample_id=wildcards.sample, patch_size=params.patch_size)
+
+rule create_embeddings:
+    input:
+        "checkpoints/samples/{sample}/coords_448.done"
+    output:
+        touch("checkpoints/samples/{sample}/embeddings.done")
+    params:
+        sample_id="{sample}"
+    log:
+        "logs/samples/{sample}/create_embeddings.log"
+    run:
+        patch_size = 448
+        patch_stride = 448
+        target_mpp = beat.target_mpp
+        overlap = beat.overlap
+        coords_version = f'patch_size={patch_size}-stride={patch_stride}-mpp={target_mpp:.4f}-overlap={overlap:.2f}'
+        beat.create_patch_embeddings(sample_id=wildcards.sample,
+                                     coords_version=coords_version,
+                                     model_name='uni_v1')
