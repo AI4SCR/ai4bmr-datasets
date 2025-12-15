@@ -1101,4 +1101,56 @@ class PCa(BaseIMCDataset):
 
         clinical.to_parquet(self.clinical_metadata_path, engine="fastparquet")
 
+
+    def create_meta_labels(self):
+        lineage_map = {
+            # Epithelial subclasses
+            "epithelial-luminal": "epithelial-luminal",
+            "epithelial-luminal(ERG+)": "epithelial-tumor",
+            "epithelial-luminal(Ki67+)": "epithelial-luminal",
+            "epithelial-luminal(ERG+p53+)": "epithelial-tumor",
+            "epithelial-luminal(p53+)": "epithelial-tumor",
+            "epithelial-basal": "epithelial-other",
+            "epithelial-neuroendocrine": "epithelial-other",
+            "epithelial-transient": "epithelial-other",
+            "epithelial-(ERG+CD44+)": "epithelial-tumor",
+            # Stromal subclasses
+            "stromal-CAF1(CD105-)": "stromal-CAF1-CD105-",
+            "stromal-CAF1(CD105+)": "stromal-CAF1-CD105+",
+            "stromal-CAF1(CD105-EGR1+)": "stromal-CAF1-CD105-",
+            "stromal-CAF2(AR-)": "stromal-CAF2-AR-",
+            "stromal-CAF2(AR+)": "stromal-CAF2-AR+",
+            "stromal-CAF2(AR+CES1+)": "stromal-CAF2-AR+",
+            "stromal-CAF2(AR+EGR1+)": "stromal-CAF2-AR+",
+            "stromal-pericytes": "stromal-pericytes",
+            "stromal-mesenchymal-neuroendocrine": "stromal-other",
+            "stromal-(Ki67+)": "stromal-other",
+            # Endothelial subclasses
+            "endothelial-blood-vessel(ERG+)": "endothelial-blood-vessel",
+            "endothelial-blood-vessel(ERG-)": "endothelial-blood-vessel",
+            "endothelial-lymphatic": "endothelial-lymphatic",
+            # Immune subclasses
+            "immune-macrophages(CD68+)": "immune-myeloid",
+            "immune-PMN-MDSCs(CD11b+CD66b+)": "immune-myeloid",
+            "immune-BM-derived-fibrocytes": "immune-fibrocytes",
+            "immune-B-cells(CD20+)": "immune-B-cells",
+            "immune-T-cells(CD3+)": "immune-T-cells",
+            "immune-T-cells_helper(CD3+CD4+)": "immune-T-cells",
+            "immune-T-cells_cytotoxic(CD3+CD8a+)": "immune-T-cells",
+            "immune-T-cells_regulatory(CD3+CD4+FoxP3+)": "immune-T-cells",
+            # Mixed / other
+            "mix-vessels-PMN-MDSCs": "immune-mixed",
+            "immune-T-helper-macrophages": "immune-mixed",
+            "immune-T-helper-B-cells": "immune-mixed",
+            "immune-T-helper-T-cytotoxic": "immune-mixed",
+            "undefined": "undefined",
+        }
+
+        metadata_dir = self.metadata_dir / 'filtered-annotated'
+        paths = metadata_dir.glob('*.parquet')
+        for path in paths:
+            df = pd.read_parquet(path, engine='fastparquet')
+            df['meta_label'] = df['label'].map(lineage_map)
+            df.to_parquet(path, engine='fastparquet')
+
 # self = PCa()
