@@ -77,6 +77,8 @@ class PCa(BaseIMCDataset):
         self.create_annotated()
         self.compute_features(image_version="filtered", mask_version="annotated")
 
+        self.create_meta_labels()
+
     def process_acquisitions(self):
         """
         Failed to read acquisitions:
@@ -1103,6 +1105,8 @@ class PCa(BaseIMCDataset):
 
 
     def create_meta_labels(self):
+        import pandas as pd
+
         lineage_map = {
             # Epithelial subclasses
             "epithelial-luminal": "epithelial-luminal",
@@ -1146,11 +1150,16 @@ class PCa(BaseIMCDataset):
             "undefined": "undefined",
         }
 
+        meta_label_ids = {v: i for i, v in enumerate(sorted(set(lineage_map.values())))}
+
         metadata_dir = self.metadata_dir / 'filtered-annotated'
-        paths = metadata_dir.glob('*.parquet')
+        paths = sorted(metadata_dir.glob('*.parquet'))
         for path in paths:
             df = pd.read_parquet(path, engine='fastparquet')
             df['meta_label'] = df['label'].map(lineage_map)
+            df['meta_label_id'] = df['meta_label'].map(meta_label_ids)
+            assert not df['meta_label'].isna().any()
+            assert not df['meta_label_id'].isna().any()
             df.to_parquet(path, engine='fastparquet')
 
 # self = PCa()

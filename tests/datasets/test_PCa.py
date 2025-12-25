@@ -1,8 +1,11 @@
 def test_PCa():
     from ai4bmr_datasets import PCa
+    from pathlib import Path
 
-    ds = dataset = self = PCa(image_version="filtered", mask_version="annotated",
-                              load_metadata=True, load_intensity=True, align=True)
+    ds = dataset = self = PCa(
+        base_dir=Path('/work/FAC/FBM/DBC/mrapsoma/prometex/data/datasets/PCa'),
+        image_version="filtered", mask_version="annotated",
+        load_metadata=True, load_intensity=True, align=True)
     # ds.prepare_data()
     ds.setup()
     ds.images.keys()
