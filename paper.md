@@ -32,8 +32,7 @@ bibliography: paper.bib
 
 `SpatialProteomicsNet` is an open-source Python package that provides a harmonized and standardized interface for
 accessing
-spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (
-IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
+spatial proteomics and multiplexed imaging datasets, including imaging mass cytometry (IMC) [@giesenHighlyMultiplexedImaging2014] and multiplexed ion beam
 imaging time-of-flight (MIBI-TOF) [@kerenMIBITOFMultiplexedImaging2019] data. The package enables researchers to load
 raw spatially-resolved
 proteomics data from multiple
