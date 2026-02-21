@@ -377,7 +377,7 @@ class Danenberg2022(BaseIMCDataset):
         panel.loc[panel.metaltag == 'Tb159', 'target'] = 'c_erb_b_2_her2_D8F12'
 
         panel = panel.drop(columns=['ilastik', 'full', 'Unnamed: 10', 'tubenumber', 'to_sort', 'function_order'])
-        panel = panel.rename(columns=dict(metaltag='metal_mass'))
+        panel = panel.rename(columns=dict(metaltag='metal_tag'))
         panel.loc[[37, 38], 'target'] = ['dna1', 'dna2']
         panel.loc[:, 'target'] = panel.target.map(tidy_name)
 
