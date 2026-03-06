@@ -1,5 +1,5 @@
 ---
-title: "**SpatialProteomicsNet**: A unified interface for spatial proteomics data access for computer vision and machine learning"
+title: "SpatialProteomicsNet: A unified interface for spatial proteomics data access for computer vision and machine learning"
 tags:
   - Python
   - spatial proteomics
@@ -62,7 +62,7 @@ corresponding widely used packages.
 
 However, a critical gap hindering model development, reproducibility and cross-study analyses is the lack of unified
 frameworks to access and process the data. Spatial proteomics datasets, often deposited in public repositories such as
-Zenodo[@https://doi.org/10.25495/7gxk-rd71] or Figshare [@FigshareCreditAll], typically contain a collection of
+Zenodo [@https://doi.org/10.25495/7gxk-rd71] or Figshare [@FigshareCreditAll], typically contain a collection of
 components, such as raw and preprocessed images, segmentation
 masks, extracted single-cell intensities, panel descriptions and associated clinical metadata, uploaded in disparate,
 non-standardized formats (e.g., mixed .tiff, .csv, custom JSONs), with varying metadata structures and inconsistent
