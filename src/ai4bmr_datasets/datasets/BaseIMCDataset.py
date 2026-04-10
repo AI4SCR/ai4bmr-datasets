@@ -129,7 +129,7 @@ class BaseIMCDataset:
             ),
         }
 
-    def setup(self, sample_ids: list[str] | None = None):
+    def setup(self, sample_ids: list[str] | None = None, engine: str = 'fastparquet'):
         """
         Loads data (images, masks, features, metadata) from disk based on the configured versions.
 
@@ -164,7 +164,7 @@ class BaseIMCDataset:
         self.panel = panel
 
         # load clinical metadata
-        clinical = pd.read_parquet(self.clinical_metadata_path, engine="fastparquet")
+        clinical = pd.read_parquet(self.clinical_metadata_path, engine=engine)  # does not load str index
         assert clinical.index.name == 'sample_id'
         ids_from_clinical = set(clinical.index)
 
@@ -173,7 +173,7 @@ class BaseIMCDataset:
             intensity_dir = self.intensity_dir / feature_version
             intensity = pd.concat(
                 [
-                    pd.read_parquet(i, engine="fastparquet")
+                    pd.read_parquet(i,  engine=engine)
                     for i in intensity_dir.glob("*.parquet")
                     if not i.name.startswith(".")
                 ]
@@ -188,7 +188,7 @@ class BaseIMCDataset:
             spatial_dir = self.spatial_dir / feature_version
             spatial = pd.concat(
                 [
-                    pd.read_parquet(i, engine="fastparquet")
+                    pd.read_parquet(i,  engine=engine)
                     for i in spatial_dir.glob("*.parquet")
                     if not i.name.startswith(".")
                 ]
@@ -220,7 +220,7 @@ class BaseIMCDataset:
             metadata_dir = self.metadata_dir / metadata_version
             metadata = pd.concat(
                 [
-                    pd.read_parquet(i, engine="fastparquet")
+                    pd.read_parquet(i,  engine=engine)
                     for i in metadata_dir.glob("*.parquet")
                     if not i.name.startswith(".")
                 ]
@@ -506,7 +506,7 @@ class BaseIMCDataset:
         panel_path = self.get_panel_path(image_version=image_version)
         assert panel_path.exists()
 
-        panel = pd.read_parquet(panel_path, engine="fastparquet")
+        panel = pd.read_parquet(panel_path,  engine=engine)
         panel = panel.reset_index().set_index("target")
 
         image_ids = set([i.stem for i in img_dir.glob("*.tiff") if not i.name.startswith('.')])
@@ -536,8 +536,8 @@ class BaseIMCDataset:
 
             assert intensity.index.equals(spatial.index)
 
-            intensity.to_parquet(save_intensity_dir / f'{sample_id}.parquet', engine="fastparquet")
-            spatial.to_parquet(save_spatial_dir / f'{sample_id}.parquet', engine="fastparquet")
+            intensity.to_parquet(save_intensity_dir / f'{sample_id}.parquet',  engine=engine)
+            spatial.to_parquet(save_spatial_dir / f'{sample_id}.parquet',  engine=engine)
 
 
     def list_image_versions(self) -> list[str]:
