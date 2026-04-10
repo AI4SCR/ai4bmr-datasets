@@ -1,13 +1,13 @@
 import re
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from ai4bmr_core.utils.tidy import tidy_name
 from loguru import logger
-from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-from ai4bmr_datasets.utils.download import unzip_recursive
+from ai4bmr_datasets.utils import io
+from ai4bmr_datasets.utils.tidy import tidy_name
 
 
 class Danenberg2022(BaseIMCDataset):
@@ -15,7 +15,7 @@ class Danenberg2022(BaseIMCDataset):
     id = "Danenberg2022"
     doi = "10.1038/s41588-022-01041-y"
 
-    def __init__(self, 
+    def __init__(self,
                  base_dir: Path | None = None,
                  image_version: str | None = None,
                  mask_version: str | None = None,
@@ -63,23 +63,30 @@ class Danenberg2022(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import requests
         import shutil
-        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
+        from ai4bmr_datasets.utils.download import DownloadRecord, download_file_map, unzip_recursive
 
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        file_map = {
-            "https://zenodo.org/records/6036188/files/MBTMEStrIMCPublic.zip?download=1": download_dir / 'mbtme_imc_public.zip',
-            'https://zenodo.org/records/15615709/files/correctedPublicMasks.zip?download=1': download_dir / 'corrected_public_masks.zip',
-        }
+        files = [
+            DownloadRecord(
+                url="https://zenodo.org/records/6036188/files/MBTMEStrIMCPublic.zip?download=1",
+                file_name='mbtme_imc_public.zip',
+                checksum="53f03887ebe3c8532f442efb50eb883689c44f67d98cc138501bee8bdfa03666",
+            ),
+            DownloadRecord(
+                url='https://zenodo.org/records/15615709/files/correctedPublicMasks.zip?download=1',
+                file_name='corrected_public_masks.zip',
+                checksum="0c39d56dd47215d01045e6e73f399d42a1aa42b851d38f29d63211d0e0de631e",
+            ),
+        ]
 
-        download_file_map(file_map, force=force)
+        download_file_map(files, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for target_path in file_map.values():
-            unzip_recursive(target_path)
+        for record in files:
+            unzip_recursive(download_dir / record.file_name)
 
         shutil.rmtree(self.raw_dir / '__MACOSX', ignore_errors=True)
 
@@ -131,17 +138,20 @@ class Danenberg2022(BaseIMCDataset):
         import subprocess
         import textwrap
 
+        clinical_fst_path = self.raw_dir / "mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst"
         clinical_path = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/IMCClinical.parquet'
+
+        sc_fst_path = self.raw_dir / "mbtme_imc_public/MBTMEIMCPublic/SingleCells.fst"
         sc_path = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/SingleCells.parquet'
 
         if sc_path.exists() and clinical_path.exists():
             logger.info("Clinical and SingleCells data already processed. Skipping.")
             return
 
-        logger.info('Converting fts files to Parquet format')
+        logger.info('Converting fst files to Parquet format')
 
         r_script = f"""
-        options(repos = c(CRAN = "https://cloud.r-project.org"))
+        options(repos = c(CRAN = 'https://cloud.r-project.org'))
 
         if (!requireNamespace("BiocManager", quietly = TRUE)) {{
             install.packages("BiocManager", quiet = TRUE)
@@ -159,24 +169,20 @@ class Danenberg2022(BaseIMCDataset):
         library(fst)
         library(arrow)
         
-        df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/IMCClinical.fst")
-        write_parquet(df, "{clinical_path}")
+        df <- read.fst("{clinical_fst_path.as_posix()}")
+        write_parquet(df, "{clinical_path.as_posix()}")
         
-        df <- read.fst("{self.raw_dir}/mbtme_imc_public/MBTMEIMCPublic/SingleCells.fst")
-        write_parquet(df, "{sc_path}")
+        df <- read.fst("{sc_fst_path.as_posix()}")
+        write_parquet(df, "{sc_path.as_posix()}")
         """
         r_script = textwrap.dedent(r_script)
 
-        # TODO: this will run only on slurm
-        # subprocess.run(["Rscript", "-e", r_script], check=True)
-        # Wrap the command in a shell to load modules and run the R script
-        shell_command = textwrap.dedent(f"""
-            module load r-light/4.4.1
-            Rscript -e '{r_script.strip()}'
-        """)
+        r_script_path = Path(self.raw_dir) / "script.R"
+        r_script_path.write_text(r_script)
+        logger.info(f"R script written to: {r_script_path}")
 
         # Run using bash shell to ensure module environment is available
-        subprocess.run(["bash", "-c", shell_command], check=True)
+        subprocess.run(["Rscript", str(r_script_path)], check=True)
 
     def create_images(self):
         """
@@ -186,7 +192,10 @@ class Danenberg2022(BaseIMCDataset):
         and saves them as TIFF files.
         """
         images_dir = self.raw_dir / 'mbtme_imc_public/MBTMEIMCPublic/Images'
-        img_paths = list(images_dir.rglob('*.tiff'))
+        img_paths = [
+            p for p in images_dir.rglob('*.tiff')
+            if not p.name.startswith('.')
+        ]
         img_paths = sorted(filter(lambda x: 'FullStack' in str(x), img_paths))
 
         save_dir = self.images_dir / self.get_version_name(version='published')
@@ -205,10 +214,11 @@ class Danenberg2022(BaseIMCDataset):
             else:
                 logger.info(f"Creating image {save_path}")
 
-            img = imread(img_path)
+            img = io.imread(img_path)
             assert len(img) == 39
 
-            imwrite(save_path, img)
+            img = img.astype(np.float32)
+            io.imsave(save_path=save_path, img=img)
 
     def create_masks(self):
         """
@@ -219,12 +229,12 @@ class Danenberg2022(BaseIMCDataset):
         """
         images_dir = self.raw_dir / 'corrected_public_masks' / 'correctedPublicMasks'
         img_paths = list(images_dir.rglob('*.tiff'))
-        img_paths = sorted(filter(lambda x: 'Mask' in str(x), img_paths))
+        mask_paths = sorted(filter(lambda x: 'Mask' in str(x) and not x.name.startswith('.'), img_paths))
 
-        for img_path in img_paths:
-            sample_id = self.get_sample_id(str(img_path))
+        for mask_path in mask_paths:
+            sample_id = self.get_sample_id(str(mask_path))
 
-            version = self.get_mask_version(str(img_path)).strip().lower()
+            version = self.get_mask_version(str(mask_path)).strip().lower()
             version = f'published_{version}'
             save_dir = self.masks_dir / self.get_version_name(version=version)
             save_dir.mkdir(parents=True, exist_ok=True)
@@ -236,10 +246,10 @@ class Danenberg2022(BaseIMCDataset):
             else:
                 logger.info(f"Creating mask {save_path}")
 
-            img = imread(img_path)
-            assert img.ndim == 2
+            mask = io.imread(mask_path)
+            assert mask.ndim == 2
 
-            imwrite(save_path, img)
+            io.save_mask(save_path=save_path, mask=mask)
 
     def create_metadata_and_intensity(self):
         """
@@ -388,4 +398,3 @@ class Danenberg2022(BaseIMCDataset):
         panel_path = self.get_panel_path("published")
         panel_path.parent.mkdir(parents=True, exist_ok=True)
         panel.to_parquet(panel_path)
-

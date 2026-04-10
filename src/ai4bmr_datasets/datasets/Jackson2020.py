@@ -1,12 +1,14 @@
+import shutil
 from pathlib import Path
-
+import numpy as np
 import pandas as pd
 from loguru import logger
-from tifffile import imread, imwrite
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-from ai4bmr_datasets.utils.download import unzip_recursive
-from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_datasets.utils import io
+from ai4bmr_datasets.utils.download import DownloadRecord, download_file_map, unzip_recursive
+from ai4bmr_datasets.utils.tidy import tidy_name
+
 
 class Jackson2020(BaseIMCDataset):
     name = "Jackson2020"
@@ -49,6 +51,7 @@ class Jackson2020(BaseIMCDataset):
         self.create_panel()
         self.create_images()
         self.create_masks()
+        self.create_metadata()
         self.create_features()
 
         self.create_annotated()
@@ -60,26 +63,47 @@ class Jackson2020(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import requests
-        import shutil
-        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
-
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        file_map = {
-            "https://zenodo.org/records/4607374/files/OMEandSingleCellMasks.zip?download=1": download_dir / 'ome_and_single_cell_masks.zip',
-            "https://zenodo.org/records/4607374/files/singlecell_locations.zip?download=1": download_dir / 'single_cell_locations.zip',
-            "https://zenodo.org/records/4607374/files/singlecell_cluster_labels.zip?download=1": download_dir / 'single_cell_cluster_labels.zip',
-            "https://zenodo.org/records/4607374/files/SingleCell_and_Metadata.zip?download=1": download_dir / 'single_cell_and_metadata.zip',
-            "https://zenodo.org/records/4607374/files/TumorStroma_masks.zip?download=1": download_dir / 'tumor_stroma_masks.zip',
-        }
+        files = [
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/OMEandSingleCellMasks.zip?download=1",
+                file_name='ome_and_single_cell_masks.zip',
+                checksum="93708da338fb28a473d209d1cfecbbec03a7aac0b5d53fffcf9bd975177fbab9",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/singlecell_locations.zip?download=1",
+                file_name='single_cell_locations.zip',
+                checksum="8b7a42c373840983dd1c768512dbb2a651a5009e0e2964cd722119be23cedc24",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/singlecell_cluster_labels.zip?download=1",
+                file_name='single_cell_cluster_labels.zip',
+                checksum="c026694a83f28dc5081d7ac05558ea904df072d16ebe73feb3f967ae71ed4984",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/SingleCell_and_Metadata.zip?download=1",
+                file_name='single_cell_and_metadata.zip',
+                checksum="04c5ffb7037105b829ea8d413e844f415d166a58ae85e3668a2c0b46bc37db42",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/4607374/files/TumorStroma_masks.zip?download=1",
+                file_name='tumor_stroma_masks.zip',
+                checksum="268d266d5cd958707ddd1480620fc8c5100a2dc37b969bd98f47dba316d7abb8",
+            ),
+        ]
 
-        download_file_map(file_map, force=force)
+        download_file_map(files, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for target_path in file_map.values():
-            unzip_recursive(target_path)
+        for record in files:
+            target_path = download_dir / record.file_name
+            try:
+                unzip_recursive(target_path)
+            except Exception as e:
+                logger.error(f"Failed to unzip {target_path}: {e}. Try deleting the zip file and re-downloading.")
+                raise e
 
         shutil.rmtree(self.raw_dir / '__MACOSX', ignore_errors=True)
 
@@ -112,10 +136,12 @@ class Jackson2020(BaseIMCDataset):
                 else:
                     logger.info(f"Creating image {save_path}")
 
-                img = imread(img_path)
+                img = io.imread(img_path)
                 img = img[panel.page.values]
 
-                imwrite(save_path, img)
+                img = img.astype(np.float32)
+
+                io.imsave(img=img, save_path=save_path)
             else:
                 logger.warning(f"Image file {img_path} does not exist. Skipping.")
 
@@ -146,9 +172,9 @@ class Jackson2020(BaseIMCDataset):
                 else:
                     logger.info(f"Creating mask {save_path}")
 
-                mask = imread(mask_path)
+                mask = io.imread(mask_path)
 
-                imwrite(save_path, mask)
+                io.save_mask(mask=mask, save_path=save_path)
             else:
                 logger.warning(f"Mask file {mask_path} does not exist. Skipping.")
 
@@ -229,12 +255,14 @@ class Jackson2020(BaseIMCDataset):
         assert metadata.index.is_unique
         metadata = metadata.drop(columns=['id', 'core', 'metacluster'])
 
-        metadata = metadata.rename(columns={
-            'class': 'label0',
-            'cell_type': 'label'
-        })
-        metadata.loc[:, 'label'] = metadata['label'].str.replace('+', '_pos').map(tidy_name)
-        metadata.loc[:, 'label0'] = metadata['label0'].map(tidy_name)
+        # metadata = metadata.rename(columns={
+        #     'class': 'label0',
+        #     'cell_type': 'label'
+        # })
+
+        metadata.loc[:, 'cell_type'] = metadata['cell_type'].str.replace('+', '_pos').map(tidy_name)
+        metadata.loc[:, 'cell_type'] = metadata['cell_type'].map(tidy_name)
+        metadata.loc[:, 'class'] = metadata['class'].map(tidy_name)
         metadata.columns = metadata.columns.map(tidy_name)
 
         version_name = self.get_version_name(version='published')
@@ -355,6 +383,14 @@ class Jackson2020(BaseIMCDataset):
         applies tidy naming conventions, and saves the processed features as Parquet files,
         grouped by sample ID.
         """
+
+        version_name = self.get_version_name(version='published')
+        save_intensity_dir = self.intensity_dir / version_name
+        save_spatial_dir = self.spatial_dir / version_name
+        if save_intensity_dir.exists() and save_spatial_dir.exists():
+            logger.info(f"Feature in {save_intensity_dir} and {save_spatial_dir} already exist. Skipping.")
+            return
+
         logger.info(f'Creating `published` features')
 
         panel = pd.read_parquet(self.get_panel_path('published'))
@@ -404,20 +440,16 @@ class Jackson2020(BaseIMCDataset):
         spatial = x.loc[:, x.columns.isin(spatial_feat)]
         spatial.columns = spatial.columns.map(tidy_name)
 
-        version_name = self.get_version_name(version='published')
-
         # intensity
-        save_dir = self.intensity_dir / version_name
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_intensity_dir.mkdir(parents=True, exist_ok=True)
         for grp_name, grp_dat in intensity.groupby('sample_id'):
-            save_path = save_dir / f"{grp_name}.parquet"
+            save_path = save_intensity_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
         # spatial
-        save_dir = self.spatial_dir / version_name
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_spatial_dir.mkdir(parents=True, exist_ok=True)
         for grp_name, grp_dat in spatial.groupby('sample_id'):
-            save_path = save_dir / f"{grp_name}.parquet"
+            save_path = save_spatial_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
 
     def create_panel(self):

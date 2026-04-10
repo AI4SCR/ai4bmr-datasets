@@ -1,5 +1,5 @@
 from loguru import logger
-from ai4bmr_core.utils.tidy import tidy_name
+from ai4bmr_datasets.utils.tidy import tidy_name
 from tifffile import imread, imwrite
 from pathlib import Path
 import pandas as pd

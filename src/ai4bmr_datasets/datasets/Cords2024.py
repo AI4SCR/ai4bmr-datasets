@@ -1,14 +1,17 @@
 import json
 import re
+import shutil
 from pathlib import Path
-from tqdm import tqdm
+
 import numpy as np
 import pandas as pd
 from loguru import logger
-from tifffile import imread, imwrite
+from tqdm import tqdm
 
 from ai4bmr_datasets.datasets.BaseIMCDataset import BaseIMCDataset
-from ai4bmr_datasets.utils.download import unzip_recursive
+from ai4bmr_datasets.utils import io
+from ai4bmr_datasets.utils.download import DownloadRecord, download_file_map, unzip_recursive
+from ai4bmr_datasets.utils.tidy import filter_paths
 
 
 class Cords2024(BaseIMCDataset):
@@ -86,6 +89,7 @@ class Cords2024(BaseIMCDataset):
         self.create_images()
         self.create_masks()
         self.create_metadata()
+        self.create_features()
 
         self.create_annotated()
 
@@ -96,62 +100,131 @@ class Cords2024(BaseIMCDataset):
         Args:
             force (bool): If True, forces re-download even if files already exist.
         """
-        import shutil
-        from ai4bmr_datasets.utils.download import download_file_map, unzip_recursive
-
         download_dir = self.raw_dir
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        file_map = {
-            "https://zenodo.org/records/7961844/files/2020115_LC_NSCLC_TMA_86_A.mcd.zip?download=1": download_dir
-                                                                                                     / "2020115_LC_NSCLC_TMA_86_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/2020117_LC_NSCLC_TMA_86_B.mcd.zip?download=1": download_dir
-                                                                                                     / "2020117_LC_NSCLC_TMA_86_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/2020120_LC_NSCLC_TMA_86_C.mcd.zip?download=1": download_dir
-                                                                                                     / "2020120_LC_NSCLC_TMA_86_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201219_LC_NSCLC_TMA_178_A.mcd.zip?download=1": download_dir
-                                                                                                       / "20201219_LC_NSCLC_TMA_178_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201222_LC_NSCLC_TMA_178_B_2.mcd.zip?download=1": download_dir
-                                                                                                         / "20201222_LC_NSCLC_TMA_178_B_2.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201224_LC_NSCLC_TMA_178_C.mcd.zip?download=1": download_dir
-                                                                                                       / "20201224_LC_NSCLC_TMA_178_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201226_LC_NSCLC_TMA_175_A.mcd.zip?download=1": download_dir
-                                                                                                       / "20201226_LC_NSCLC_TMA_175_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20201228_LC_NSCLC_TMA_175_B.mcd.zip?download=1": download_dir
-                                                                                                       / "20201228_LC_NSCLC_TMA_175_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210101_LC_NSCLC_TMA_175_C.mcd.zip?download=1": download_dir
-                                                                                                       / "20210101_LC_NSCLC_TMA_175_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210104_LC_NSCLC_TMA_176_A.mcd.zip?download=1": download_dir
-                                                                                                       / "20210104_LC_NSCLC_TMA_176_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210109_LC_NSCLC_TMA_176_C.mcd.zip?download=1": download_dir
-                                                                                                       / "20210109_LC_NSCLC_TMA_176_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210112_LC_NSCLC_TMA_176_B.mcd.zip?download=1": download_dir
-                                                                                                       / "20210112_LC_NSCLC_TMA_176_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/2020121_LC_NSCLC_TMA_87_A.mcd.zip?download=1": download_dir
-                                                                                                     / "2020121_LC_NSCLC_TMA_87_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210123_LC_NSCLC_TMA_87_B.mcd.zip?download=1": download_dir
-                                                                                                      / "20210123_LC_NSCLC_TMA_87_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210126_LC_NSCLC_TMA_87_C.mcd.zip?download=1": download_dir
-                                                                                                      / "20210126_LC_NSCLC_TMA_87_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_A.mcd.zip?download=1": download_dir
-                                                                                                      / "20210129_LC_NSCLC_TMA_88_A.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_B.mcd.zip?download=1": download_dir
-                                                                                                      / "20210129_LC_NSCLC_TMA_88_B.mcd.zip",
-            "https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_C.mcd.zip?download=1": download_dir
-                                                                                                      / "20210129_LC_NSCLC_TMA_88_C.mcd.zip",
-            "https://zenodo.org/records/7961844/files/comp_csv_files.zip?download=1": download_dir
-                                                                                      / "comp_csv_files.zip",
-            "https://zenodo.org/records/7961844/files/Cell%20masks.zip?download=1": download_dir / "cell_masks_zenodo.zip",
-            "https://drive.usercontent.google.com/download?id=1wXboMZpkLzk7ZP1Oib1q4NBwvFGK_h7G&confirm=xxx": download_dir
-                                                                                                              / "cell_masks_google_drive.zip",
-            "https://zenodo.org/records/7961844/files/SingleCellExperiment%20Objects.zip?download=1": download_dir / 'single_cell_experiment_objects.zip'
-        }
+        files = [
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020115_LC_NSCLC_TMA_86_A.mcd.zip?download=1",
+                file_name="2020115_LC_NSCLC_TMA_86_A.mcd.zip",
+                checksum="7bf62d8252ad15bcf11a34dc64294f72e6618ac30ef8b17f5c39b6bd4760322f",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020117_LC_NSCLC_TMA_86_B.mcd.zip?download=1",
+                file_name="2020117_LC_NSCLC_TMA_86_B.mcd.zip",
+                checksum="dbec22705ed3f4811222aa253d173eb167111d85b05bf018608c57557a114a1a",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020120_LC_NSCLC_TMA_86_C.mcd.zip?download=1",
+                file_name="2020120_LC_NSCLC_TMA_86_C.mcd.zip",
+                checksum="850db4fd90d0b101667b2595c757bf0a8744bb4234cb637e4d9b84f6d661f6c5",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201219_LC_NSCLC_TMA_178_A.mcd.zip?download=1",
+                file_name="20201219_LC_NSCLC_TMA_178_A.mcd.zip",
+                checksum="ff97fa311ef948da9f245abdb9bd771616e1996563d5f4a417f2b8d5d8a2de02",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201222_LC_NSCLC_TMA_178_B_2.mcd.zip?download=1",
+                file_name="20201222_LC_NSCLC_TMA_178_B_2.mcd.zip",
+                checksum="3e41a7e21fb63581609bc4e6962076849a876336405cbd25336213b3ecec1da8",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201224_LC_NSCLC_TMA_178_C.mcd.zip?download=1",
+                file_name="20201224_LC_NSCLC_TMA_178_C.mcd.zip",
+                checksum="1a2b2ec79488340a0a54a746d1206b61a94bc15182ebcd5fe3b4243fd3ddb523",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201226_LC_NSCLC_TMA_175_A.mcd.zip?download=1",
+                file_name="20201226_LC_NSCLC_TMA_175_A.mcd.zip",
+                checksum="86f47ecce84c07b2162e682ffe7effd1af703918c0d2fbe5c738a4817e9c3c70",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20201228_LC_NSCLC_TMA_175_B.mcd.zip?download=1",
+                file_name="20201228_LC_NSCLC_TMA_175_B.mcd.zip",
+                checksum="0f02254e85adcac25a1aeb91ac390590dd757037e18799ea4ff664369d023e72",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210101_LC_NSCLC_TMA_175_C.mcd.zip?download=1",
+                file_name="20210101_LC_NSCLC_TMA_175_C.mcd.zip",
+                checksum="13885eda04dee6d5718a13e940b0af5699af5263812733d14458c7bac7025fde",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210104_LC_NSCLC_TMA_176_A.mcd.zip?download=1",
+                file_name="20210104_LC_NSCLC_TMA_176_A.mcd.zip",
+                checksum="a88c1f6e1ca563175d5717fbc0bc7670868dd75a4f463a15a759b9e131f60d5c",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210109_LC_NSCLC_TMA_176_C.mcd.zip?download=1",
+                file_name="20210109_LC_NSCLC_TMA_176_C.mcd.zip",
+                checksum="0219d145bc1bd2e7feee1635de902670cfe6ddfb3bbc4d446168e4594a85920b",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210112_LC_NSCLC_TMA_176_B.mcd.zip?download=1",
+                file_name="20210112_LC_NSCLC_TMA_176_B.mcd.zip",
+                checksum="2c28c3bb6cb3f6a0958db015d113a4f7452243ce8d885bad46abec197ae4316a",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/2020121_LC_NSCLC_TMA_87_A.mcd.zip?download=1",
+                file_name="2020121_LC_NSCLC_TMA_87_A.mcd.zip",
+                checksum="d333f48269652e0649001ea2a968c5f629c0e215f038b5daca7f10f3c38db770",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210123_LC_NSCLC_TMA_87_B.mcd.zip?download=1",
+                file_name="20210123_LC_NSCLC_TMA_87_B.mcd.zip",
+                checksum="07fae00241cebbea328f3ac53c2f5466ebc53e62b47ac71ee83aa62a209e9c5c",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210126_LC_NSCLC_TMA_87_C.mcd.zip?download=1",
+                file_name="20210126_LC_NSCLC_TMA_87_C.mcd.zip",
+                checksum="a0a5cf81dc0ee537d100b66c1dd1fc50ca40fda36eca3e0d67052a72c2748560",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_A.mcd.zip?download=1",
+                file_name="20210129_LC_NSCLC_TMA_88_A.mcd.zip",
+                checksum="9a1af8017ca9e445c815c91be7b5880559eefcfa3f066d8a9e35c5667f2f5d98",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_B.mcd.zip?download=1",
+                file_name="20210129_LC_NSCLC_TMA_88_B.mcd.zip",
+                checksum="7b63619b7608e138567048fbf90bec89f076963730bbf5ac7aa9ff9f0ac96101",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/20210129_LC_NSCLC_TMA_88_C.mcd.zip?download=1",
+                file_name="20210129_LC_NSCLC_TMA_88_C.mcd.zip",
+                checksum="8246ede08b89984caf98a8ce7bd9e97581f7bea81035c66b75b2ef8906ac0986",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/comp_csv_files.zip?download=1",
+                file_name="comp_csv_files.zip",
+                checksum="6a099ad8397f65a054b2cc11355b1554422c483f237d0b57e05342c0606fc693",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/Cell%20masks.zip?download=1",
+                file_name="cell_masks_zenodo.zip",
+                checksum="3dbdfff619b64e67974d7f450c8063aa4992e64594bd292d4c820fb9de4302df",
+            ),
+            DownloadRecord(
+                url="https://drive.usercontent.google.com/download?id=1wXboMZpkLzk7ZP1Oib1q4NBwvFGK_h7G&confirm=xxx",
+                file_name="cell_masks_google_drive.zip",
+                checksum="03321187e8332b11db0ddba6b9e52b75ed6e0f84a324b3f9311519bff4ca828f",
+            ),
+            DownloadRecord(
+                url="https://zenodo.org/records/7961844/files/SingleCellExperiment%20Objects.zip?download=1",
+                file_name="single_cell_experiment_objects.zip",
+                checksum="14b2ced15f8690f0cd2551fff24a9efe51aa1347eb5768ba06dea7a42f892d30",
+            ),
+        ]
 
-        download_file_map(file_map, force=force)
+        download_file_map(files, download_dir=download_dir, force=force)
 
         # Extract zip files
-        for target_path in file_map.values():
-            unzip_recursive(target_path)
+        for record in files:
+            target_path = download_dir / record.file_name
+            try:
+                unzip_recursive(target_path)
+            except Exception as e:
+                logger.error(f'Failed to unzip {target_path}: {e}')
 
         shutil.rmtree(self.raw_dir / '__MACOSX', ignore_errors=True)
 
@@ -186,7 +259,7 @@ class Cords2024(BaseIMCDataset):
 
         num_failed_reads = 0
 
-        mcd_paths = [i for i in self.raw_dir.rglob("*.mcd") if i.is_file()]
+        mcd_paths = [i for i in self.raw_dir.rglob("*.mcd") if i.is_file() and not i.name.startswith(".")]
         for mcd_path in mcd_paths:
             logger.info(f"Processing {mcd_path.name}")
             mcd_id = re.search(r".+_TMA_(\d+_\w+).mcd", mcd_path.name).group(1)
@@ -206,9 +279,7 @@ class Cords2024(BaseIMCDataset):
                             metal_names=acq.channel_metals,
                         )
 
-                        image_name = (
-                            f"{mcd_id}_{acq.id}"  # should be equivalent to 'Tma_ac'
-                        )
+                        image_name = f"{mcd_id}_{acq.id}"  # should be equivalent to 'Tma_ac'
                         metadata_path = acquisitions_dir / f"{image_name}.json"
                         image_path = acquisitions_dir / f"{image_name}.tiff"
 
@@ -219,7 +290,8 @@ class Cords2024(BaseIMCDataset):
                         try:
                             logger.info(f"Reading acquisition of image {image_name}")
                             img = f.read_acquisition(acq)
-                            imwrite(image_path, img)
+                            img = img.astype(np.float32)
+                            io.imsave(save_path=image_path, img=img)
                             with open(metadata_path, "w") as f_json:
                                 json.dump(item, f_json)
                         except OSError:
@@ -227,7 +299,8 @@ class Cords2024(BaseIMCDataset):
                             num_failed_reads += 1
                             continue
 
-    def validate_masks(self):
+    @classmethod
+    def validate_masks(cls):
         """
         Validates the consistency between mask objects and metadata objects.
 
@@ -237,11 +310,11 @@ class Cords2024(BaseIMCDataset):
         """
         import numpy as np
         version_name = 'published'
-        self.setup(image_version=version_name, mask_version=version_name, metadata_version=version_name,
-                   load_metadata=True, load_spatial=False, load_intensity=False)
+        ds = cls(image_version=version_name, mask_version=version_name, metadata_version=version_name,
+                 load_metadata=True, load_spatial=False, load_intensity=False)
 
         mismatches = []
-        for sample_id, mask in self.masks.items():
+        for sample_id, mask in ds.masks.items():
             uniq_mask_objs = set(map(int, np.unique(mask.data))) - {0}
             meta = self.metadata.loc[sample_id]
             uniq_meta_objs = set(meta.index.astype(int))
@@ -267,12 +340,13 @@ class Cords2024(BaseIMCDataset):
         This method reads channel information from raw acquisition JSON files, processes it,
         and saves the consolidated panel as a Parquet file.
         """
-        from ai4bmr_core.utils.tidy import tidy_name
+        from ai4bmr_datasets.utils.tidy import tidy_name
         import json
         import pandas as pd
         panel = None
 
-        for img_metadata_path in self.raw_acquisitions_dir.glob("*.json"):
+        img_metadata_paths = [p for p in self.raw_acquisitions_dir.glob("*.json") if not p.name.startswith('.')]
+        for img_metadata_path in img_metadata_paths:
             with open(img_metadata_path, "r") as f:
                 img_metadata = json.load(f)
                 df = pd.DataFrame(img_metadata)
@@ -321,21 +395,22 @@ class Cords2024(BaseIMCDataset):
         panel = pd.read_parquet(panel_path)
 
         acquisitions_dir = self.raw_acquisitions_dir
-        acquisition_paths = list(acquisitions_dir.glob("*.tiff"))
+        acquisition_paths = [p for p in acquisitions_dir.glob("*.tiff") if not p.name.startswith('.')]
 
+        logger.info(f'Creating images...')
         save_dir = self.get_image_version_dir("published")
         save_dir.mkdir(parents=True, exist_ok=True)
-        for img_path in acquisition_paths:
+        for img_path in tqdm(acquisition_paths):
             save_path = save_dir / f"{img_path.name}"
 
             if save_path.exists():
                 logger.info(f"Skipping image {img_path}. Already exists.")
                 continue
 
-            img = imread(img_path)
+            img = io.imread(img_path)
             img = img[panel.page.values]
-
-            imwrite(save_path, img)
+            img = img.astype(np.float32)
+            io.imsave(save_path=save_path, img=img)
 
     def create_masks(self):
         """
@@ -345,11 +420,9 @@ class Cords2024(BaseIMCDataset):
         naming conventions and potential mismatches), and saves the processed masks as TIFF files.
         """
         import tifffile
-        import shutil
-        from loguru import logger
 
         raw_masks_dir = self.raw_dir / 'cell_masks_google_drive'
-        mask_paths = list(raw_masks_dir.rglob("*.tiff"))
+        mask_paths = [p for p in raw_masks_dir.rglob("*.tiff") if not p.name.startswith('.')]
 
         # note:
         # - 86_B_mask also contains 86_C masks
@@ -373,7 +446,7 @@ class Cords2024(BaseIMCDataset):
         save_dir = self.get_mask_version_dir('published')
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        image_ids = [i.stem for i in self.get_image_version_dir('published').glob('*.tiff')]
+        image_ids = [i.stem for i in self.get_image_version_dir('published').glob('*.tiff') if not i.name.startswith('.')]
         image_ids = set(image_ids)
 
         mask_ids = [i[0] for i in mask_paths_with_ids]
@@ -415,7 +488,7 @@ class Cords2024(BaseIMCDataset):
         and saves the consolidated clinical metadata as a Parquet file.
         It also logs any samples for which clinical metadata or images are missing.
         """
-        from ai4bmr_core.utils.tidy import tidy_name
+        from ai4bmr_datasets.utils.tidy import tidy_name
         import re
 
         clinical_metadata = pd.read_csv(self.raw_clinical_metadata)
@@ -494,7 +567,7 @@ class Cords2024(BaseIMCDataset):
         """
         logger.info('Creating spatial features')
 
-        from ai4bmr_core.utils.tidy import tidy_name
+        from ai4bmr_datasets.utils.tidy import tidy_name
         path = self.raw_dir / 'single_cell_experiment_objects/SingleCellExperiment Objects/spatial.parquet'
         spatial = pd.read_parquet(path)
 
@@ -672,14 +745,12 @@ class Cords2024(BaseIMCDataset):
             write_parquet(intensity, "{save_intensity_path}")
         """)
 
-        # TODO: this will run only on slurm
-        # subprocess.run(["Rscript", "-e", r_script], check=True)
-        # Wrap the command in a shell to load modules and run the R script
-        shell_command = textwrap.dedent(f"""
-            module load r-light/4.4.1
-            Rscript -e '{r_script.strip()}'
-        """)
-        subprocess.run(shell_command, shell=True, check=True)
+        r_script_path = Path(self.raw_dir) / "script.R"
+        r_script_path.write_text(r_script)
+        logger.info(f"R script written to: {r_script_path}")
+
+        # Run using bash shell to ensure module environment is available
+        subprocess.run(["Rscript", str(r_script_path)], check=True)
 
     def create_annotated(self, version_name: str = 'annotated', mask_version: str = "published"):
         """
@@ -690,18 +761,18 @@ class Cords2024(BaseIMCDataset):
             version_name (str): The name for the new annotated version (default: 'annotated').
             mask_version (str): The mask version to use for annotation (default: 'published').
         """
-        from skimage.io import imread, imsave
+        from ai4bmr_datasets.utils import io
         import numpy as np
 
         logger.info(f'Creating new data version: `annotated`')
 
         metadata_version = 'published'
-        metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
-        intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
+        metadata = pd.read_parquet(filter_paths(self.metadata_dir / metadata_version), engine='fastparquet')
+        intensity = pd.read_parquet(filter_paths(self.intensity_dir / metadata_version), engine='fastparquet')
 
         # mask_version = 'published_cell'
         masks_dir = self.masks_dir / mask_version
-        mask_paths = list(masks_dir.glob("*.tiff"))
+        mask_paths = [p for p in masks_dir.glob("*.tiff") if not p.name.startswith('.')]
 
         image_version = 'published'
         images_dir = self.images_dir / image_version
@@ -746,7 +817,7 @@ class Cords2024(BaseIMCDataset):
 
             # logger.info(f"Saving annotated mask {save_path}")
 
-            mask = imread(mask_path)
+            mask = io.imread(mask_path)
             intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
             metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
 
@@ -763,7 +834,7 @@ class Cords2024(BaseIMCDataset):
             objs = np.asarray(sorted(objs), dtype=mask.dtype)
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
             assert len(np.unique(mask_filtered)) == len(objs) + 1
-            imsave(save_path, mask_filtered)
+            io.save_mask(save_path=save_path, mask=mask_filtered)
 
             idx = pd.IndexSlice[:, objs.astype(str)]
 
@@ -772,3 +843,4 @@ class Cords2024(BaseIMCDataset):
 
             metadata_ = metadata_.loc[idx, :]
             metadata_.to_parquet(save_metadata_dir / f"{sample_id}.parquet", engine='fastparquet')
+

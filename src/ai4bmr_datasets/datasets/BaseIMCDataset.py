@@ -3,7 +3,8 @@ from loguru import logger
 import pandas as pd
 
 from ai4bmr_datasets.datamodels.Image import Image, Mask
-
+from ai4bmr_datasets.utils.tidy import filter_paths
+from ai4bmr_datasets.utils import io
 
 class BaseIMCDataset:
     name: str = None
@@ -174,6 +175,7 @@ class BaseIMCDataset:
                 [
                     pd.read_parquet(i, engine="fastparquet")
                     for i in intensity_dir.glob("*.parquet")
+                    if not i.name.startswith(".")
                 ]
             )
 
@@ -188,6 +190,7 @@ class BaseIMCDataset:
                 [
                     pd.read_parquet(i, engine="fastparquet")
                     for i in spatial_dir.glob("*.parquet")
+                    if not i.name.startswith(".")
                 ]
             )
 
@@ -197,7 +200,7 @@ class BaseIMCDataset:
         # load images
         images_dir = self.get_image_version_dir(image_version=self.image_version)
         images = {}
-        for image_path in images_dir.glob("*.tiff"):
+        for image_path in [p for p in images_dir.glob("*.tiff") if not p.name.startswith('.')]:
             images[image_path.stem] = Image(
                 id=image_path.stem,
                 data_path=image_path,
@@ -208,7 +211,7 @@ class BaseIMCDataset:
         # load masks
         masks_dir = self.get_mask_version_dir(mask_version=self.mask_version)
         masks = {}
-        for mask_path in masks_dir.glob("*.tiff"):
+        for mask_path in [p for p in masks_dir.glob("*.tiff") if not p.name.startswith('.')]:
             masks[mask_path.stem] = Mask(id=mask_path.stem, data_path=mask_path, metadata_path=None)
         ids_from_masks = set(masks.keys())
 
@@ -219,6 +222,7 @@ class BaseIMCDataset:
                 [
                     pd.read_parquet(i, engine="fastparquet")
                     for i in metadata_dir.glob("*.parquet")
+                    if not i.name.startswith(".")
                 ]
             )
             ids_from_metadata = set(metadata.index.get_level_values("sample_id"))
@@ -276,22 +280,21 @@ class BaseIMCDataset:
             version_name (str): The name for the new annotated version (default: 'annotated').
             mask_version (str): The mask version to use for annotation (default: 'published').
         """
-        from skimage.io import imread, imsave
         import numpy as np
 
         logger.info(f'Creating new data version: `{version_name}`')
 
         metadata_version = 'published'
-        metadata = pd.read_parquet(self.metadata_dir / metadata_version, engine='fastparquet')
-        intensity = pd.read_parquet(self.intensity_dir / metadata_version, engine='fastparquet')
+        metadata = pd.read_parquet(filter_paths(self.metadata_dir / metadata_version), engine='fastparquet')
+        intensity = pd.read_parquet(filter_paths(self.intensity_dir / metadata_version), engine='fastparquet')
 
         # mask_version = 'published_cell'
         masks_dir = self.masks_dir / mask_version
-        mask_paths = list(masks_dir.glob("*.tiff"))
+        mask_paths = [p for p in masks_dir.glob("*.tiff") if not p.name.startswith('.')]
 
         image_version = 'published'
         images_dir = self.images_dir / image_version
-        image_paths = list(images_dir.glob("*.tiff"))
+        image_paths = [p for p in images_dir.glob("*.tiff") if not p.name.startswith('.')]
 
         # collect sample ids
         sample_ids = set(metadata.index.get_level_values('sample_id').unique()) \
@@ -325,7 +328,7 @@ class BaseIMCDataset:
 
             logger.info(f"Saving annotated mask {save_path}")
 
-            mask = imread(mask_path)
+            mask = io.imread(mask_path)
             intensity_ = intensity.xs(sample_id, level='sample_id', drop_level=False)
             metadata_ = metadata.xs(sample_id, level='sample_id', drop_level=False)
 
@@ -342,7 +345,7 @@ class BaseIMCDataset:
             objs = np.asarray(sorted(objs), dtype=mask.dtype)
             mask_filtered = np.where(np.isin(mask, objs), mask, 0)
             assert len(np.unique(mask_filtered)) == len(objs) + 1
-            imsave(save_path, mask_filtered)
+            io.save_mask(mask=mask_filtered, save_path=save_path)
 
             idx = pd.IndexSlice[:, objs]
 
@@ -480,7 +483,6 @@ class BaseIMCDataset:
             force (bool): If True, recomputes features even if they already exist.
         """
         from ai4bmr_datasets.utils.imc.features import intensity_features, spatial_features
-        from tifffile import imread
 
         version_name = self.get_version_name(image_version=image_version, mask_version=mask_version)
         save_intensity_dir = self.intensity_dir / version_name
@@ -507,8 +509,8 @@ class BaseIMCDataset:
         panel = pd.read_parquet(panel_path, engine="fastparquet")
         panel = panel.reset_index().set_index("target")
 
-        image_ids = set([i.stem for i in img_dir.glob("*.tiff")])
-        mask_ids = set([i.stem for i in mask_dir.glob("*.tiff")])
+        image_ids = set([i.stem for i in img_dir.glob("*.tiff") if not i.name.startswith('.')])
+        mask_ids = set([i.stem for i in mask_dir.glob("*.tiff") if not i.name.startswith('.')])
         sample_ids = image_ids.intersection(mask_ids)
 
         for i, sample_id in enumerate(sample_ids):
@@ -520,8 +522,8 @@ class BaseIMCDataset:
             mask_path = mask_dir / f"{sample_id}.tiff"
             assert mask_path.exists()
 
-            img = imread(img_path)
-            mask = imread(mask_path)
+            img = io.imread(img_path)
+            mask = io.imread(mask_path)
             assert img.shape[1:] == mask.shape
 
             intensity = intensity_features(img=img, mask=mask, panel=panel)
@@ -537,3 +539,47 @@ class BaseIMCDataset:
             intensity.to_parquet(save_intensity_dir / f'{sample_id}.parquet', engine="fastparquet")
             spatial.to_parquet(save_spatial_dir / f'{sample_id}.parquet', engine="fastparquet")
 
+
+    def list_image_versions(self) -> list[str]:
+        """
+        Lists all available image versions in the images directory.
+
+        Returns:
+            list[str]: A list of available image version names.
+        """
+        if not self.images_dir.exists():
+            return []
+        return [p.name for p in self.images_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+
+    def list_mask_versions(self) -> list[str]:
+        """
+        Lists all available mask versions in the images directory.
+
+        Returns:
+            list[str]: A list of available mask version names.
+        """
+        if not self.masks_dir.exists():
+            return []
+        return [p.name for p in self.masks_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+
+    def list_metadata_versions(self) -> list[str]:
+        """
+        Lists all available metadata versions in the images directory.
+
+        Returns:
+            list[str]: A list of available metadata version names.
+        """
+        if not self.metadata_dir.exists():
+            return []
+        return [p.name for p in self.metadata_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+
+    def list_features_versions(self) -> list[str]:
+        """
+        Lists all available features versions in the images directory.
+
+        Returns:
+            list[str]: A list of available features version names.
+        """
+        if not self.intensity_dir.exists():
+            return []
+        return [p.name for p in self.intensity_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
