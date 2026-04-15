@@ -38,6 +38,10 @@ classifiers = [
 repository = "https://github.com/AI4SCR/ai4scr-datasets"
 
 [project.optional-dependencies]
+torch = [
+    "torch",
+    "torchvision",
+]
 test = [
     "pytest",
     "pytest-cov",
@@ -75,4 +79,3 @@ ignore_missing_imports = true
 [tool.setuptools_scm]
 version_scheme = "post-release"
 write_to = "src/ai4bmr_datasets/_version.py"  # Example path where version info could be written
-
