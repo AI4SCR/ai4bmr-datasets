@@ -20,6 +20,7 @@ dependencies = [
     { name = "requests" },
     { name = "scikit-image" },
     { name = "tifffile" },
+    { name = "torchvision" },
     { name = "tqdm" },
 ]
 
@@ -68,6 +69,7 @@ requires-dist = [
     { name = "tabulate", marker = "extra == 'dev'" },
     { name = "tifffile" },
     { name = "torch", marker = "extra == 'torch'" },
+    { name = "torchvision", specifier = ">=0.26.0" },
     { name = "torchvision", marker = "extra == 'torch'" },
     { name = "tqdm" },
 ]

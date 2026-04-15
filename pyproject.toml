@@ -26,6 +26,7 @@ dependencies = [
     "geopandas",
     "loguru",
     "requests",
+    "torchvision",
 ]
 dynamic = ["version"]
 classifiers = [
