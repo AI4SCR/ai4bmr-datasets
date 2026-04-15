@@ -301,3 +301,4 @@ cell-masks-differences/
 
 .snakemake/
 checkpoints/
+scribble/
