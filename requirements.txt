@@ -32,7 +32,7 @@ pyproj==3.7.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
 pytz==2025.2
-requests==2.32.5
+requests==2.33.0
 scikit-image==0.26.0
 scipy==1.17.0
 setuptools==80.10.1
