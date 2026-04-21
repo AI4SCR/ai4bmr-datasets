@@ -140,7 +140,6 @@ class ImageNet2012:
             "class_index": target,
             "class_name": class_name,
             "wnid": wnid,
-            "path": path,
             "split": self.split,
         }
 
