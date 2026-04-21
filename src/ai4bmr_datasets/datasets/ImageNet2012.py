@@ -116,6 +116,11 @@ class ImageNet2012:
         self.dataset = ImageNet(**kwargs)
         return self
 
+    def get_sample_id(self, idx: int) -> str:
+        self._require_setup()
+        path = Path(self.dataset.samples[idx][0])
+        return path.stem
+
     def __len__(self) -> int:
         self._require_setup()
         return len(self.dataset)
@@ -123,14 +128,10 @@ class ImageNet2012:
     def __getitem__(self, idx: int) -> dict:
         self._require_setup()
         image, target = self.dataset[idx]
-        path = Path(self.dataset.samples[idx][0])
         class_name = self.dataset.classes[target]
         wnid = self.dataset.wnids[target]
 
-        try:
-            sample_id = path.relative_to(self.base_dir).as_posix()
-        except ValueError:
-            sample_id = path.stem
+        sample_id = self.get_sample_id(idx)
 
         return {
             "sample_id": sample_id,
