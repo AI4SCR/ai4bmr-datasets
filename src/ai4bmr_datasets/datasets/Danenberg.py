@@ -56,6 +56,8 @@ class Danenberg2022(BaseIMCDataset):
         self.create_annotated(version_name='annotated_cell', mask_version='published_cell')
         self.create_annotated(version_name='annotated_nucleus', mask_version='published_nucleus')
 
+        self.create_features_spatial()
+
     def download(self, force: bool = False):
         """
         Downloads the raw data files for the Danenberg2022 dataset from Zenodo.
@@ -338,6 +340,33 @@ class Danenberg2022(BaseIMCDataset):
         for grp_name, grp_dat in sc.groupby('sample_id'):
             save_path = save_dir / f"{grp_name}.parquet"
             grp_dat.to_parquet(save_path, engine='fastparquet')
+
+    def create_features_spatial(self, version_name: str = 'annotated'):
+        """
+        Creates and saves spatial features (cell centroid coordinates) for the
+        Danenberg2022 dataset, split out from the annotated metadata into their own
+        per-sample Parquet files under `spatial_dir`, matching the layout
+        `BaseIMCDataset.setup()` expects when `load_spatial=True` (e.g. Keren2018's
+        `create_features_spatial`).
+
+        `location_center_x`/`location_center_y` already live in the metadata written
+        by `create_metadata_and_intensity` (and carried through by `create_annotated`),
+        so this reads them from the already-materialized `metadata_dir / version_name`
+        files rather than re-deriving them from raw data -- guaranteeing the same
+        (sample_id, object_id) index as the metadata version it is paired with, with
+        no risk of the two silently drifting apart.
+        """
+        logger.info(f"Creating spatial features for version `{version_name}`")
+
+        coord_cols = ['location_center_x', 'location_center_y']
+
+        metadata_dir = self.metadata_dir / version_name
+        save_dir = self.spatial_dir / version_name
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        for path in sorted(metadata_dir.glob('*.parquet')):
+            spatial = pd.read_parquet(path, columns=coord_cols, engine='fastparquet')
+            spatial.to_parquet(save_dir / path.name, engine='fastparquet')
 
     def create_clinical_metadata(self):
         """
